@@ -1,29 +1,11 @@
 import { Skeleton } from "@workspace/ui/components/skeleton"
 
 /**
- * What a page shows while its route streams in (`loading.tsx`): the title
- * block, a toolbar and table rows in the list layout, inside the shell.
+ * Loading skeletons for `loading.tsx`. Only the editor tabs have one: a
+ * boundary around the Organization pages would stream the Quote header in
+ * a Suspense boundary, and a click on its actions before that boundary
+ * hydrates is lost.
  */
-export function PageSkeleton() {
-  return (
-    <div
-      className="flex flex-col gap-5"
-      role="status"
-      aria-label="Loading the page"
-    >
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-7 w-48" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-      </div>
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-64 max-w-full" />
-        <Skeleton className="h-8 w-20" />
-        <Skeleton className="h-8 w-20" />
-      </div>
-      <TableSkeleton />
-    </div>
-  )
-}
 
 /** The editor tab body while it streams in (the header stays). */
 export function TabSkeleton() {

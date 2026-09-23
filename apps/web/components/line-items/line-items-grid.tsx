@@ -121,15 +121,17 @@ function NotesCell({ row }: Cell) {
 }
 
 function StartCell({ row }: Cell) {
-  const { readOnly, onUpdate, quoteStartDate } = useGrid()
+  const { readOnly, onUpdate, quoteStartDate, quoteEndDate } = useGrid()
   const line = row.original
+  // A planner-managed line's start lifts and shifts its Allocations (the
+  // end moves with it), so it may go anywhere within the Quote.
   return (
     <InlineDate
       label="Start date"
       value={line.startDate}
       min={quoteStartDate}
-      max={line.endDate}
-      disabled={readOnly || line.plannerManaged}
+      max={line.plannerManaged ? quoteEndDate : line.endDate}
+      disabled={readOnly}
       onSave={(startDate) => onUpdate({ id: line.id, startDate })}
     />
   )

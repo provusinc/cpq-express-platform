@@ -5,10 +5,7 @@ import { ArrowLeftIcon, CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
 
 import type { RouterOutputs } from "@workspace/api"
-import {
-  QUOTE_STATUS_LABELS,
-  TIME_PERIOD_LABELS,
-} from "@workspace/domain/enums"
+import { QUOTE_STATUS_LABELS } from "@workspace/domain/enums"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import {
   Alert,
@@ -22,6 +19,7 @@ import { useTRPC } from "@/trpc/react"
 
 import { QUOTE_POLL_MS, QuoteSaveIndicator, useQuoteCommand } from "./autosave"
 import { InlineText } from "./inline-text"
+import { QuoteDatesEditor, TimePeriodControl } from "./quote-schedule"
 import { QuoteStatusBadge } from "./quote-status-badge"
 
 type Quote = RouterOutputs["quote"]["byId"]
@@ -91,8 +89,9 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
 
 /**
  * The Quote editor's header: Name and Description (edited in place, each
- * saved as its own command), status, Account, Owner, dates and Time
- * Period, and a read-only notice when the viewer can't edit. `actions`
+ * saved as its own command), status, Account, Owner, the Quote dates
+ * (`QuoteDatesEditor`: shift/clamp with an impact preview) and Time Period
+ * (`TimePeriodControl`: warns, then discards all Allocations), and a read-only notice when the viewer can't edit. `actions`
  * renders at the top right (approval actions, #19).
  */
 export function QuoteHeader({
@@ -172,7 +171,7 @@ export function QuoteHeader({
           )}
         </Meta>
         <Meta label="Dates">
-          {formatDate(quote.startDate)} – {formatDate(quote.endDate)}
+          <QuoteDatesEditor quote={quote} disabled={!canEdit} />
         </Meta>
         <Meta label="Valid until">
           {quote.validUntil ? (
@@ -193,7 +192,9 @@ export function QuoteHeader({
             "—"
           )}
         </Meta>
-        <Meta label="Time period">{TIME_PERIOD_LABELS[quote.timePeriod]}</Meta>
+        <Meta label="Time period">
+          <TimePeriodControl quote={quote} disabled={!canEdit} />
+        </Meta>
       </dl>
       <ReadOnlyNotice quote={quote} />
     </div>

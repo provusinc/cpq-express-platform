@@ -5,6 +5,7 @@ import type { IsoDate } from "../dates"
 import {
   changeLineItemStart,
   changeQuoteDates,
+  changeQuoteWindow,
   type QuoteDateChange,
   type ScheduleLine,
   type ScheduleQuote,
@@ -562,5 +563,87 @@ describe("changeLineItemStart", () => {
     const result = move(roleLine(), MON_JAN5)
     expect(result.line.changed).toBe(false)
     expect(result.impact.direction).toBe("same")
+  })
+})
+
+describe("changeQuoteWindow", () => {
+  it("shifts by default, keeping Effort, and lets the end move too", () => {
+    const result = changeQuoteWindow({
+      quote: quoteOf(),
+      lines: [roleLine()],
+      startDate: MON_JAN12,
+      endDate: "2026-02-06",
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.startDate).toBe(MON_JAN12)
+    expect(result.endDate).toBe("2026-02-06")
+    expect(result.impact).toMatchObject({
+      mode: "shift",
+      impactedCount: 1,
+      clampedCount: 0,
+      effortReducedCount: 0,
+      oldTotal: "16000.0000",
+      newTotal: "16000.0000",
+    })
+    expect(cells(result.lines[0]!.allocations)).toEqual({
+      [MON_JAN12]: 40,
+      [MON_JAN19]: 40,
+      [MON_JAN26]: 40,
+      "2026-02-02": 40,
+    })
+  })
+
+  it("shifts, then clamps an end pulled in below the shifted end", () => {
+    const result = changeQuoteWindow({
+      quote: quoteOf(),
+      lines: [roleLine()],
+      startDate: MON_JAN12,
+      endDate: FRI_JAN30,
+    })
+    if (!result.ok) throw new Error(result.message)
+    expect(result.impact).toMatchObject({
+      clampedCount: 1,
+      effortReducedCount: 1,
+      oldTotal: "16000.0000",
+      newTotal: "12000.0000",
+    })
+    expect(result.impact.steps.map((s) => s.field)).toEqual(["start", "end"])
+  })
+
+  it("clamps the start when asked, and outward moves change nothing", () => {
+    const clamp = changeQuoteWindow({
+      quote: quoteOf(),
+      lines: [roleLine()],
+      startDate: MON_JAN12,
+      endDate: FRI_JAN30,
+      mode: "clamp",
+    })
+    if (!clamp.ok) throw new Error(clamp.message)
+    expect(clamp.lines[0]).toMatchObject({
+      startDate: MON_JAN12,
+      quantity: "120.000",
+    })
+    const outward = changeQuoteWindow({
+      quote: quoteOf(),
+      lines: [roleLine()],
+      startDate: "2025-12-29",
+      endDate: FRI_FEB27,
+      mode: "clamp",
+    })
+    if (!outward.ok) throw new Error(outward.message)
+    expect(outward.impact.impactedCount).toBe(0)
+    expect(outward.lines[0]!.changed).toBe(false)
+  })
+
+  it("passes refusals through", () => {
+    expect(
+      changeQuoteWindow({
+        quote: quoteOf(),
+        lines: [roleLine()],
+        startDate: MON_JAN5,
+        endDate: "2026-01-01",
+      })
+    ).toMatchObject({ ok: false, reason: "end_before_start" })
   })
 })

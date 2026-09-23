@@ -1,18 +1,18 @@
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { and, eq, inArray, schema, sql } from "@workspace/db"
+import { and, eq, inArray, schema } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
-import {
-  diffAllocations,
-  resizeAllocatedEffort,
-} from "@workspace/domain/allocations"
-import { compareDates, periodTypeForTimePeriod } from "@workspace/domain/dates"
+import { resizeAllocatedEffort } from "@workspace/domain/allocations"
+import type { AllocationInput } from "@workspace/domain/allocations"
+import { compareDates } from "@workspace/domain/dates"
 import type { IsoDate } from "@workspace/domain/dates"
 import { SOURCE_KINDS } from "@workspace/domain/enums"
 import type { TimePeriod } from "@workspace/domain/enums"
 import { defaultLineItemQuantity } from "@workspace/domain/pricing"
+import { changeLineItemStart } from "@workspace/domain/schedule"
 
+import { writeAllocations } from "../allocations"
 import { notFound } from "../errors"
 import {
   isoDateInput,
@@ -244,109 +244,104 @@ export const lineItemRouter = createTRPCRouter({
    * the Base Rate price (`null` resets it); the Base Rate itself never
    * changes. On a planner-managed line (one with Allocations) a quantity
    * change resizes its Effort with the domain's rules (keeping quantity =
-   * Σ Allocations), and its dates follow the Allocations, so a date edit is
-   * refused (the Quote dates ticket adds lift-and-shift).
+   * Σ Allocations); a start change lifts and shifts its Allocations by
+   * whole periods (`changeLineItemStart`: the end moves with it, Effort
+   * pushed past the Quote End Date is trimmed); its end date follows the
+   * Allocations, so an end edit is refused (PRECONDITION_FAILED).
    */
-  update: organizationProcedure
-    .input(updateInput)
-    .mutation(({ ctx, input }) =>
-      quoteCommand(ctx, input.quoteId, "quote.edit", async (cmd) => {
-        const { scope, quote } = cmd
-        const [line] = await findQuoteLines(scope, quote.id, [input.id])
-        const { unitPrice, ...fields } = omit(input, "quoteId", "id")
-        const changes: Partial<LineItemRow> = stripUndefined(fields)
-        if (unitPrice !== undefined) {
-          changes.unitPrice = unitPrice ?? line!.basePrice
+  update: organizationProcedure.input(updateInput).mutation(({ ctx, input }) =>
+    quoteCommand(ctx, input.quoteId, "quote.edit", async (cmd) => {
+      const { scope, quote } = cmd
+      const [line] = await findQuoteLines(scope, quote.id, [input.id])
+      const { unitPrice, ...fields } = omit(input, "quoteId", "id")
+      const changes: Partial<LineItemRow> = stripUndefined(fields)
+      if (unitPrice !== undefined) {
+        changes.unitPrice = unitPrice ?? line!.basePrice
+      }
+
+      let current = line!
+      let stored: AllocationInput[] = await lineAllocations(scope, current.id)
+      const plannerManaged = stored.length > 0
+      const startChanged =
+        input.startDate !== undefined && input.startDate !== current.startDate
+      const endChanged =
+        input.endDate !== undefined && input.endDate !== current.endDate
+
+      if (plannerManaged && endChanged) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "This line's end date follows its Allocations. Change them in the Resource Planner, or move its start.",
+        })
+      }
+      if (plannerManaged && startChanged) {
+        // Lift-and-shift: the Allocations move by whole periods with the
+        // start, trimmed at the Quote End Date.
+        const moved = changeLineItemStart({
+          quote,
+          line: { ...current, allocations: stored },
+          startDate: input.startDate!,
+        })
+        if (!moved.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: moved.message })
         }
-
-        const stored = await lineAllocations(scope, line!.id)
-        const plannerManaged = stored.length > 0
-        const datesChanged =
-          (input.startDate !== undefined &&
-            input.startDate !== line!.startDate) ||
-          (input.endDate !== undefined && input.endDate !== line!.endDate)
-
-        if (datesChanged) {
-          if (plannerManaged) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message:
-                "This line's dates follow its Allocations. Change them in the Resource Planner.",
-            })
-          }
-          const problem = lineDatesProblem(
-            quote,
-            input.startDate ?? line!.startDate,
-            input.endDate ?? line!.endDate
-          )
-          if (problem) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: problem })
-          }
+        await writeAllocations(scope, {
+          lineItemId: current.id,
+          timePeriod: quote.timePeriod,
+          before: stored,
+          after: moved.line.allocations,
+        })
+        stored = moved.line.allocations
+        current = {
+          ...current,
+          startDate: moved.line.startDate,
+          endDate: moved.line.endDate,
+          quantity: moved.line.quantity,
         }
+        changes.startDate = current.startDate
+        changes.endDate = current.endDate
+        changes.quantity = current.quantity
+      } else if (startChanged || endChanged) {
+        const problem = lineDatesProblem(
+          quote,
+          input.startDate ?? current.startDate,
+          input.endDate ?? current.endDate
+        )
+        if (problem) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: problem })
+        }
+      }
 
-        if (plannerManaged && input.quantity !== undefined) {
-          const { hoursPerDay } = await getOrganizationSettings(scope)
-          const resized = resizeAllocatedEffort({
-            timePeriod: quote.timePeriod,
-            hoursPerDay,
-            quantity: input.quantity,
-            line: { ...line!, allocations: stored },
-            quote,
+      if (plannerManaged && input.quantity !== undefined) {
+        const { hoursPerDay } = await getOrganizationSettings(scope)
+        const resized = resizeAllocatedEffort({
+          timePeriod: quote.timePeriod,
+          hoursPerDay,
+          quantity: input.quantity,
+          line: { ...current, allocations: stored },
+          quote,
+        })
+        if (!resized.ok) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: resized.message,
           })
-          if (!resized.ok) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: resized.message,
-            })
-          }
-          const periodType = periodTypeForTimePeriod(quote.timePeriod)
-          const diff = diffAllocations(
-            quote.timePeriod,
-            stored,
-            resized.allocations
-          )
-          if (diff.deletes.length > 0) {
-            await scope.db
-              .delete(allocations)
-              .where(
-                scope.where(
-                  allocations,
-                  eq(allocations.lineItemId, line!.id),
-                  inArray(allocations.periodStart, diff.deletes)
-                )
-              )
-          }
-          if (diff.upserts.length > 0) {
-            await scope.db
-              .insert(allocations)
-              .values(
-                diff.upserts.map((a) => ({
-                  organizationId: scope.organizationId,
-                  lineItemId: line!.id,
-                  periodType,
-                  periodStart: a.periodStart,
-                  amount: a.amount,
-                }))
-              )
-              .onConflictDoUpdate({
-                target: [
-                  allocations.organizationId,
-                  allocations.lineItemId,
-                  allocations.periodType,
-                  allocations.periodStart,
-                ],
-                set: { amount: sql`excluded.amount`, updatedAt: new Date() },
-              })
-          }
-          changes.quantity = resized.quantity
-          changes.startDate = resized.startDate
-          changes.endDate = resized.endDate
         }
+        await writeAllocations(scope, {
+          lineItemId: current.id,
+          timePeriod: quote.timePeriod,
+          before: stored,
+          after: resized.allocations,
+        })
+        changes.quantity = resized.quantity
+        changes.startDate = resized.startDate
+        changes.endDate = resized.endDate
+      }
 
-        await scope.update(lineItems, line!.id, changes)
-        return editorResult(cmd, { lineIds: [line!.id] })
-      })
-    ),
+      await scope.update(lineItems, line!.id, changes)
+      return editorResult(cmd, { lineIds: [line!.id] })
+    })
+  ),
 
   /**
    * Deletes Line Items (one or many: a single gesture) with their

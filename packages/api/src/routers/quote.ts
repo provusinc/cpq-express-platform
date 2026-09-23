@@ -36,6 +36,7 @@ import { editorResult, lineItemViews } from "../line-items"
 import { quoteCommand, quoteFacts } from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
+import { quoteScheduleProcedures } from "./quote-schedule"
 
 const { accounts, lineItems, phases, quotes, users } = schema
 
@@ -468,6 +469,9 @@ export const quoteRouter = createTRPCRouter({
         return editorResult(cmd, {})
       })
     ),
+
+  /** `setDates` and `setTimePeriod` (see ./quote-schedule.ts). */
+  ...quoteScheduleProcedures,
 
   /** Renames the Quote (Name only). Needs edit permission and an unlocked Quote. */
   rename: organizationProcedure

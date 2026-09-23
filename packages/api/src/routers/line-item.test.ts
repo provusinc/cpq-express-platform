@@ -566,7 +566,7 @@ describe("lineItem.update", () => {
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
 
-  it("resizes a planner-managed line's Allocations and refuses date edits", () =>
+  it("resizes a planner-managed line's Allocations and refuses end-date edits", () =>
     withTestDb(async (db) => {
       const { organization, caller, quote, role } = await setup(db)
       const added = await caller("member").lineItem.add({
@@ -612,7 +612,7 @@ describe("lineItem.update", () => {
         caller("member").lineItem.update({
           quoteId: quote.id,
           id: line.id,
-          startDate: "2026-10-15",
+          endDate: "2026-12-15",
         })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
       await expect(

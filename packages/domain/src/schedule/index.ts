@@ -459,6 +459,123 @@ function shiftQuote(
   }
 }
 
+// ─── Both Quote dates at once ───────────────────────────────────────────────
+
+export interface QuoteWindowImpact {
+  /** How the start move was applied (`shift` unless asked to clamp). */
+  mode: "shift" | "clamp"
+  /** Lines whose dates, quantity or Allocations changed. */
+  impactedCount: number
+  /** Lines cut to a new Quote bound. */
+  clampedCount: number
+  /** Lines that lost Effort. */
+  effortReducedCount: number
+  /** Only lines that changed, old → new. */
+  lines: LineImpact[]
+  oldTotal: string
+  newTotal: string
+  /** True when anything changed, so the user should confirm first. */
+  requiresConfirmation: boolean
+  /** The start move then the end move, as `changeQuoteDates` reported them. */
+  steps: QuoteDateImpact[]
+}
+
+export type QuoteWindowChangeResult =
+  | {
+      ok: true
+      startDate: IsoDate
+      endDate: IsoDate
+      /** Every input line, in input order. */
+      lines: ScheduledLine[]
+      impact: QuoteWindowImpact
+    }
+  | Extract<QuoteDateChangeResult, { ok: false }>
+
+/**
+ * Move both Quote dates in one gesture (the Quote date editor): first the
+ * start (a Quote Shift by default, which also slides the end; or a clamp),
+ * then the end to `endDate` (a clamp inward, nothing else outward). The
+ * impact compares the original lines with the final ones, and the Totals
+ * are priced from the resulting quantities with the Quote Discount.
+ */
+export function changeQuoteWindow(input: {
+  quote: ScheduleQuote
+  lines: readonly ScheduleLine[]
+  startDate: IsoDate
+  endDate: IsoDate
+  mode?: "shift" | "clamp"
+}): QuoteWindowChangeResult {
+  const mode = input.mode ?? "shift"
+  let quote = input.quote
+  let lines: ScheduleLine[] = [...input.lines]
+  const steps: QuoteDateImpact[] = []
+  const clamped = new Set<string>()
+
+  const apply = (change: QuoteDateChange) => {
+    const result = changeQuoteDates({ quote, lines, change })
+    if (!result.ok) return result
+    steps.push(result.impact)
+    for (const impact of result.impact.lines) {
+      if (impact.clamped) clamped.add(impact.id)
+    }
+    lines = lines.map((line, i) => {
+      const next = result.lines[i]!
+      return {
+        ...line,
+        startDate: next.startDate,
+        endDate: next.endDate,
+        quantity: next.quantity,
+        allocations: next.allocations,
+      }
+    })
+    quote = { ...quote, startDate: result.startDate, endDate: result.endDate }
+    return null
+  }
+
+  if (input.startDate !== quote.startDate) {
+    const refusal = apply({ field: "start", date: input.startDate, mode })
+    if (refusal) return refusal
+  }
+  if (input.endDate !== quote.endDate) {
+    const refusal = apply({ field: "end", date: input.endDate })
+    if (refusal) return refusal
+  }
+
+  const scheduled = input.lines.map((original, i) =>
+    finish(original, input.quote.timePeriod, {
+      startDate: lines[i]!.startDate,
+      endDate: lines[i]!.endDate,
+      quantity: toQuantityString(lines[i]!.quantity),
+      allocations: normalizeAllocations(
+        input.quote.timePeriod,
+        lines[i]!.allocations
+      ),
+    })
+  )
+  const impacts = input.lines.flatMap((original, i) => {
+    const next = scheduled[i]!
+    if (!next.changed) return []
+    return [{ ...impactOf(original, next), clamped: clamped.has(original.id) }]
+  })
+  return {
+    ok: true,
+    startDate: quote.startDate,
+    endDate: quote.endDate,
+    lines: scheduled,
+    impact: {
+      mode,
+      impactedCount: impacts.length,
+      clampedCount: impacts.filter((i) => i.clamped).length,
+      effortReducedCount: impacts.filter((i) => i.effortReduced).length,
+      lines: impacts,
+      oldTotal: totalOf(input.quote, input.lines),
+      newTotal: totalOf(input.quote, lines),
+      requiresConfirmation: impacts.length > 0,
+      steps,
+    },
+  }
+}
+
 // ─── Line Item start change ─────────────────────────────────────────────────
 
 export type LineItemStartChangeResult =

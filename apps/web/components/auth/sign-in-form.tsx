@@ -62,8 +62,10 @@ export function SignInForm({
 
   return (
     <Card>
-      <CardHeader className="text-center">
-        <CardTitle className="text-xl">Sign in</CardTitle>
+      <CardHeader>
+        <CardTitle className="text-2xl font-semibold tracking-[-0.015em]">
+          Sign in
+        </CardTitle>
         <CardDescription>
           {oauthProviders.length > 0
             ? "Continue with your work account or an email link."

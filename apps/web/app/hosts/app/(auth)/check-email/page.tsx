@@ -16,16 +16,26 @@ export const metadata: Metadata = { title: "Check your email · CPQ Express" }
 export default function CheckEmailPage() {
   return (
     <Card>
-      <CardHeader className="text-center">
-        <MailCheckIcon className="mx-auto mb-2 size-8 text-muted-foreground" />
-        <CardTitle className="text-xl">Check your email</CardTitle>
+      <CardHeader>
+        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-accent">
+          <MailCheckIcon className="size-5 text-primary" />
+        </div>
+        <CardTitle className="text-2xl font-semibold tracking-[-0.015em]">
+          Check your email
+        </CardTitle>
         <CardDescription>
           We sent you a sign-in link. Open it on this device to finish signing
           in. The link expires in 24 hours and works once.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex justify-center">
-        <Link href="/sign-in" className={buttonVariants({ variant: "ghost" })}>
+      <CardContent>
+        <Link
+          href="/sign-in"
+          className={buttonVariants({
+            variant: "outline",
+            className: "w-full",
+          })}
+        >
           Use a different email
         </Link>
       </CardContent>

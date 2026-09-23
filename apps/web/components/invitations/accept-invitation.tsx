@@ -64,11 +64,11 @@ export function AcceptInvitation({
 
   return (
     <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex size-10 items-center justify-center rounded-full bg-muted">
-          <MailCheckIcon className="size-5 text-muted-foreground" />
+      <CardHeader>
+        <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-accent">
+          <MailCheckIcon className="size-5 text-primary" />
         </div>
-        <CardTitle className="text-xl">
+        <CardTitle className="text-2xl font-semibold tracking-[-0.015em]">
           Join {invitation.organizationName}
         </CardTitle>
         <CardDescription>
@@ -79,7 +79,7 @@ export function AcceptInvitation({
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         {emailMatches ? (
-          <p className="text-center text-muted-foreground">
+          <p className="text-muted-foreground">
             Signed in as {signedInAs}. The Invitation expires on{" "}
             {formatDate(invitation.expiresAt)}.
           </p>

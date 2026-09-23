@@ -36,6 +36,18 @@ There is one root `.env`, templated by `.env.example`. Add every new variable in
 - Do all arithmetic with `Decimal`, never JS `number`. Keep values as strings at the API boundary.
 - The server recomputes totals through the domain pricing engine and ignores totals sent by the client.
 
+## Domain package API
+
+Import from `@workspace/domain/<area>`; the root `@workspace/domain` re-exports every area. All functions are pure and take and return plain serialisable data.
+
+- **Boundary types.** Decimal inputs accept `string | number | Decimal`, so pass Postgres `numeric` strings straight in. Decimal outputs are strings at their column's storage scale: money has 4 dp (`"1234.5000"`), percentages 4 dp, and quantities and Allocation amounts 3 dp. Compare them with `Decimal`.
+- **Refusals.** Business refusals come back as values (`{ allowed: false, reason, message }` or `{ ok: false, reason, message }`), never as thrown errors. Map `reason` to a tRPC error code and show `message`.
+- `enums`: `ROLES`, `QUOTE_STATUSES`, `APPROVAL_STEP_ACTIONS`, `TIME_PERIODS`, `PERIOD_TYPES`, `BILLING_UNITS`, `SOURCE_KINDS`, `CATALOG_ITEM_KINDS`, `DISCOUNT_KINDS` and `MILESTONE_TYPES`, as const arrays with matching union types. db enums and zod schemas are built from these arrays.
+- `money`: `Decimal`, `currencyMinorUnit`, `roundToMinorUnit` (half-up), `sumDecimals`, and `toMoneyString`, `toPercentString` and `toQuantityString` for storage-scale strings.
+- `pricing`: `priceQuote({ currency, lines, discount })` returns per-line totals and margins, Subtotal, discountAmount, Total, cost, Margin and marginPct. Call it after every command and persist the result. It also has `hoursPerTimePeriod` and `defaultLineItemQuantity`, which use the Organization's Hours Per Day.
+- `status`: `nextStatus(status, action)`, `availableActions`, `isLocked`, `isTerminal`, `LOCKED_STATUSES`, and `canSubmit({ status, total })`, which gives the specific refusal reason.
+- `policy`: `can(actor, action, quote?, settings?)` answers every permission question, for Quote actions and for Admin-only Organization actions. `checkDeletableStatuses` validates the deletable-status setting, and `DELETABLE_STATUS_OPTIONS` lists the statuses that may be in it.
+
 ## tRPC
 
 - Add a router in `packages/api/src/routers/<area>.ts` and register it under its area name in `src/root.ts`.

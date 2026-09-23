@@ -1,6 +1,11 @@
 import { and, eq } from "drizzle-orm"
 
-import type { DiscountKind, SourceKind } from "@workspace/domain/enums"
+import type {
+  DiscountKind,
+  MilestoneType,
+  SourceKind,
+} from "@workspace/domain/enums"
+import { DEFAULT_MILESTONE_COLOURS } from "@workspace/domain/milestones"
 import { defaultLineItemQuantity } from "@workspace/domain/pricing"
 
 import type { Db } from "../index"
@@ -9,7 +14,9 @@ import { recomputeQuoteTotals } from "../quote-totals"
 import {
   catalogItems,
   lineItems,
+  milestones,
   organizationSettings,
+  phases,
   quotes,
   resourceRoles,
   users,
@@ -26,37 +33,97 @@ interface SeedLine {
   /** A negotiated rate overriding the Base Rate price. */
   unitPrice?: string
   notes?: string
+  /** The (top-level) Phase it sits in, by name; omitted: no Phase. */
+  phase?: string
+  /** Omitted: the Quote dates. */
+  startDate?: string
+  endDate?: string
+}
+
+interface SeedPlan {
+  lines: SeedLine[]
+  discount?: { kind: DiscountKind; value: string }
+  /** Top-level Phases, in order. */
+  phases?: string[]
+  milestones?: {
+    name: string
+    date: string
+    type: MilestoneType
+    completed?: boolean
+    description?: string
+  }[]
 }
 
 /**
  * Line Items (and a Quote Discount) for the demo Quotes, by Quote Name, so
  * the editor, the list's totals and the lock have content. Sources come
- * from `seed/catalog.ts`.
+ * from `seed/catalog.ts`. "Acme Corp – Platform rollout" also has Phases
+ * (its lines dated inside them) and Milestones, so the Overview, Timeline
+ * and grid have a plan to show.
  */
-export const SEED_LINE_ITEMS: Record<
-  string,
-  { lines: SeedLine[]; discount?: { kind: DiscountKind; value: string } }
-> = {
+export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "Acme Corp – Platform rollout": {
+    phases: ["Discovery", "Design", "Build", "Launch"],
     lines: [
-      { kind: "resource_role", source: "Solutions Architect", quantity: "320" },
-      { kind: "resource_role", source: "Software Engineer", quantity: "640" },
+      {
+        kind: "resource_role",
+        source: "Solutions Architect",
+        quantity: "160",
+        phase: "Discovery",
+        startDate: "2026-10-01",
+        endDate: "2026-10-30",
+      },
+      {
+        kind: "resource_role",
+        source: "Solutions Architect",
+        quantity: "160",
+        phase: "Design",
+        startDate: "2026-11-02",
+        endDate: "2026-12-11",
+      },
+      {
+        kind: "add_on",
+        source: "Code Review",
+        quantity: "4",
+        phase: "Design",
+        startDate: "2026-11-02",
+        endDate: "2026-12-11",
+      },
+      {
+        kind: "resource_role",
+        source: "Software Engineer",
+        quantity: "640",
+        phase: "Build",
+        startDate: "2026-12-14",
+        endDate: "2027-02-26",
+      },
       {
         kind: "product",
         source: "Senior Developer Service",
         quantity: "2",
         notes: "Two on-site weeks",
+        phase: "Build",
+        startDate: "2026-12-14",
+        endDate: "2027-02-26",
       },
-      { kind: "add_on", source: "Code Review", quantity: "4" },
       {
         kind: "add_on",
         source: "Quality Assurance Testing",
         quantity: "160",
         unitPrice: "90.00",
         notes: "Negotiated rate",
+        phase: "Launch",
+        startDate: "2027-03-01",
+        endDate: "2027-03-31",
       },
     ],
     discount: { kind: "percent", value: "5" },
+    milestones: [
+      { name: "Kickoff", date: "2026-10-01", type: "milestone" },
+      { name: "Design sign-off", date: "2026-12-11", type: "review" },
+      { name: "First site live", date: "2027-02-26", type: "deadline" },
+      { name: "Final payment", date: "2027-03-31", type: "payment_due" },
+    ],
   },
   "TechStart – Support retainer": {
     lines: [
@@ -269,19 +336,49 @@ export async function seedLineItems(db: Db, organization: Organization) {
     await db
       .delete(lineItems)
       .where(scope.where(lineItems, eq(lineItems.quoteId, quote.id)))
+    await db
+      .delete(phases)
+      .where(scope.where(phases, eq(phases.quoteId, quote.id)))
+    await db
+      .delete(milestones)
+      .where(scope.where(milestones, eq(milestones.quoteId, quote.id)))
+    const phaseIds = new Map<string, string>()
+    for (const [sequence, name] of (plan.phases ?? []).entries()) {
+      const phase = await scope.insert(phases, {
+        quoteId: quote.id,
+        name,
+        sequence,
+      })
+      phaseIds.set(name, phase.id)
+    }
+    if (plan.milestones?.length) {
+      await scope.insertMany(
+        milestones,
+        plan.milestones.map((m) => ({
+          quoteId: quote.id,
+          name: m.name,
+          date: m.date,
+          type: m.type,
+          colour: DEFAULT_MILESTONE_COLOURS[m.type],
+          completed: m.completed ?? false,
+          description: m.description ?? null,
+        }))
+      )
+    }
     const values = []
     for (const [sequence, line] of plan.lines.entries()) {
       const source = await findSource(db, organization.id, line)
       values.push({
         quoteId: quote.id,
+        phaseId: line.phase ? (phaseIds.get(line.phase) ?? null) : null,
         sourceKind: line.kind,
         catalogItemId: line.kind === "resource_role" ? null : source.id,
         resourceRoleId: line.kind === "resource_role" ? source.id : null,
         name: source.name,
         description: source.description,
         notes: line.notes ?? null,
-        startDate: quote.startDate,
-        endDate: quote.endDate,
+        startDate: line.startDate ?? quote.startDate,
+        endDate: line.endDate ?? quote.endDate,
         billingUnit: source.billingUnit,
         basePrice: source.price,
         baseCost: source.cost,

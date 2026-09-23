@@ -297,6 +297,44 @@ describe("quote.list", () => {
       ).toEqual(["gamma pilot"])
     }))
 
+  it("filters by a Valid Until range", () =>
+    withTestDb(async (db) => {
+      const { caller } = await listSetup(db)
+      const list = async (validUntilFrom?: string, validUntilTo?: string) =>
+        names(
+          await caller("member").quote.list({ validUntilFrom, validUntilTo })
+        )
+      expect(await list("2000-01-01", "2000-01-01")).toEqual(["Alpha rollout"])
+      expect(await list("2001-01-01")).toEqual(["Beta support"])
+      expect(await list(undefined, "2998-12-31")).toEqual(["Alpha rollout"])
+    }))
+
+  it("counts every status under the other filters, for the status tabs", () =>
+    withTestDb(async (db) => {
+      const { caller, globex } = await listSetup(db)
+      const all = await caller("member").quote.list({ statuses: ["draft"] })
+      expect(all.total).toBe(1)
+      expect(all.statusCounts).toEqual({
+        draft: 1,
+        pending_approval: 0,
+        approved: 1,
+        rejected: 1,
+        pending_customer_approval: 0,
+        customer_approved: 0,
+        customer_rejected: 0,
+      })
+      const onGlobex = await caller("member").quote.list({
+        accountId: globex.id,
+        statuses: ["approved", "rejected"],
+      })
+      expect(onGlobex.total).toBe(2)
+      expect(onGlobex.statusCounts).toMatchObject({
+        draft: 0,
+        approved: 1,
+        rejected: 1,
+      })
+    }))
+
   it("rejects a created range that ends before it starts", () =>
     withTestDb(async (db) => {
       const { caller } = await listSetup(db)

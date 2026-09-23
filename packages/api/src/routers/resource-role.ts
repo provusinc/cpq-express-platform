@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import {
+  and,
   asc,
-  count,
   eq,
   gte,
   ilike,
@@ -78,7 +78,8 @@ export const resourceRoleRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const where = ctx.scope.where(
+      // Every filter but the status: the status tabs count under these.
+      const others = ctx.scope.where(
         resourceRoles,
         input.search
           ? or(
@@ -86,9 +87,6 @@ export const resourceRoleRouter = createTRPCRouter({
               ilike(resourceRoles.description, containsPattern(input.search))
             )
           : undefined,
-        input.status === "all"
-          ? undefined
-          : eq(resourceRoles.active, input.status === "active"),
         input.minRate ? gte(resourceRoles.billRate, input.minRate) : undefined,
         input.maxRate ? lte(resourceRoles.billRate, input.maxRate) : undefined,
         input.country
@@ -97,7 +95,11 @@ export const resourceRoleRouter = createTRPCRouter({
         input.state ? eq(resourceRoles.locationState, input.state) : undefined,
         input.city ? eq(resourceRoles.locationCity, input.city) : undefined
       )
-      const [rows, [total]] = await Promise.all([
+      const where =
+        input.status === "all"
+          ? others
+          : and(others, eq(resourceRoles.active, input.status === "active"))
+      const [rows, [counts]] = await Promise.all([
         ctx.scope.db
           .select()
           .from(resourceRoles)
@@ -108,11 +110,30 @@ export const resourceRoleRouter = createTRPCRouter({
           )
           .limit(input.pageSize)
           .offset((input.page - 1) * input.pageSize),
-        ctx.scope.db.select({ n: count() }).from(resourceRoles).where(where),
+        ctx.scope.db
+          .select({
+            active:
+              sql<number>`count(*) filter (where ${resourceRoles.active})`.mapWith(
+                Number
+              ),
+            inactive:
+              sql<number>`count(*) filter (where not ${resourceRoles.active})`.mapWith(
+                Number
+              ),
+          })
+          .from(resourceRoles)
+          .where(others),
       ])
+      const statusCounts = {
+        active: counts?.active ?? 0,
+        inactive: counts?.inactive ?? 0,
+        all: (counts?.active ?? 0) + (counts?.inactive ?? 0),
+      }
       return {
         rows,
-        total: total?.n ?? 0,
+        total: statusCounts[input.status],
+        /** Counts per status tab under the other filters. */
+        statusCounts,
         page: input.page,
         pageSize: input.pageSize,
       }

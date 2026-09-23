@@ -3,6 +3,7 @@ import { allocationRouter } from "./routers/allocation"
 import { authRouter } from "./routers/auth"
 import { catalogItemRouter } from "./routers/catalog-item"
 import { contactRouter } from "./routers/contact"
+import { dashboardRouter } from "./routers/dashboard"
 import { healthRouter } from "./routers/health"
 import { invitationRouter } from "./routers/invitation"
 import { lineItemRouter } from "./routers/line-item"
@@ -28,6 +29,7 @@ export const appRouter = createTRPCRouter({
   auth: authRouter,
   catalogItem: catalogItemRouter,
   contact: contactRouter,
+  dashboard: dashboardRouter,
   health: healthRouter,
   invitation: invitationRouter,
   lineItem: lineItemRouter,

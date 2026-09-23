@@ -11,14 +11,16 @@ import {
   ilike,
   inArray,
   lt,
+  lte,
   ne,
   or,
   schema,
   sql,
 } from "@workspace/db"
-import type { OrganizationScope, SQLWrapper } from "@workspace/db"
+import type { OrganizationScope, SQL, SQLWrapper } from "@workspace/db"
 import { addDays, compareDates } from "@workspace/domain/dates"
 import { QUOTE_STATUSES, TIME_PERIODS } from "@workspace/domain/enums"
+import type { QuoteStatus } from "@workspace/domain/enums"
 import { can, quotePermissions } from "@workspace/domain/policy"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import { isLocked } from "@workspace/domain/status"
@@ -150,6 +152,10 @@ const listInput = z
     createdFrom: isoDateInput.optional(),
     /** Created on or before this date (UTC day). */
     createdTo: isoDateInput.optional(),
+    /** Valid Until on or after this date. */
+    validUntilFrom: isoDateInput.optional(),
+    /** Valid Until on or before this date. */
+    validUntilTo: isoDateInput.optional(),
     /** `mine`: Quotes the caller owns. */
     owner: z.enum(["all", "mine"]).default("all"),
     /**
@@ -187,42 +193,51 @@ export const quoteRouter = createTRPCRouter({
    * `validUntilPassed` is true when Valid Until is before today (UTC),
    * which the list highlights; it never changes the status. `canDelete`
    * is whether the caller may delete the row (its menu and bulk delete).
+   * `statusCounts` counts every status under all the other filters (the
+   * list's status tabs); `total` is their sum over `statuses`.
    */
   list: organizationProcedure.input(listInput).query(async ({ ctx, input }) => {
     const search = input.search ? containsPattern(input.search) : undefined
-    const where = and(
-      ctx.scope.where(
-        quotes,
-        search
-          ? or(
-              ilike(quotes.name, search),
-              ilike(quotes.description, search),
-              ilike(accounts.name, search)
-            )
-          : undefined,
-        input.statuses?.length
-          ? inArray(quotes.status, input.statuses)
-          : undefined,
-        input.accountId ? eq(quotes.accountId, input.accountId) : undefined,
-        input.createdFrom
-          ? gte(quotes.createdAt, utcDayStart(input.createdFrom))
-          : undefined,
-        input.createdTo
-          ? lt(quotes.createdAt, utcDayStart(addDays(input.createdTo, 1)))
-          : undefined,
-        input.owner === "mine" ? eq(quotes.ownerId, ctx.user.id) : undefined,
-        input.marginBelow !== undefined
-          ? marginBelow(input.marginBelow)
-          : undefined
-      ),
-      ctx.scope.where(accounts)
-    )
+    // Every filter but the status: the status tabs count under these.
+    const filters = (statuses?: readonly QuoteStatus[]) =>
+      and(
+        ctx.scope.where(
+          quotes,
+          search
+            ? or(
+                ilike(quotes.name, search),
+                ilike(quotes.description, search),
+                ilike(accounts.name, search)
+              )
+            : undefined,
+          statuses?.length ? inArray(quotes.status, statuses) : undefined,
+          input.accountId ? eq(quotes.accountId, input.accountId) : undefined,
+          input.createdFrom
+            ? gte(quotes.createdAt, utcDayStart(input.createdFrom))
+            : undefined,
+          input.createdTo
+            ? lt(quotes.createdAt, utcDayStart(addDays(input.createdTo, 1)))
+            : undefined,
+          input.validUntilFrom
+            ? gte(quotes.validUntil, input.validUntilFrom)
+            : undefined,
+          input.validUntilTo
+            ? lte(quotes.validUntil, input.validUntilTo)
+            : undefined,
+          input.owner === "mine" ? eq(quotes.ownerId, ctx.user.id) : undefined,
+          input.marginBelow !== undefined
+            ? marginBelow(input.marginBelow)
+            : undefined
+        ),
+        ctx.scope.where(accounts)
+      ) as SQL
+    const where = filters(input.statuses)
     const direction = input.sort.direction === "asc" ? asc : desc
     const accountJoin = and(
       eq(accounts.organizationId, quotes.organizationId),
       eq(accounts.id, quotes.accountId)
     )
-    const [rows, [total], settings] = await Promise.all([
+    const [rows, byStatus, settings] = await Promise.all([
       ctx.scope.db
         .select({
           id: quotes.id,
@@ -258,11 +273,14 @@ export const quoteRouter = createTRPCRouter({
         )
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize),
+      // Counts per status under every other filter: the status tabs; the
+      // total is the sum over the statuses asked for.
       ctx.scope.db
-        .select({ n: count() })
+        .select({ status: quotes.status, n: count() })
         .from(quotes)
         .innerJoin(accounts, accountJoin)
-        .where(where),
+        .where(filters())
+        .groupBy(quotes.status),
       getOrganizationSettings(ctx.scope),
     ])
     const today = utcToday()
@@ -278,7 +296,18 @@ export const quoteRouter = createTRPCRouter({
           { deletableStatuses: settings.deletableStatuses }
         ).allowed,
       })),
-      total: total?.n ?? 0,
+      total: byStatus
+        .filter(
+          (s) => !input.statuses?.length || input.statuses.includes(s.status)
+        )
+        .reduce((sum, s) => sum + s.n, 0),
+      /** Every status's count under the other filters (the status tabs). */
+      statusCounts: Object.fromEntries(
+        QUOTE_STATUSES.map((status) => [
+          status,
+          byStatus.find((s) => s.status === status)?.n ?? 0,
+        ])
+      ) as Record<QuoteStatus, number>,
       page: input.page,
       pageSize: input.pageSize,
     }

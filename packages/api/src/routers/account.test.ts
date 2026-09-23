@@ -187,6 +187,11 @@ describe("account.list", () => {
 
       const all = await caller.account.list({})
       expect(all).toMatchObject({ total: 2, page: 1, pageSize: 25 })
+      expect(all.statusCounts).toEqual({ active: 2, archived: 1, all: 3 })
+      expect(
+        (await caller.account.list({ status: "archived", type: "Customer" }))
+          .statusCounts
+      ).toEqual({ active: 1, archived: 1, all: 2 })
       expect(all.rows.map((r) => r.name)).toEqual(["acme", "Initech"])
       expect(all.rows[1]).toMatchObject({
         contactCount: 2,

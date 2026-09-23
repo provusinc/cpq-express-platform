@@ -188,6 +188,21 @@ describe("catalogItem.list", () => {
         "Premium Support",
       ])
       expect(await names({ status: "inactive" })).toEqual(["Old Workshop"])
+      const inactive = await member.catalogItem.list({
+        kind: "product",
+        status: "inactive",
+      })
+      expect(inactive.total).toBe(1)
+      expect(inactive.statusCounts).toEqual({ active: 2, inactive: 1, all: 3 })
+      expect(
+        (
+          await member.catalogItem.list({
+            kind: "product",
+            status: "active",
+            search: "support",
+          })
+        ).statusCounts
+      ).toEqual({ active: 2, inactive: 0, all: 2 })
       expect(await names({ minPrice: "75.0001", maxPrice: "250" })).toEqual([
         "Old Workshop",
         "Premium Support",

@@ -123,6 +123,12 @@ describe("resourceRole.list", () => {
         "Junior Developer",
         "Software Engineer",
       ])
+      const active = await member.resourceRole.list({ status: "active" })
+      expect(active.total).toBe(2)
+      expect(active.statusCounts).toEqual({ active: 2, inactive: 1, all: 3 })
+      expect(
+        (await member.resourceRole.list({ state: "California" })).statusCounts
+      ).toEqual({ active: 1, inactive: 1, all: 2 })
       expect(await names({ minRate: "100", maxRate: "150" })).toEqual([
         "Software Engineer",
         "UX Designer",

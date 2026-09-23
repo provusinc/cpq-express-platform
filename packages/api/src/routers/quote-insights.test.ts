@@ -27,7 +27,12 @@ async function setup(db: Db) {
   /** A Quote owned by the Member with the given status and totals. */
   const quote = (
     status: QuoteStatus,
-    fields: { total?: string; marginPct?: string; createdAt?: Date } = {}
+    fields: {
+      total?: string
+      marginPct?: string
+      createdAt?: Date
+      validUntil?: string | null
+    } = {}
   ) =>
     createQuote(db, organization, {
       owner: user,
@@ -35,6 +40,9 @@ async function setup(db: Db) {
       total: fields.total ?? "1000",
       marginPct: fields.marginPct ?? "40",
       ...(fields.createdAt ? { createdAt: fields.createdAt } : {}),
+      ...(fields.validUntil !== undefined
+        ? { validUntil: fields.validUntil }
+        : {}),
     })
   /** Records a submit Approval Step `days` ago. */
   const submitted = (quoteId: string, days: number) =>
@@ -64,6 +72,7 @@ describe("quote.insights", () => {
         "pending_approval",
         "high_value_pipeline",
         "low_margin",
+        "expiring_soon",
         "this_month",
         "rejected",
       ])
@@ -166,6 +175,32 @@ describe("quote.insights", () => {
       })
     }))
 
+  it("counts offers in play whose Valid Until is within 14 days", () =>
+    withTestDb(async (db) => {
+      const { caller, quote } = await setup(db)
+      const day = (offset: number) =>
+        new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, 10)
+      await quote("draft", { total: "10", validUntil: day(0) })
+      await quote("approved", { total: "20", validUntil: day(7) })
+      await quote("pending_customer_approval", {
+        total: "30",
+        validUntil: day(14),
+      })
+      // Not counted: passed, too far out, none, or no longer in play.
+      await quote("draft", { total: "1", validUntil: day(-1) })
+      await quote("draft", { total: "1", validUntil: day(15) })
+      await quote("draft", { total: "1", validUntil: null })
+      await quote("rejected", { total: "1", validUntil: day(3) })
+      await quote("customer_approved", { total: "1", validUntil: day(3) })
+      const result = await caller.quote.insights()
+      expect(result.today).toBe(day(0))
+      expect(card(result, "expiring_soon")).toMatchObject({
+        count: 3,
+        value: "60.0000",
+        severity: "warning",
+      })
+    }))
+
   it("counts Quotes created since the start of this UTC month", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
@@ -191,18 +226,18 @@ describe("quote.insights", () => {
   it.each([
     [2, "info"],
     [3, "warning"],
-  ] as const)(
-    "counts Rejected + Customer Rejected (%i → %s)",
-    (n, severity) =>
-      withTestDb(async (db) => {
-        const { caller, quote } = await setup(db)
-        await quote("customer_rejected", { total: "50" })
-        for (let i = 1; i < n; i++) await quote("rejected", { total: "50" })
-        await quote("approved")
-        expect(card(await caller.quote.insights(), "rejected")).toMatchObject(
-          { count: n, value: (50 * n).toFixed(4), severity }
-        )
+  ] as const)("counts Rejected + Customer Rejected (%i → %s)", (n, severity) =>
+    withTestDb(async (db) => {
+      const { caller, quote } = await setup(db)
+      await quote("customer_rejected", { total: "50" })
+      for (let i = 1; i < n; i++) await quote("rejected", { total: "50" })
+      await quote("approved")
+      expect(card(await caller.quote.insights(), "rejected")).toMatchObject({
+        count: n,
+        value: (50 * n).toFixed(4),
+        severity,
       })
+    })
   )
 
   it("counts every status", () =>
@@ -289,7 +324,10 @@ describe("quote.insights", () => {
       expect(card(result, "low_margin").count).toBe(0)
       expect(result.statusCounts.draft).toBe(0)
       await expect(
-        organizationCaller(db, { organization, user: outsider }).quote.insights()
+        organizationCaller(db, {
+          organization,
+          user: outsider,
+        }).quote.insights()
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
 })

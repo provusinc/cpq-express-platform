@@ -2,9 +2,9 @@ import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import {
+  and,
   arrayContains,
   asc,
-  count,
   eq,
   gte,
   ilike,
@@ -101,7 +101,8 @@ export const catalogItemRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const where = ctx.scope.where(
+      // Every filter but the status: the status tabs count under these.
+      const others = ctx.scope.where(
         catalogItems,
         eq(catalogItems.kind, input.kind),
         input.search
@@ -113,16 +114,17 @@ export const catalogItemRouter = createTRPCRouter({
         input.billingUnit
           ? eq(catalogItems.billingUnit, input.billingUnit)
           : undefined,
-        input.status === "all"
-          ? undefined
-          : eq(catalogItems.active, input.status === "active"),
         input.minPrice ? gte(catalogItems.price, input.minPrice) : undefined,
         input.maxPrice ? lte(catalogItems.price, input.maxPrice) : undefined,
         input.tags?.length
           ? arrayContains(catalogItems.tags, input.tags)
           : undefined
       )
-      const [rows, [total]] = await Promise.all([
+      const where =
+        input.status === "all"
+          ? others
+          : and(others, eq(catalogItems.active, input.status === "active"))
+      const [rows, [counts]] = await Promise.all([
         ctx.scope.db
           .select()
           .from(catalogItems)
@@ -130,11 +132,30 @@ export const catalogItemRouter = createTRPCRouter({
           .orderBy(asc(sql`lower(${catalogItems.name})`), asc(catalogItems.id))
           .limit(input.pageSize)
           .offset((input.page - 1) * input.pageSize),
-        ctx.scope.db.select({ n: count() }).from(catalogItems).where(where),
+        ctx.scope.db
+          .select({
+            active:
+              sql<number>`count(*) filter (where ${catalogItems.active})`.mapWith(
+                Number
+              ),
+            inactive:
+              sql<number>`count(*) filter (where not ${catalogItems.active})`.mapWith(
+                Number
+              ),
+          })
+          .from(catalogItems)
+          .where(others),
       ])
+      const statusCounts = {
+        active: counts?.active ?? 0,
+        inactive: counts?.inactive ?? 0,
+        all: (counts?.active ?? 0) + (counts?.inactive ?? 0),
+      }
       return {
         rows,
-        total: total?.n ?? 0,
+        total: statusCounts[input.status],
+        /** Counts per status tab under the other filters. */
+        statusCounts,
         page: input.page,
         pageSize: input.pageSize,
       }

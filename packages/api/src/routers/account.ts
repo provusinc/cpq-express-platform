@@ -165,7 +165,8 @@ export const accountRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
-      const where = ctx.scope.where(
+      // Every filter but the status: the Active / Archived tabs count under these.
+      const others = ctx.scope.where(
         accounts,
         input.search
           ? or(
@@ -175,16 +176,17 @@ export const accountRouter = createTRPCRouter({
             )
           : undefined,
         input.type ? eq(accounts.type, input.type) : undefined,
-        input.industry ? eq(accounts.industry, input.industry) : undefined,
-        input.status === "all"
-          ? undefined
-          : eq(accounts.archived, input.status === "archived")
+        input.industry ? eq(accounts.industry, input.industry) : undefined
       )
+      const where =
+        input.status === "all"
+          ? others
+          : and(others, eq(accounts.archived, input.status === "archived"))
       const contactCount = ctx.scope.db
         .select({ n: count() })
         .from(contacts)
         .where(ctx.scope.where(contacts, eq(contacts.accountId, accounts.id)))
-      const [rows, [total]] = await Promise.all([
+      const [rows, [counts]] = await Promise.all([
         ctx.scope.db
           .select({
             id: accounts.id,
@@ -217,14 +219,33 @@ export const accountRouter = createTRPCRouter({
           .orderBy(asc(sql`lower(${accounts.name})`), asc(accounts.id))
           .limit(input.pageSize)
           .offset((input.page - 1) * input.pageSize),
-        ctx.scope.db.select({ n: count() }).from(accounts).where(where),
+        ctx.scope.db
+          .select({
+            active:
+              sql<number>`count(*) filter (where not ${accounts.archived})`.mapWith(
+                Number
+              ),
+            archived:
+              sql<number>`count(*) filter (where ${accounts.archived})`.mapWith(
+                Number
+              ),
+          })
+          .from(accounts)
+          .where(others),
       ])
+      const statusCounts = {
+        active: counts?.active ?? 0,
+        archived: counts?.archived ?? 0,
+        all: (counts?.active ?? 0) + (counts?.archived ?? 0),
+      }
       return {
         rows: rows.map((r) => ({
           ...r,
           primaryContact: r.primaryContact?.id ? r.primaryContact : null,
         })),
-        total: total?.n ?? 0,
+        total: statusCounts[input.status],
+        /** Counts per status tab under the other filters. */
+        statusCounts,
         page: input.page,
         pageSize: input.pageSize,
       }

@@ -1,6 +1,6 @@
 /**
  * `quote.insights`, registered on the `quote` router: the Key Insight cards
- * above the Quote list, the count per status and the caller's recent
+ * at the top of the Dashboard, the count per status and the caller's recent
  * Quotes. The definitions and severities are the domain's
  * (`@workspace/domain/insights`); this file only counts.
  */
@@ -13,6 +13,7 @@ import {
   gte,
   inArray,
   lt,
+  lte,
   or,
   schema,
   sql,
@@ -22,6 +23,8 @@ import { QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import {
   ageInDays,
+  EXPIRING_STATUSES,
+  expiringWindow,
   INSIGHT_KEYS,
   insightSeverity,
   LOW_MARGIN_STATUSES,
@@ -30,6 +33,7 @@ import {
   PIPELINE_STATUSES,
   REJECTED_STATUSES,
   startOfUtcMonth,
+  utcDay,
 } from "@workspace/domain/insights"
 import type { InsightKey } from "@workspace/domain/insights"
 import { toMoneyString } from "@workspace/domain/money"
@@ -51,7 +55,6 @@ export const marginBelow = (threshold: string) =>
 /** The start of a UTC day, for `createdAt` comparisons. */
 const utcDayStart = (date: string) => new Date(`${date}T00:00:00.000Z`)
 
-
 export const quoteInsightsProcedures = {
   /**
    * The Key Insights for the whole Organization (every member sees every
@@ -61,16 +64,21 @@ export const quoteInsightsProcedures = {
    * - `high_value_pipeline`: Draft + Pending Approval, count and value;
    * - `low_margin`: Margin % < 15 with Total > 0, excluding decided
    *   statuses (Approved, Rejected, Customer Approved/Rejected);
+   * - `expiring_soon`: Valid Until from today to 14 days ahead, on an
+   *   offer still in play (Draft, Pending Approval, Approved, Pending
+   *   Customer Approval);
    * - `this_month`: Quotes created since the start of this UTC month;
    * - `rejected`: Rejected + Customer Rejected.
    * Each card carries its domain severity. Also the count per status (every
-   * status, zeros included), `thisMonthFrom` (the month's first day, for
-   * the list filter) and the caller's recent Quotes: those they created or
+   * status, zeros included), `thisMonthFrom` (the month's first day) and
+   * `today` (the UTC day), for the list filters, and the caller's recent Quotes: those they created or
    * last changed, most recently changed first.
    */
   insights: organizationProcedure.query(async ({ ctx }) => {
     const now = new Date()
     const thisMonthFrom = startOfUtcMonth(now.getTime())
+    const today = utcDay(now.getTime())
+    const expiring = expiringWindow(today)
 
     // The latest submit step of each Quote: when it entered the queue.
     const submitted = ctx.scope.db
@@ -89,6 +97,11 @@ export const quoteInsightsProcedures = {
       low_margin: and(
         inArray(quotes.status, LOW_MARGIN_STATUSES),
         marginBelow(LOW_MARGIN_THRESHOLD)
+      )!,
+      expiring_soon: and(
+        inArray(quotes.status, EXPIRING_STATUSES),
+        gte(quotes.validUntil, expiring.from),
+        lte(quotes.validUntil, expiring.to)
       )!,
       this_month: gte(quotes.createdAt, utcDayStart(thisMonthFrom)),
       rejected: inArray(quotes.status, REJECTED_STATUSES),
@@ -114,7 +127,9 @@ export const quoteInsightsProcedures = {
           ...aggregates,
           // Epoch ms of the longest wait (a Quote without a submit step,
           // e.g. imported, counts from its last change).
-          oldestSubmittedAt: sql<number | null>`extract(epoch from min(coalesce(${submitted.submittedAt}, ${quotes.updatedAt})) filter (where ${definitions.pending_approval})) * 1000`,
+          oldestSubmittedAt: sql<
+            number | null
+          >`extract(epoch from min(coalesce(${submitted.submittedAt}, ${quotes.updatedAt})) filter (where ${definitions.pending_approval})) * 1000`,
         })
         .from(quotes)
         .leftJoin(submitted, eq(submitted.quoteId, quotes.id))
@@ -194,6 +209,7 @@ export const quoteInsightsProcedures = {
     return {
       currencyCode: ctx.organization.currencyCode,
       thisMonthFrom,
+      today,
       cards,
       statusCounts,
       recent,

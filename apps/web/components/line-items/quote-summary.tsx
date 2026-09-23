@@ -12,6 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Separator } from "@workspace/ui/components/separator"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@workspace/ui/components/toggle-group"
 import { cn } from "@workspace/ui/lib/utils"
 
 import type { EditorTotals } from "@/components/quotes/autosave"
@@ -91,25 +96,26 @@ export function QuoteSummary({
           <div className="flex items-center justify-between gap-2">
             <dt className="flex items-center gap-1 text-muted-foreground">
               Discount
-              <span className="inline-flex rounded-md border p-0.5">
+              <ToggleGroup
+                aria-label="Discount kind"
+                value={[kind]}
+                onValueChange={(values) => {
+                  const next = values[0] as typeof kind | undefined
+                  if (next && next !== kind) switchKind(next)
+                }}
+                disabled={readOnly}
+                className="gap-0 rounded-md border p-0.5"
+              >
                 {(["percent", "amount"] as const).map((k) => (
-                  <button
+                  <ToggleGroupItem
                     key={k}
-                    type="button"
-                    disabled={readOnly}
-                    aria-pressed={kind === k}
-                    onClick={() => switchKind(k)}
-                    className={cn(
-                      "rounded px-1.5 text-xs",
-                      kind === k
-                        ? "bg-muted font-medium text-foreground"
-                        : "text-muted-foreground"
-                    )}
+                    value={k}
+                    className="h-auto min-w-0 rounded px-1.5 text-xs font-normal text-muted-foreground aria-pressed:font-medium aria-pressed:text-foreground"
                   >
                     {k === "percent" ? "%" : currency}
-                  </button>
+                  </ToggleGroupItem>
                 ))}
-              </span>
+              </ToggleGroup>
             </dt>
             <dd className="flex items-center gap-1">
               <InlineText
@@ -145,7 +151,7 @@ export function QuoteSummary({
               −{money(totals.discountAmount)}
             </Row>
           )}
-          <div className="my-1 border-t" />
+          <Separator className="my-1" />
           <Row label="Total" strong>
             {money(totals.total)}
           </Row>

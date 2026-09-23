@@ -1,3 +1,5 @@
+import { Progress } from "@workspace/ui/components/progress"
+
 import { BrandLockup } from "@/components/brand/brand"
 
 /** Sample lines for the showcase: an illustration, not anyone's data. */
@@ -45,9 +47,11 @@ export function AuthShowcase() {
           <div className="mt-4 flex items-end justify-between border-t border-current/20 pt-3">
             <div className="flex flex-col gap-1.5">
               <span className="text-xs opacity-70">Margin 32.4%</span>
-              <span className="relative block h-1.5 w-28 overflow-hidden rounded-full bg-current/15">
-                <span className="absolute inset-y-0 left-0 w-[65%] rounded-full bg-iris" />
-              </span>
+              <Progress
+                aria-hidden
+                value={65}
+                className="w-28 gap-0 **:data-[slot=progress-indicator]:rounded-full **:data-[slot=progress-indicator]:bg-iris **:data-[slot=progress-track]:h-1.5 **:data-[slot=progress-track]:bg-current/15"
+              />
             </div>
             <div className="flex flex-col items-end">
               <span className="text-xs opacity-70">Total</span>

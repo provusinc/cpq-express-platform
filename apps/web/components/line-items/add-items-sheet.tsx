@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@workspace/ui/components/sheet"
+import { Spinner } from "@workspace/ui/components/spinner"
 import {
   Tabs,
   TabsContent,
@@ -29,6 +30,12 @@ import {
 } from "@workspace/ui/components/tabs"
 
 import { TagsFilter } from "@/components/catalog/tags-filter"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+} from "@/components/shell/empty"
 import { FilterSelect } from "@/components/shell/filter-select"
 import { useLabels } from "@/components/shell/labels"
 import { formatMoney } from "@/lib/money"
@@ -411,18 +418,26 @@ function PickerList({
       style={{ maxHeight: "calc(100dvh - 17rem)" }}
     >
       {loading ? (
-        <p className="py-8 text-center text-muted-foreground">Loading…</p>
+        <p className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+          <Spinner role={undefined} aria-hidden />
+          Loading…
+        </p>
       ) : children.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-          <PackageSearchIcon className="size-6" aria-hidden />
-          {empty}
-        </div>
+        <Empty className="py-10">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <PackageSearchIcon />
+            </EmptyMedia>
+            <EmptyDescription>{empty}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border">{children}</ul>
       )}
       <div ref={endRef} aria-hidden className="h-1" />
       {fetchingMore && (
-        <p className="py-2 text-center text-xs text-muted-foreground">
+        <p className="flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground">
+          <Spinner className="size-3" role={undefined} aria-hidden />
           Loading more…
         </p>
       )}

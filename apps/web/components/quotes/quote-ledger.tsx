@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import { LOW_MARGIN_THRESHOLD } from "@workspace/domain/insights"
 import { Decimal } from "@workspace/domain/money"
+import { Progress } from "@workspace/ui/components/progress"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { useHydrated } from "@/components/shell/use-hydrated"
@@ -100,7 +101,7 @@ function Ledger({
         {hasDiscount ? `−${money(totals.discountAmount)}` : "—"}
       </Figure>
       <Figure label="Margin">
-        <span className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span
             className={cn(
               tone === "danger" && "text-danger-ink",
@@ -109,26 +110,27 @@ function Ledger({
           >
             {trimMoney(new Decimal(totals.marginPct).toFixed(1))}%
           </span>
-          <span
-            aria-hidden
-            className="relative h-1.5 w-14 overflow-hidden rounded-full bg-muted"
-          >
-            <span
+          <div aria-hidden className="relative w-14">
+            <Progress
+              value={fill}
               className={cn(
-                "absolute inset-y-0 left-0 rounded-full",
-                tone === "success" && "bg-success",
-                tone === "warning" && "bg-warning",
-                tone === "danger" && "bg-danger",
-                tone === "neutral" && "bg-neutral"
+                "gap-0 **:data-[slot=progress-indicator]:rounded-full **:data-[slot=progress-track]:h-1.5",
+                tone === "success" &&
+                  "**:data-[slot=progress-indicator]:bg-success",
+                tone === "warning" &&
+                  "**:data-[slot=progress-indicator]:bg-warning",
+                tone === "danger" &&
+                  "**:data-[slot=progress-indicator]:bg-danger",
+                tone === "neutral" &&
+                  "**:data-[slot=progress-indicator]:bg-neutral"
               )}
-              style={{ width: `${fill}%` }}
             />
             <span
               className="absolute inset-y-0 w-px bg-foreground/40"
               style={{ left: `${threshold}%` }}
             />
-          </span>
-        </span>
+          </div>
+        </div>
       </Figure>
       <div className="flex flex-col items-end border-l pl-5">
         <dt className="text-[0.7rem] leading-4 text-muted-foreground">Total</dt>

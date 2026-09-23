@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { ArrowRightIcon, CalendarCogIcon, LoaderCircleIcon } from "lucide-react"
+import { ArrowRightIcon, CalendarCogIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
@@ -18,8 +18,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  FieldTitle,
+} from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@workspace/ui/components/radio-group"
 import {
   Select,
   SelectContent,
@@ -27,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
+import { Spinner } from "@workspace/ui/components/spinner"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import { formatDate } from "@/lib/format"
@@ -203,13 +217,19 @@ function QuoteDatesDialog({
             </div>
           </div>
           {startMoved && (
-            <div
-              className="flex flex-col gap-1.5"
-              role="radiogroup"
-              aria-label="How to move the start"
-            >
-              <span className="text-sm font-medium">Moving the start</span>
-              <div className="grid grid-cols-2 gap-2">
+            <FieldSet className="gap-1.5">
+              <FieldLegend variant="label" className="mb-0">
+                Moving the start
+              </FieldLegend>
+              <RadioGroup
+                value={mode}
+                onValueChange={(value) => {
+                  const next = value as typeof mode
+                  setMode(next)
+                  onStartChange(startDate, next)
+                }}
+                className="grid-cols-2"
+              >
                 {(
                   [
                     [
@@ -224,25 +244,23 @@ function QuoteDatesDialog({
                     ],
                   ] as const
                 ).map(([value, title, text]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={mode === value}
-                    onClick={() => {
-                      setMode(value)
-                      onStartChange(startDate, value)
-                    }}
-                    className="flex flex-col gap-0.5 rounded-lg border p-2 text-left text-sm aria-checked:border-primary aria-checked:bg-primary/5"
-                  >
-                    <span className="font-medium">{title}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {text}
-                    </span>
-                  </button>
+                  <FieldLabel key={value} htmlFor={`start-mode-${value}`}>
+                    <Field orientation="horizontal" className="items-start">
+                      <FieldContent className="gap-0.5">
+                        <FieldTitle>{title}</FieldTitle>
+                        <FieldDescription className="text-xs">
+                          {text}
+                        </FieldDescription>
+                      </FieldContent>
+                      <RadioGroupItem
+                        value={value}
+                        id={`start-mode-${value}`}
+                      />
+                    </Field>
+                  </FieldLabel>
                 ))}
-              </div>
-            </div>
+              </RadioGroup>
+            </FieldSet>
           )}
           <ImpactPreview
             changed={changed}
@@ -294,7 +312,9 @@ function ImpactPreview({
   if (!impact) {
     return (
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        {pending && <LoaderCircleIcon className="size-3.5 animate-spin" />}
+        {pending && (
+          <Spinner className="size-3.5" role={undefined} aria-hidden />
+        )}
         Working out the impact…
       </p>
     )

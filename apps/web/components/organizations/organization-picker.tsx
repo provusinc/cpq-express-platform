@@ -8,14 +8,22 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@workspace/ui/components/item"
+
+import { SignOutButton } from "@/components/auth/sign-out-button"
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@workspace/ui/components/empty"
-
-import { SignOutButton } from "@/components/auth/sign-out-button"
+} from "@/components/shell/empty"
 
 export interface PickerOrganization {
   slug: string
@@ -61,28 +69,25 @@ export function OrganizationPicker({
             </EmptyHeader>
           </Empty>
         ) : (
-          <ul className="flex flex-col divide-y rounded-lg border">
+          <ItemGroup className="gap-0 divide-y rounded-lg border">
             {organizations.map((organization) => (
-              <li key={organization.slug}>
-                <PickerLink
-                  href={organization.url}
-                  title={organization.name}
-                  subtitle={`${organization.slug} · ${ROLE_LABELS[organization.role]}`}
-                  icon={<Building2Icon />}
-                />
-              </li>
+              <PickerLink
+                key={organization.slug}
+                href={organization.url}
+                title={organization.name}
+                subtitle={`${organization.slug} · ${ROLE_LABELS[organization.role]}`}
+                icon={<Building2Icon />}
+              />
             ))}
             {adminConsoleUrl && (
-              <li>
-                <PickerLink
-                  href={adminConsoleUrl}
-                  title="Platform console"
-                  subtitle="Provision and operate Organizations"
-                  icon={<ShieldIcon />}
-                />
-              </li>
+              <PickerLink
+                href={adminConsoleUrl}
+                title="Platform console"
+                subtitle="Provision and operate Organizations"
+                icon={<ShieldIcon />}
+              />
             )}
-          </ul>
+          </ItemGroup>
         )}
         <div className="flex justify-end">
           <SignOutButton />
@@ -104,20 +109,21 @@ function PickerLink({
   icon: React.ReactNode
 }) {
   return (
-    <a
-      href={href}
-      className="flex items-center gap-3 p-3 text-sm transition-colors hover:bg-muted/60 [&_svg]:size-4"
+    <Item
+      role="listitem"
+      render={<a href={href} />}
+      className="gap-3 rounded-none p-3 first:rounded-t-lg last:rounded-b-lg hover:bg-muted/60"
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+      <ItemMedia variant="icon" className="size-8 rounded-md bg-muted">
         {icon}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium">{title}</span>
-        <span className="truncate text-xs text-muted-foreground">
+      </ItemMedia>
+      <ItemContent className="min-w-0 gap-0">
+        <ItemTitle className="w-full truncate">{title}</ItemTitle>
+        <ItemDescription className="truncate text-xs">
           {subtitle}
-        </span>
-      </span>
-      <ArrowRightIcon className="text-muted-foreground" />
-    </a>
+        </ItemDescription>
+      </ItemContent>
+      <ArrowRightIcon className="size-4 text-muted-foreground" />
+    </Item>
   )
 }

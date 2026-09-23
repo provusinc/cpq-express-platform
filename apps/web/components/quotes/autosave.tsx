@@ -41,11 +41,12 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query"
 import type { UseMutationOptions } from "@tanstack/react-query"
-import { CheckIcon, LoaderCircleIcon } from "lucide-react"
+import { CheckIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
 import { priceQuote } from "@workspace/domain/pricing"
+import { Spinner } from "@workspace/ui/components/spinner"
 
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -289,7 +290,7 @@ export function QuoteSaveIndicator({ quoteId }: { quoteId: string }) {
         className="flex items-center gap-1 text-sm text-muted-foreground"
         role="status"
       >
-        <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
+        <Spinner className="size-3.5" role={undefined} aria-hidden />
         Saving…
       </span>
     )

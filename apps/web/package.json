@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@react-pdf/renderer": "^4.9.0",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-table": "^9.2.4",
@@ -24,6 +25,7 @@
     "@workspace/api": "workspace:*",
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/documents": "workspace:*",
     "@workspace/domain": "workspace:*",
     "@workspace/storage": "workspace:*",
     "@workspace/ui": "workspace:*",

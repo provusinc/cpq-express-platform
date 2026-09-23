@@ -10,6 +10,7 @@ import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
 import { platformRouter } from "./routers/platform"
 import { quoteRouter } from "./routers/quote"
+import { quoteDocumentRouter } from "./routers/quote-document"
 import { resourceRoleRouter } from "./routers/resource-role"
 import { settingsRouter } from "./routers/settings"
 import { userRouter } from "./routers/user"
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   organization: organizationRouter,
   platform: platformRouter,
   quote: quoteRouter,
+  quoteDocument: quoteDocumentRouter,
   resourceRole: resourceRoleRouter,
   settings: settingsRouter,
   user: userRouter,

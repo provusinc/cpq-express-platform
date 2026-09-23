@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 
 import { eq, organizationScope, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
+import { DEFAULT_DOCUMENT_SETTINGS } from "@workspace/domain/documents"
 import { LOGO_MAX_BYTES } from "@workspace/domain/settings"
 
 import { getOrganizationSettings } from "../settings"
@@ -525,5 +526,108 @@ describe("logo", () => {
             .from(organizations)
             .where(eq(organizations.id, acme.id)),
       })
+    }))
+})
+
+describe("document settings", () => {
+  const SETTINGS = {
+    format: "compact" as const,
+    primaryColor: "#AABBCC",
+    accentColor: "#f0a",
+    sections: [
+      { section: "line_items" as const, visible: true },
+      { section: "header" as const, visible: false },
+    ],
+    moneyDecimals: 0,
+    quantityDecimals: 1,
+    locale: "de-de",
+    footerText: "  Thank you  ",
+    terms: "Net 30",
+  }
+
+  it("reads the defaults until saved, for every member", () =>
+    withTestDb(async (db) => {
+      const acme = await createOrganization(db)
+      const { user } = await createMember(db, acme, { role: "member" })
+      const caller = organizationCaller(db, { organization: acme, user })
+      expect(await caller.settings.documents()).toEqual(
+        DEFAULT_DOCUMENT_SETTINGS
+      )
+    }))
+
+  it("saves normalised settings (Admin)", () =>
+    withTestDb(async (db) => {
+      const { caller } = await acmeWithAdmin(db)
+      const saved = await caller.settings.updateDocuments(SETTINGS)
+      expect(saved).toMatchObject({
+        format: "compact",
+        primaryColor: "#aabbcc",
+        accentColor: "#ff00aa",
+        moneyDecimals: 0,
+        quantityDecimals: 1,
+        locale: "de-DE",
+        footerText: "Thank you",
+        terms: "Net 30",
+      })
+      expect(saved.sections.slice(0, 3)).toEqual([
+        { section: "line_items", visible: true },
+        { section: "header", visible: false },
+        { section: "bill_to", visible: true },
+      ])
+      expect(saved.sections).toHaveLength(8)
+      expect(await caller.settings.documents()).toEqual(saved)
+
+      // Saving again replaces the row.
+      const again = await caller.settings.updateDocuments({
+        ...SETTINGS,
+        moneyDecimals: null,
+        terms: "",
+      })
+      expect(again).toMatchObject({ moneyDecimals: null, terms: null })
+    }))
+
+  it.each([
+    [{ primaryColor: "navy" }, "primaryColor"],
+    [{ accentColor: "#12345g" }, "accentColor"],
+    [{ moneyDecimals: 7 }, "moneyDecimals"],
+    [{ quantityDecimals: 4 }, "quantityDecimals"],
+    [{ locale: "??" }, "locale"],
+  ])("refuses %j", (patch, field) =>
+    withTestDb(async (db) => {
+      const { caller } = await acmeWithAdmin(db)
+      const error = await caller.settings
+        .updateDocuments({ ...SETTINGS, ...patch })
+        .catch((e: unknown) => e)
+      expect(error).toMatchObject({ code: "BAD_REQUEST" })
+      expect(JSON.stringify((error as { cause?: unknown }).cause)).toContain(
+        field
+      )
+    })
+  )
+
+  it("is Admin-only", () =>
+    withTestDb(async (db) => {
+      const acme = await createOrganization(db)
+      for (const role of ["manager", "member"] as const) {
+        const { user } = await createMember(db, acme, { role })
+        const caller = organizationCaller(db, { organization: acme, user })
+        await expect(
+          caller.settings.updateDocuments(SETTINGS)
+        ).rejects.toMatchObject({ code: "FORBIDDEN" })
+      }
+    }))
+
+  it("is per Organization", () =>
+    withTestDb(async (db) => {
+      const { caller } = await acmeWithAdmin(db)
+      await caller.settings.updateDocuments(SETTINGS)
+      const globex = await createOrganization(db)
+      const { user } = await createMember(db, globex, { role: "admin" })
+      expect(
+        await organizationCaller(db, {
+          organization: globex,
+          user,
+        }).settings.documents()
+      ).toEqual(DEFAULT_DOCUMENT_SETTINGS)
     }))
 })

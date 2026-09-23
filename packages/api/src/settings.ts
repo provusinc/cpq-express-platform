@@ -9,6 +9,11 @@
  */
 import { eq, schema } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
+import {
+  DEFAULT_DOCUMENT_SETTINGS,
+  sectionsFromColumns,
+} from "@workspace/domain/documents"
+import type { DocumentSettings } from "@workspace/domain/documents"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import { DEFAULT_DELETABLE_STATUSES } from "@workspace/domain/policy"
 import {
@@ -18,7 +23,12 @@ import {
 import type { Labels } from "@workspace/domain/settings"
 import type { ObjectStorage } from "@workspace/storage"
 
-const { labelOverrides, organizationSettings, organizations } = schema
+const {
+  documentSettings,
+  labelOverrides,
+  organizationSettings,
+  organizations,
+} = schema
 
 export interface OrganizationSettings {
   /** Glossary: Hours Per Day, at storage scale (e.g. "8.00"). */
@@ -82,5 +92,33 @@ export async function getCompany(
           expiresIn: LOGO_URL_EXPIRES_IN_SECONDS,
         })
       : null,
+  }
+}
+
+/**
+ * The Organization's document settings (Settings → Documents): format,
+ * colours, sections in order with their visibility, decimals, locale,
+ * footer and terms. `DEFAULT_DOCUMENT_SETTINGS` until an Admin saves them.
+ */
+export async function getDocumentSettings(
+  scope: OrganizationScope
+): Promise<DocumentSettings> {
+  const [row] = await scope.findMany(documentSettings, { limit: 1 })
+  if (!row) {
+    return {
+      ...DEFAULT_DOCUMENT_SETTINGS,
+      sections: DEFAULT_DOCUMENT_SETTINGS.sections.map((s) => ({ ...s })),
+    }
+  }
+  return {
+    format: row.format,
+    primaryColor: row.primaryColor,
+    accentColor: row.accentColor,
+    sections: sectionsFromColumns(row.sectionOrder, row.hiddenSections),
+    moneyDecimals: row.moneyDecimals,
+    quantityDecimals: row.quantityDecimals,
+    locale: row.locale,
+    footerText: row.footerText,
+    terms: row.terms,
   }
 }

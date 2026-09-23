@@ -19,6 +19,7 @@
     "@trpc/server": "^11.19.0",
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/documents": "workspace:*",
     "@workspace/domain": "workspace:*",
     "@workspace/storage": "workspace:*",
     "superjson": "^2.2.6",

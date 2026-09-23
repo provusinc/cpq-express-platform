@@ -17,6 +17,7 @@
  * - members: Membership rules (the last-Admin guard)
  * - settings: Organization settings (Hours Per Day, Label Overrides, logo)
  * - quotes:  Quote naming (the suggested Name for a new Quote)
+ * - documents: Quote Document settings (validation, defaults) and deletion
  */
 export * from "./enums"
 export * from "./money"
@@ -32,3 +33,4 @@ export * from "./organizations"
 export * from "./members"
 export * from "./settings"
 export * from "./quotes"
+export * from "./documents"

@@ -3,6 +3,12 @@ import { z } from "zod"
 
 import { eq, schema, sql, uuidv7 } from "@workspace/db"
 import type { Db } from "@workspace/db"
+import {
+  checkDocumentSettings,
+  DOCUMENT_FORMATS,
+  DOCUMENT_SECTIONS,
+  sectionsToColumns,
+} from "@workspace/domain/documents"
 import { LABEL_TERMS, QUOTE_STATUSES } from "@workspace/domain/enums"
 import { checkDeletableStatuses } from "@workspace/domain/policy"
 import {
@@ -16,14 +22,24 @@ import {
 } from "@workspace/storage"
 import type { ObjectStorage } from "@workspace/storage"
 
-import { getCompany, getLabels, getOrganizationSettings } from "../settings"
+import {
+  getCompany,
+  getDocumentSettings,
+  getLabels,
+  getOrganizationSettings,
+} from "../settings"
 import {
   createTRPCRouter,
   organizationProcedure,
   permittedProcedure,
 } from "../trpc"
 
-const { labelOverrides, organizationSettings, organizations } = schema
+const {
+  documentSettings,
+  labelOverrides,
+  organizationSettings,
+  organizations,
+} = schema
 
 /** Object-key area of Organization logos: `organizations/<id>/logo/<name>`. */
 const LOGO_AREA = "logo"
@@ -136,6 +152,36 @@ const labelsInput = z.object({
     ),
 })
 
+/** Settings → Documents; validated and normalised by the domain's rules. */
+const documentSettingsInput = z
+  .object({
+    format: z.enum(DOCUMENT_FORMATS),
+    primaryColor: z.string(),
+    accentColor: z.string(),
+    sections: z
+      .array(
+        z.object({ section: z.enum(DOCUMENT_SECTIONS), visible: z.boolean() })
+      )
+      .max(DOCUMENT_SECTIONS.length * 2),
+    moneyDecimals: z.number().int().nullable(),
+    quantityDecimals: z.number().int(),
+    locale: z.string().max(35),
+    footerText: z.string().nullish(),
+    terms: z.string().nullish(),
+  })
+  .transform((input, ctx) => {
+    const check = checkDocumentSettings(input)
+    if (!check.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: check.message,
+        path: [check.field],
+      })
+      return z.NEVER
+    }
+    return check.value
+  })
+
 const manageSettings = permittedProcedure("settings.manage")
 
 export const settingsRouter = createTRPCRouter({
@@ -160,6 +206,31 @@ export const settingsRouter = createTRPCRouter({
   company: organizationProcedure.query(({ ctx }) =>
     getCompany(ctx.scope, ctx.storage)
   ),
+
+  /**
+   * Document settings: how Quote Documents look (format, colours, section
+   * order and visibility, decimals, locale, footer, terms). Any member: the
+   * live preview renders with them.
+   */
+  documents: organizationProcedure.query(({ ctx }) =>
+    getDocumentSettings(ctx.scope)
+  ),
+
+  /** Replaces the document settings. */
+  updateDocuments: manageSettings
+    .input(documentSettingsInput)
+    .mutation(async ({ ctx, input }) => {
+      const { sections, ...rest } = input
+      const values = { ...rest, ...sectionsToColumns(sections) }
+      await ctx.db
+        .insert(documentSettings)
+        .values({ organizationId: ctx.organization.id, ...values })
+        .onConflictDoUpdate({
+          target: documentSettings.organizationId,
+          set: { ...values, updatedAt: new Date() },
+        })
+      return getDocumentSettings(ctx.scope)
+    }),
 
   /** Replaces the company information (name, contact details, address). */
   updateCompany: manageSettings

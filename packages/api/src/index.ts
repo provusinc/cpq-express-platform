@@ -15,7 +15,24 @@ export type {
   ResourceRoleImportValues,
   RowResult,
 } from "./catalog-import"
-export { getCompany, getLabels, getOrganizationSettings } from "./settings"
+export {
+  getCompany,
+  getDocumentSettings,
+  getLabels,
+  getOrganizationSettings,
+} from "./settings"
+export {
+  buildQuoteDocumentSnapshot,
+  generateQuoteDocument,
+  QUOTE_DOCUMENT_AREA,
+  removeQuoteDocumentObjects,
+} from "./documents"
+export type {
+  GenerateQuoteDocumentOptions,
+  QuoteDocumentView,
+} from "./documents"
+export { openQuoteDocument } from "./routers/quote-document"
+export type { OpenQuoteDocumentResult } from "./routers/quote-document"
 export type { OrganizationSettings } from "./settings"
 export type { QuoteCommand, QuoteRow } from "./quotes"
 export type { EditorResult, LineItemView } from "./line-items"

@@ -1,0 +1,257 @@
+"use client"
+
+/**
+ * Clone of niko-table's `filters/table-view-menu.tsx` (registry item
+ * `@niko-table/data-table-view-menu`), carrying the app's Columns popover design (a
+ * "n of m shown" header, checkbox rows, a padded Reset footer). The popover's
+ * inside can't be styled from outside, so per the UI component policy this is
+ * the one sanctioned clone; keep it in step with upstream fixes.
+ */
+
+/**
+ * A dropdown menu component that allows users to toggle the visibility of table columns.
+ * It uses a popover to display a list of columns with checkboxes.
+ *
+ * Two opt-in extensions:
+ *   - `lockedColumnIds`: include columns marked `enableHiding: false` in the
+ *     list, but render them disabled (always-on, can't toggle).
+ *   - `onReset` + `resetLabel`: render a Reset button below a separator.
+ *
+ * Tuned for large column counts (200+): rows are a memoized component, the
+ * search filter runs at this layer (so non-matching rows skip rendering
+ * entirely), and `lockedColumnIds` is consulted via a `Set` for O(1) lookups.
+ *
+ * For drag-to-reorder, see `TableViewDndMenu` — it lives in a separate file
+ * so consumers who don't need DnD don't pay the `@dnd-kit/*` bundle cost.
+ */
+
+import type { RowData } from "@tanstack/react-table"
+import { Check, ChevronsUpDown, RotateCcw, Settings2 } from "lucide-react"
+import * as React from "react"
+import { Button } from "@workspace/ui/components/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@workspace/ui/components/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@workspace/ui/components/popover"
+import { cn } from "@workspace/ui/lib/utils"
+import { formatLabel } from "@workspace/ui/components/niko-table/lib/format"
+
+import type {
+  DataTableColumn,
+  DataTableInstance,
+} from "@workspace/ui/components/niko-table/types"
+function getColumnTitle<TData extends RowData>(
+  column: DataTableColumn<TData, unknown>
+): string {
+  return column.columnDef.meta?.label ?? formatLabel(column.id)
+}
+
+export interface ColumnsViewMenuProps<TData extends RowData> {
+  table: DataTableInstance<TData>
+  className?: string
+  onColumnVisibilityChange?: (columnId: string, isVisible: boolean) => void
+  /**
+   * Column ids that should appear in the menu but cannot be toggled off.
+   * Useful for columns the table marks `enableHiding: false` but the
+   * consumer still wants visible in the column list (typically with a
+   * Reset to Defaults affordance below).
+   */
+  lockedColumnIds?: string[]
+  /**
+   * When provided, renders a Reset button at the bottom of the menu.
+   * Useful when paired with persisted column preferences so users can
+   * revert to defaults.
+   */
+  onReset?: () => void
+  /** Label for the reset button. Defaults to "Reset to defaults". */
+  resetLabel?: string
+  /**
+   * Replaces the default toolbar button.
+   *
+   * Same `trigger` contract the sibling filters already expose
+   * (`TableColumnActions`, `TableDateFilter`, `TableFacetedFilter`), so a
+   * consumer that needs a different trigger shape — a header-sized bare icon
+   * beside a column title, for instance — composes one instead of waiting for
+   * a boolean per shape.
+   */
+  trigger?: React.ReactNode
+}
+
+interface MenuRowProps<TData extends RowData> {
+  column: DataTableColumn<TData, unknown>
+  isLocked: boolean
+  isVisible: boolean
+  onToggle: (columnId: string) => void
+}
+
+const MenuRow = React.memo(function MenuRow<TData extends RowData>({
+  column,
+  isLocked,
+  isVisible,
+  onToggle,
+}: MenuRowProps<TData>) {
+  return (
+    <CommandItem
+      data-disabled={isLocked ? "" : undefined}
+      aria-checked={isLocked || isVisible}
+      className="gap-2.5"
+      onSelect={() => {
+        if (isLocked) return
+        onToggle(column.id)
+      }}
+    >
+      {/* App fix: a checkbox look, so hidden columns read as unticked. */}
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors",
+          (isVisible || isLocked) &&
+            "border-primary bg-primary text-primary-foreground",
+          isLocked && "opacity-50"
+        )}
+      >
+        {(isVisible || isLocked) && <Check className="size-3" />}
+      </span>
+      <span className={cn("truncate", isLocked && "text-muted-foreground")}>
+        {getColumnTitle(column)}
+      </span>
+    </CommandItem>
+  )
+}) as <TData extends RowData>(props: MenuRowProps<TData>) => React.ReactElement
+
+export function ColumnsViewMenu<TData extends RowData>({
+  table,
+  onColumnVisibilityChange,
+  lockedColumnIds,
+  onReset,
+
+  trigger,
+  resetLabel,
+}: ColumnsViewMenuProps<TData>) {
+  // Controlled search. cmdk's built-in filter hides non-matching `CommandItem`s
+  // but still renders all of them — at 200+ columns that's the bottleneck.
+  // Filtering at this layer means non-matching rows skip rendering entirely.
+  const [search, setSearch] = React.useState("")
+
+  // O(1) lookups instead of O(m) `.includes()` per row.
+  const lockedSet = React.useMemo(
+    () => new Set(lockedColumnIds ?? []),
+    [lockedColumnIds]
+  )
+
+  const columns = React.useMemo(
+    () =>
+      table
+        .getAllColumns()
+        .filter(
+          (column) =>
+            typeof column.accessorFn !== "undefined" &&
+            (column.getCanHide() || lockedSet.has(column.id))
+        ),
+    // Depend on the column set, not just the (stable) table ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table, table.options.columns, lockedSet]
+  )
+
+  const visibleColumns = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return columns
+    return columns.filter((c) => getColumnTitle(c).toLowerCase().includes(q))
+  }, [columns, search])
+
+  // Stable callback so memoized rows skip re-render on keystrokes.
+  const onToggle = React.useCallback(
+    (columnId: string) => {
+      const column = table.getColumn(columnId)
+      if (!column) return
+      const newVisibility = !column.getIsVisible()
+      column.toggleVisibility(newVisibility)
+      onColumnVisibilityChange?.(columnId, newVisibility)
+    },
+    [table, onColumnVisibilityChange]
+  )
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          (trigger as React.ReactElement | undefined) ?? (
+            <Button
+              aria-label="Toggle columns"
+              role="combobox"
+              variant="outline"
+              size="sm"
+              className="ml-auto hidden h-8 lg:flex"
+            >
+              <Settings2 />
+              View
+              <ChevronsUpDown className="ml-auto opacity-50" />
+            </Button>
+          )
+        }
+      />
+      <PopoverContent align="end" className="w-64 gap-0 p-0">
+        <Command shouldFilter={false} className="rounded-lg! p-0">
+          {/* App fix: a titled header with the shown count. */}
+          <div className="flex items-baseline justify-between gap-2 px-3 pt-2.5 pb-1.5">
+            <span className="text-sm font-medium">Columns</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {columns.filter((c) => c.getIsVisible()).length} of{" "}
+              {columns.length} shown
+            </span>
+          </div>
+          <CommandInput
+            placeholder="Search columns"
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList className="max-h-80 p-1">
+            <CommandEmpty>No columns found.</CommandEmpty>
+            <CommandGroup>
+              {visibleColumns.map((column) => (
+                <MenuRow
+                  key={column.id}
+                  column={column}
+                  isLocked={lockedSet.has(column.id)}
+                  isVisible={column.getIsVisible()}
+                  onToggle={onToggle}
+                />
+              ))}
+            </CommandGroup>
+          </CommandList>
+          {onReset ? (
+            <>
+              <div className="border-t p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start gap-2 text-muted-foreground"
+                  onClick={onReset}
+                >
+                  <RotateCcw className="size-3.5" />
+                  {resetLabel ?? "Reset to defaults"}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * @required displayName is required for auto feature detection
+ * @see "feature-detection.ts"
+ */
+
+ColumnsViewMenu.displayName = "ColumnsViewMenu"

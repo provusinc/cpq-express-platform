@@ -9,7 +9,8 @@
  * - `FacetedFilter` is a shadcn `Popover` with a real `Button` trigger
  *   around niko's `DataTableFacetedFilterContent` (niko's own trigger nests
  *   a `<button>` in the popover's `<button>`).
- * - `DateRangeFilter`, `ColumnsMenu` and `ColumnsDndMenu` are niko's
+ * - `DateRangeFilter` is niko's; `ColumnsMenu` / `ColumnsDndMenu` use our
+ *   clones of niko's view menus (columns-view-*.tsx). All
  *   components with a `TriggerFace` as `trigger`: niko renders the trigger
  *   inside its own `<button>`, so the face is a `<span>` that looks like a
  *   Button (globals.css makes that `<button>` a bare hit target).
@@ -36,8 +37,6 @@ import {
 } from "@workspace/ui/components/input-group"
 import { DataTableDateFilter } from "@workspace/ui/components/niko-table/components/data-table-date-filter"
 import { DataTableFacetedFilterContent } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
-import { DataTableViewDndMenu } from "@workspace/ui/components/niko-table/components/data-table-view-dnd-menu"
-import { DataTableViewMenu } from "@workspace/ui/components/niko-table/components/data-table-view-menu"
 import { useDataTable } from "@workspace/ui/components/niko-table/core/data-table-context"
 import { useDerivedColumnTitle } from "@workspace/ui/components/niko-table/hooks/use-derived-column-title"
 import { formatDate } from "@workspace/ui/components/niko-table/lib/format"
@@ -49,6 +48,9 @@ import {
 } from "@workspace/ui/components/popover"
 import { Separator } from "@workspace/ui/components/separator"
 import { cn } from "@workspace/ui/lib/utils"
+
+import { ColumnsViewDndMenu } from "./columns-view-dnd-menu"
+import { ColumnsViewMenu } from "./columns-view-menu"
 
 /**
  * Looks like a `Button` but is a `<span>`, for a niko trigger slot that is
@@ -319,9 +321,10 @@ function ColumnsFace() {
  * with `enableHiding: false` (the Name, filter-only columns) aren't listed.
  */
 export function ColumnsMenu() {
+  const { table } = useDataTable()
   return (
     <div className="ml-auto">
-      <DataTableViewMenu trigger={<ColumnsFace />} />
+      <ColumnsViewMenu table={table} trigger={<ColumnsFace />} />
     </div>
   )
 }
@@ -340,9 +343,11 @@ export function ColumnsDndMenu({
   onColumnOrderChange: (order: string[]) => void
   onReset: () => void
 }) {
+  const { table } = useDataTable()
   return (
     <div className="ml-auto">
-      <DataTableViewDndMenu
+      <ColumnsViewDndMenu
+        table={table}
         columnOrder={columnOrder}
         onColumnOrderChange={onColumnOrderChange}
         onReset={onReset}

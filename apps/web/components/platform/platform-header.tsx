@@ -5,6 +5,7 @@ import { LogOutIcon, ShieldIcon } from "lucide-react"
 import { signOut } from "@workspace/auth/react"
 import { Button, buttonVariants } from "@workspace/ui/components/button"
 
+import { BrandMark } from "@/components/brand/brand"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 /** Top bar of the Platform Admin console. */
@@ -19,13 +20,14 @@ export function PlatformHeader({
   signedOutUrl: string
 }) {
   return (
-    <header className="border-b bg-background">
+    <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 md:px-6">
-        <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <ShieldIcon className="size-4" />
-        </span>
+        <BrandMark />
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className="text-sm font-semibold">Platform console</span>
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            Platform console
+            <ShieldIcon className="size-3.5 text-iris" aria-hidden />
+          </span>
           <span className="truncate text-xs text-muted-foreground">
             {email}
           </span>

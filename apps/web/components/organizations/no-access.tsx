@@ -10,6 +10,8 @@ import {
   EmptyTitle,
 } from "@workspace/ui/components/empty"
 
+import { BrandLockup } from "@/components/brand/brand"
+
 /**
  * Shown on an Organization subdomain to a signed-in User without a
  * Membership there. Deliberately identical whether or not the Organization
@@ -28,8 +30,9 @@ export function NoAccess({
   reason?: string
 }) {
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
-      <Empty className="max-w-md border bg-background">
+    <main className="flex min-h-svh flex-col items-center justify-center gap-8 bg-canvas p-6">
+      <BrandLockup />
+      <Empty className="max-w-md flex-none border bg-card">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <LockIcon />

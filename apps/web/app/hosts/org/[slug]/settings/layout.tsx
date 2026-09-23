@@ -29,8 +29,10 @@ export default async function SettingsLayout({
         title="Settings"
         description="How your Organization quotes, and how CPQ Express speaks to your team."
       />
-      <SettingsTabs />
-      <div className="max-w-3xl">{children}</div>
+      <div className="grid gap-6 lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:gap-10">
+        <SettingsTabs />
+        <div className="max-w-3xl min-w-0 lg:border-l lg:pl-10">{children}</div>
+      </div>
     </>
   )
 }

@@ -8,14 +8,12 @@ import {
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
-  ArrowLeftIcon,
   PencilIcon,
   PlusIcon,
   StarIcon,
   Trash2Icon,
   UsersIcon,
 } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
@@ -23,7 +21,7 @@ import { toast } from "sonner"
 import type { RouterOutputs } from "@workspace/api"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
 import {
   Card,
   CardAction,
@@ -116,17 +114,6 @@ export function AccountDetail({ accountId }: { accountId: string }) {
 
   return (
     <>
-      <Link
-        href="/accounts"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "self-start",
-        })}
-      >
-        <ArrowLeftIcon data-icon="inline-start" />
-        Accounts
-      </Link>
       <PageHeader
         title={account.name}
         description={

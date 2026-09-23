@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
+import { BrandLockup } from "@/components/brand/brand"
 import { OrganizationPicker } from "@/components/organizations/organization-picker"
 import { adminUrl, organizationUrl } from "@/lib/urls"
 import { getCaller } from "@/trpc/server"
@@ -39,9 +40,9 @@ export default async function OrganizationPickerPage({
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
+    <main className="flex min-h-svh items-center justify-center bg-canvas p-6">
       <div className="flex w-full max-w-md flex-col gap-6">
-        <p className="text-center text-sm font-medium">CPQ Express</p>
+        <BrandLockup className="self-center" />
         <OrganizationPicker
           email={session.user.email}
           organizations={organizations}

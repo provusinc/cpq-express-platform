@@ -1,15 +1,49 @@
+import {
+  Building2Icon,
+  FileTextIcon,
+  SlidersHorizontalIcon,
+  TagsIcon,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+
 /**
- * The Settings tabs, in order. Each has a route at
- * `app/hosts/org/[slug]/settings/<segment>/page.tsx`; add a tab by adding
+ * The Settings sections, in order (the side nav). Each has a route at
+ * `app/hosts/org/[slug]/settings/<segment>/page.tsx`; add one by adding
  * its entry here and its page.
  */
 export const SETTINGS_TABS = [
-  { segment: "company", label: "Company", href: "/settings/company" },
-  { segment: "quoting", label: "Quoting", href: "/settings/quoting" },
-  { segment: "labels", label: "Labels", href: "/settings/labels" },
-  { segment: "documents", label: "Documents", href: "/settings/documents" },
+  {
+    segment: "company",
+    label: "Company",
+    description: "Name, logo and address",
+    href: "/settings/company",
+    icon: Building2Icon,
+  },
+  {
+    segment: "quoting",
+    label: "Quoting",
+    description: "Working hours and deletion rules",
+    href: "/settings/quoting",
+    icon: SlidersHorizontalIcon,
+  },
+  {
+    segment: "labels",
+    label: "Labels",
+    description: "What your team calls things",
+    href: "/settings/labels",
+    icon: TagsIcon,
+  },
+  {
+    segment: "documents",
+    label: "Documents",
+    description: "How Quote Documents print",
+    href: "/settings/documents",
+    icon: FileTextIcon,
+  },
 ] as const satisfies readonly {
   segment: string
   label: string
+  description: string
   href: string
+  icon: LucideIcon
 }[]

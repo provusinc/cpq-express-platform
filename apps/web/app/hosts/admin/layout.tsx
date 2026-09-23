@@ -29,7 +29,7 @@ export default async function PlatformLayout({
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-muted/40">
+    <div className="flex min-h-svh flex-col bg-canvas">
       <PlatformHeader
         email={session.user.email}
         organizationsUrl={appUrl("/?choose")}

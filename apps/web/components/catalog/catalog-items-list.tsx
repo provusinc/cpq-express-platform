@@ -20,6 +20,7 @@ import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/compo
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
+import { ActiveBadge } from "@/components/shell/active-badge"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   actionsColumn,
@@ -129,12 +130,7 @@ const dataColumns: DataTableColumns<CatalogItem> = [
     accessorKey: "active",
     header: ColumnTitle,
     meta: { label: "Status" },
-    cell: ({ row }) =>
-      row.original.active ? (
-        <Badge variant="secondary">Active</Badge>
-      ) : (
-        <Badge variant="outline">Inactive</Badge>
-      ),
+    cell: ({ row }) => <ActiveBadge active={row.original.active} />,
   },
 ]
 /** The Description starts hidden (the Columns menu shows it). */

@@ -12,7 +12,6 @@ import { createContext, useContext, useDeferredValue, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
-import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
 import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
@@ -26,6 +25,7 @@ import {
   ManagedRowMenu,
 } from "@/components/catalog/row-menu"
 import type { ManagedRowActions } from "@/components/catalog/row-menu"
+import { ActiveBadge } from "@/components/shell/active-badge"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   actionsColumn,
@@ -118,12 +118,7 @@ const dataColumns: DataTableColumns<ResourceRole> = [
     accessorKey: "active",
     header: ColumnTitle,
     meta: { label: "Status" },
-    cell: ({ row }) =>
-      row.original.active ? (
-        <Badge variant="secondary">Active</Badge>
-      ) : (
-        <Badge variant="outline">Inactive</Badge>
-      ),
+    cell: ({ row }) => <ActiveBadge active={row.original.active} />,
   },
   // Filter-only columns (never shown).
   {

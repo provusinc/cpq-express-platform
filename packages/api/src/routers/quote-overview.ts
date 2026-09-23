@@ -1,16 +1,15 @@
 /**
- * The Summary and Financials reads, registered on the `quote` router
- * (`quote.summary`, `quote.financials`). Both compute with the domain's
- * `financials` area over the Quote's stored Line Items (and Allocations);
- * nothing is persisted.
+ * The Overview and Financials reads, registered on the `quote` router
+ * (`quote.overview`, `quote.financials`). Financials computes with the
+ * domain's `financials` area over the Quote's stored Line Items (and
+ * Allocations); nothing is persisted.
  */
 import { z } from "zod"
 
-import { and, asc, eq, inArray, schema } from "@workspace/db"
+import { and, asc, eq, schema } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
 import { periodTypeForTimePeriod } from "@workspace/domain/dates"
 import {
-  breakdownByItemType,
   buildFinancials,
   FINANCIAL_GRANULARITIES,
 } from "@workspace/domain/financials"
@@ -20,7 +19,7 @@ import { allocationsByLine } from "../line-items"
 import { getOrganizationSettings } from "../settings"
 import { organizationProcedure } from "../trpc"
 
-const { accounts, contacts, lineItems, quotes, users } = schema
+const { accounts, contacts, lineItems, quotes, resourceRoles } = schema
 
 async function findQuote(scope: OrganizationScope, id: string) {
   const quote = await scope.findById(quotes, id)
@@ -34,18 +33,19 @@ const quoteLines = (scope: OrganizationScope, quoteId: string) =>
     orderBy: [asc(lineItems.sequence), asc(lineItems.id)],
   })
 
-export const quoteSummaryProcedures = {
+export const quoteOverviewProcedures = {
   /**
-   * The Summary tab: the Account and its primary Contact, Valid Until, the
-   * Owner, the server-computed totals and the item-type breakdown (labour,
-   * Products, Add-ons: revenue, cost and own margin before the Quote
-   * Discount, share of the Subtotal). Every member may read it.
+   * What the Overview tab adds to `quote.byId` and `quote.editor`: the
+   * Account (industry and billing city for its card) with its primary
+   * Contact, and the Resource Roles the Quote's Line Items use (name and
+   * location; the tab sums their Effort from the editor's lines, so it
+   * follows edits at once). Every member may read it.
    */
-  summary: organizationProcedure
+  overview: organizationProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const quote = await findQuote(ctx.scope, input.id)
-      const [account, [primaryContact], [owner], lines] = await Promise.all([
+      const [account, [primaryContact], roles] = await Promise.all([
         ctx.scope.findById(accounts, quote.accountId),
         ctx.scope.db
           .select({
@@ -67,31 +67,43 @@ export const quoteSummaryProcedures = {
           )
           .limit(1),
         ctx.scope.db
-          .select({ id: users.id, name: users.name, email: users.email })
-          .from(users)
-          .where(inArray(users.id, [quote.ownerId])),
-        quoteLines(ctx.scope, quote.id),
+          .selectDistinct({
+            id: resourceRoles.id,
+            name: resourceRoles.name,
+            locationCity: resourceRoles.locationCity,
+            locationState: resourceRoles.locationState,
+            locationCountry: resourceRoles.locationCountry,
+          })
+          .from(lineItems)
+          .innerJoin(
+            resourceRoles,
+            and(
+              eq(resourceRoles.organizationId, lineItems.organizationId),
+              eq(resourceRoles.id, lineItems.resourceRoleId)
+            )
+          )
+          .where(
+            and(
+              ctx.scope.where(lineItems, eq(lineItems.quoteId, quote.id)),
+              ctx.scope.where(resourceRoles)
+            )
+          )
+          .orderBy(asc(resourceRoles.name)),
       ])
       return {
         quoteId: quote.id,
-        account: { id: account!.id, name: account!.name },
-        primaryContact: primaryContact ?? null,
-        validUntil: quote.validUntil,
-        owner: owner!,
-        startDate: quote.startDate,
-        endDate: quote.endDate,
-        totals: {
-          currencyCode: quote.currencyCode,
-          discountKind: quote.discountKind,
-          discountValue: quote.discountValue,
-          subtotal: quote.subtotal,
-          discountAmount: quote.discountAmount,
-          total: quote.total,
-          cost: quote.cost,
-          margin: quote.margin,
-          marginPct: quote.marginPct,
+        account: {
+          id: account!.id,
+          name: account!.name,
+          type: account!.type,
+          industry: account!.industry,
+          website: account!.website,
+          city: account!.billingCity,
+          state: account!.billingState,
+          country: account!.billingCountry,
         },
-        breakdown: breakdownByItemType(lines),
+        primaryContact: primaryContact ?? null,
+        resourceRoles: roles,
       }
     }),
 

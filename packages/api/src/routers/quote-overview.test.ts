@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { schema } from "@workspace/db"
+import { eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 import { Decimal } from "@workspace/domain/money"
 
@@ -72,43 +72,41 @@ async function setup(db: Db) {
 const sum = (values: string[]) =>
   values.reduce((a, v) => a.plus(v), new Decimal(0)).toFixed(4)
 
-describe("quote.summary", () => {
-  it("returns the Account, primary Contact, Owner, totals and breakdown", () =>
+describe("quote.overview", () => {
+  it("returns the Account with its primary Contact and the Quote's Resource Roles", () =>
     withTestDb(async (db) => {
-      const { caller, quote, user } = await setup(db)
-      const summary = await caller.quote.summary({ id: quote.id })
-      expect(summary).toMatchObject({
-        account: { name: "Initech" },
-        primaryContact: { name: "Peter Gibbons", email: "peter@initech.test" },
-        validUntil: "2026-11-30",
-        owner: { id: user.id },
-        totals: {
-          // 100 + 160 h × 150 = 24100; 10 % off.
-          subtotal: "24100.0000",
-          discountAmount: "2410.0000",
-          total: "21690.0000",
-        },
+      const { caller, quote, organization, account } = await setup(db)
+      // A second line of the same Resource Role lists it once.
+      const [role] = await db
+        .select()
+        .from(schema.resourceRoles)
+        .where(eq(schema.resourceRoles.organizationId, organization.id))
+      await caller.lineItem.add({
+        quoteId: quote.id,
+        items: [{ sourceKind: "resource_role", id: role!.id }],
       })
-      expect(
-        summary.breakdown.map((b) => [b.sourceKind, b.lineCount, b.revenue])
-      ).toEqual([
-        ["resource_role", 1, "24000.0000"],
-        ["product", 1, "100.0000"],
-        ["add_on", 0, "0.0000"],
+      const overview = await caller.quote.overview({ id: quote.id })
+      expect(overview).toMatchObject({
+        quoteId: quote.id,
+        account: { id: account.id, name: "Initech" },
+        primaryContact: { name: "Peter Gibbons", email: "peter@initech.test" },
+      })
+      expect(overview.resourceRoles).toEqual([
+        expect.objectContaining({ id: role!.id, name: role!.name }),
       ])
     }))
 
-  it("has no primary Contact when the Account has none", () =>
+  it("has no primary Contact or Resource Roles on an empty Quote", () =>
     withTestDb(async (db) => {
       const organization = await createOrganization(db)
       const { user } = await createMember(db, organization)
       const quote = await createQuote(db, organization, { owner: user })
-      const summary = await organizationCaller(db, {
+      const overview = await organizationCaller(db, {
         organization,
         user,
-      }).quote.summary({ id: quote.id })
-      expect(summary.primaryContact).toBeNull()
-      expect(summary.breakdown.every((b) => b.lineCount === 0)).toBe(true)
+      }).quote.overview({ id: quote.id })
+      expect(overview.primaryContact).toBeNull()
+      expect(overview.resourceRoles).toEqual([])
     }))
 
   it("is isolated from other Organizations", () =>
@@ -116,8 +114,19 @@ describe("quote.summary", () => {
       const { organization, quote } = await setup(db)
       await expectIsolated(db, {
         owner: organization,
-        call: (c) => c.quote.summary({ id: quote.id }),
+        call: (c) => c.quote.overview({ id: quote.id }),
       })
+    }))
+})
+
+describe("quote.byId effortHours", () => {
+  it("sums the hourly Line Items' quantity only", () =>
+    withTestDb(async (db) => {
+      const { caller, quote } = await setup(db)
+      // The Resource Role line's default: Oct–Dec at 8 h/day by month = 160 h;
+      // the Product (each) doesn't count.
+      const byId = await caller.quote.byId({ id: quote.id })
+      expect(byId.effortHours).toBe("160.000")
     }))
 })
 

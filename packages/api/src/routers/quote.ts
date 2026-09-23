@@ -23,6 +23,7 @@ import { QUOTE_STATUSES, TIME_PERIODS } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import { can, quotePermissions } from "@workspace/domain/policy"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
+import { toQuantityString } from "@workspace/domain/money"
 import { isLocked } from "@workspace/domain/status"
 
 import { notFound } from "../errors"
@@ -50,7 +51,7 @@ import { quoteCloneProcedures } from "./quote-clone"
 import { quoteDeleteProcedures } from "./quote-delete"
 import { marginBelow, quoteInsightsProcedures } from "./quote-insights"
 import { quoteScheduleProcedures } from "./quote-schedule"
-import { quoteSummaryProcedures } from "./quote-summary"
+import { quoteOverviewProcedures } from "./quote-overview"
 
 const { accounts, lineItems, phases, quotes, users } = schema
 
@@ -403,7 +404,8 @@ export const quoteRouter = createTRPCRouter({
     ),
 
   /**
-   * One Quote for the editor: its header fields and totals, Account, Owner
+   * One Quote for the editor: its header fields and totals, its Effort in
+   * hours (Σ quantity of the hourly Line Items), Account, Owner
    * (and whether they are still a member), who changed it last, and what
    * the caller may do to it (`permissions`, from the domain policy).
    */
@@ -412,7 +414,7 @@ export const quoteRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const quote = await ctx.scope.findById(quotes, input.id)
       if (!quote) throw notFound("Quote")
-      const [account, people, facts, settings] = await Promise.all([
+      const [account, people, facts, settings, [effort]] = await Promise.all([
         ctx.scope.findById(accounts, quote.accountId),
         ctx.scope.db
           .select({ id: users.id, name: users.name, email: users.email })
@@ -420,6 +422,18 @@ export const quoteRouter = createTRPCRouter({
           .where(inArray(users.id, [quote.ownerId, quote.updatedById])),
         quoteFacts(ctx.scope, quote),
         getOrganizationSettings(ctx.scope),
+        ctx.scope.db
+          .select({
+            hours: sql<string>`coalesce(sum(${lineItems.quantity}), 0)`,
+          })
+          .from(lineItems)
+          .where(
+            ctx.scope.where(
+              lineItems,
+              eq(lineItems.quoteId, quote.id),
+              eq(lineItems.billingUnit, "hour")
+            )
+          ),
       ])
       const person = (id: string) => people.find((p) => p.id === id)!
       return {
@@ -441,6 +455,7 @@ export const quoteRouter = createTRPCRouter({
         cost: quote.cost,
         margin: quote.margin,
         marginPct: quote.marginPct,
+        effortHours: toQuantityString(effort?.hours ?? 0),
         createdAt: quote.createdAt,
         updatedAt: quote.updatedAt,
         account: {
@@ -582,7 +597,7 @@ export const quoteRouter = createTRPCRouter({
   ...quoteCostChangeLogProcedures,
 
   /** The Summary and Financials reads (./quote-summary.ts). */
-  ...quoteSummaryProcedures,
+  ...quoteOverviewProcedures,
 
   /** The Key Insights above the Quote list (./quote-insights.ts). */
   ...quoteInsightsProcedures,

@@ -98,6 +98,7 @@ export function CloneQuoteDialog({
       onSuccess: async (quote) => {
         toast.success(`Quote “${quote.name}” created.`)
         await queryClient.invalidateQueries(trpc.quote.list.pathFilter())
+        await queryClient.invalidateQueries(trpc.quote.insights.pathFilter())
         onOpenChange(false)
         router.push(`/quotes/${quote.id}`)
       },

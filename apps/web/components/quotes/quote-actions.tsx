@@ -46,6 +46,7 @@ export function DeleteQuoteDialog({
         onOpenChange(false)
         onDeleted?.()
         await queryClient.invalidateQueries(trpc.quote.list.pathFilter())
+        await queryClient.invalidateQueries(trpc.quote.insights.pathFilter())
         await queryClient.invalidateQueries(
           trpc.quote.filterOptions.pathFilter()
         )

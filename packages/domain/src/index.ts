@@ -20,6 +20,7 @@
  * - quotes:  Quote naming (the suggested Name for a new Quote)
  * - documents: Quote Document settings (validation, defaults) and deletion
  * - financials: revenue / cost / headcount buckets, item-type breakdown
+ * - insights: Key Insight definitions and severity thresholds
  */
 export * from "./enums"
 export * from "./money"
@@ -38,3 +39,4 @@ export * from "./settings"
 export * from "./quotes"
 export * from "./documents"
 export * from "./financials"
+export * from "./insights"

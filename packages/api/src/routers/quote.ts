@@ -46,6 +46,7 @@ import { quoteApprovalProcedures } from "./quote-approval"
 import { quoteCostChangeLogProcedures } from "./quote-cost-change-log"
 import { quoteCloneProcedures } from "./quote-clone"
 import { quoteDeleteProcedures } from "./quote-delete"
+import { marginBelow, quoteInsightsProcedures } from "./quote-insights"
 import { quoteScheduleProcedures } from "./quote-schedule"
 import { quoteSummaryProcedures } from "./quote-summary"
 
@@ -151,6 +152,11 @@ const listInput = z
     createdTo: isoDateInput.optional(),
     /** `mine`: Quotes the caller owns. */
     owner: z.enum(["all", "mine"]).default("all"),
+    /**
+     * Margin % below this, among Quotes with a positive Total (the Low
+     * margin Key Insight's rule; an empty Quote has no meaningful margin).
+     */
+    marginBelow: percentInput.optional(),
     sort: z
       .object({
         by: z.enum(QUOTE_SORT_COLUMNS),
@@ -204,7 +210,10 @@ export const quoteRouter = createTRPCRouter({
         input.createdTo
           ? lt(quotes.createdAt, utcDayStart(addDays(input.createdTo, 1)))
           : undefined,
-        input.owner === "mine" ? eq(quotes.ownerId, ctx.user.id) : undefined
+        input.owner === "mine" ? eq(quotes.ownerId, ctx.user.id) : undefined,
+        input.marginBelow !== undefined
+          ? marginBelow(input.marginBelow)
+          : undefined
       ),
       ctx.scope.where(accounts)
     )
@@ -545,4 +554,7 @@ export const quoteRouter = createTRPCRouter({
 
   /** The Summary and Financials reads (./quote-summary.ts). */
   ...quoteSummaryProcedures,
+
+  /** The Key Insights above the Quote list (./quote-insights.ts). */
+  ...quoteInsightsProcedures,
 })

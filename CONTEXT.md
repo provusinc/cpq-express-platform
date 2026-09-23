@@ -200,6 +200,18 @@ _Avoid_: PDF version, proposal
 **Valid Until**:
 The date a Quote's offer lapses. Informational only — it never changes the Quote Status.
 
+**Decided**:
+A Quote Status in which an Approver or the customer has ruled on the Quote: Approved,
+Rejected, Customer Approved, or Customer Rejected. Its margin is no longer actionable.
+
+**Key Insight**:
+A card above the Quote list counting the Organization's Quotes that need attention —
+pending approval (with value and oldest wait since the latest Submission), the high-value
+pipeline (Draft + Pending Approval), low margin (under 15 % with a positive Total, not
+Decided), this month's activity, and rejected — coloured info, warning, or critical by its
+severity. Choosing one filters the list to those Quotes.
+_Avoid_: dashboard, KPI, alert
+
 ### Administration
 
 **Platform Admin**:

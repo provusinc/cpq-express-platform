@@ -24,6 +24,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useDeferredValue, useState } from "react"
 import { toast } from "sonner"
 
@@ -64,6 +65,9 @@ import { ListPagination } from "@/components/shell/list-pagination"
 import { PageHeader } from "@/components/shell/page-header"
 import { resolveColumnLayout, toSavedLayout } from "@/lib/column-layout"
 import type { ColumnLayout } from "@/lib/column-layout"
+import { insightFocusKey } from "@/lib/key-insights"
+import type { InsightFocus } from "@/lib/key-insights"
+import { trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
@@ -106,17 +110,27 @@ const resolve = <T,>(updater: Updater<T>, current: T): T =>
  * hides and reorders (saved to their preferences). Valid Until dates in the
  * past are highlighted. Each row's menu opens, clones or deletes it; the
  * select column feeds bulk delete, which reports the Quotes it skipped.
- * `insights` renders above the filters (Key Insight cards, #25).
+ * `insights` renders above the filters (the Key Insight cards). `focus` is
+ * the card chosen in the URL (`?insight=…` / `?status=…`) and
+ * `initialFilters` the list input it resolves to (the page prefetches
+ * exactly that); choosing another card resets the filters to its input.
  */
-export function QuotesList({ insights }: { insights?: React.ReactNode }) {
+export function QuotesList({
+  insights,
+  focus = null,
+  initialFilters = INITIAL_QUOTE_LIST_INPUT,
+}: {
+  insights?: React.ReactNode
+  focus?: InsightFocus | null
+  initialFilters?: QuoteListInput
+}) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
+  const router = useRouter()
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())
-  const [filters, setFilters] = useState<QuoteListInput>(
-    INITIAL_QUOTE_LIST_INPUT
-  )
+  const [filters, setFilters] = useState<QuoteListInput>(initialFilters)
   const input: QuoteListInput = {
     ...filters,
     ...(deferredSearch ? { search: deferredSearch } : {}),
@@ -131,6 +145,15 @@ export function QuotesList({ insights }: { insights?: React.ReactNode }) {
 
   // Selection is per page: any filter, sort or page change clears it.
   const [selection, setSelection] = useState<RowSelectionState>({})
+  // A card click changes the URL: apply that card's filters.
+  const focusKey = insightFocusKey(focus)
+  const [appliedFocus, setAppliedFocus] = useState(focusKey)
+  if (appliedFocus !== focusKey) {
+    setAppliedFocus(focusKey)
+    setFilters(initialFilters)
+    setSelection({})
+    setSearch("")
+  }
   const setFilter = (changes: Partial<QuoteListInput>) => {
     setSelection({})
     setFilters((f) => ({ ...f, ...changes, page: changes.page ?? 1 }))
@@ -223,10 +246,13 @@ export function QuotesList({ insights }: { insights?: React.ReactNode }) {
     Boolean(filters.accountId) ||
     Boolean(filters.createdFrom) ||
     Boolean(filters.createdTo) ||
+    filters.marginBelow !== undefined ||
     filters.owner === "mine"
   const clearFilters = () => {
     setSearch("")
+    setSelection({})
     setFilters({ ...INITIAL_QUOTE_LIST_INPUT, sort })
+    if (focus) router.push("/quotes", { scroll: false })
   }
 
   const rows = table.getRowModel().rows
@@ -265,6 +291,7 @@ export function QuotesList({ insights }: { insights?: React.ReactNode }) {
           )
         }
         await queryClient.invalidateQueries(trpc.quote.list.pathFilter())
+        await queryClient.invalidateQueries(trpc.quote.insights.pathFilter())
         await queryClient.invalidateQueries(
           trpc.quote.filterOptions.pathFilter()
         )
@@ -369,6 +396,15 @@ export function QuotesList({ insights }: { insights?: React.ReactNode }) {
             }
           />
         </div>
+        {filters.marginBelow !== undefined && (
+          <Button
+            variant="secondary"
+            onClick={() => setFilter({ marginBelow: undefined })}
+          >
+            Margin below {trimMoney(String(filters.marginBelow))} %
+            <XIcon data-icon="inline-end" />
+          </Button>
+        )}
         {filtered && (
           <Button variant="ghost" onClick={clearFilters}>
             <XIcon data-icon="inline-start" />

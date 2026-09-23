@@ -135,16 +135,20 @@ function SortableMenuRow({
     zIndex: isDragging ? 1 : 0,
   }
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="group/sortable flex items-center rounded-md hover:bg-muted/60"
+    >
       <button
         type="button"
         disabled={disabled}
         aria-label="Reorder column"
         {...attributes}
         {...listeners}
-        className="flex cursor-grab items-center rounded-sm px-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+        className="flex h-7 cursor-grab items-center rounded-sm px-1 text-muted-foreground/50 group-hover/sortable:text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none active:cursor-grabbing"
       >
-        <GripVertical className="size-4" />
+        <GripVertical className="size-3.5" />
       </button>
       <div className="flex-1">{children}</div>
     </div>
@@ -167,20 +171,28 @@ const MenuItem = React.memo(function MenuItem<TData extends RowData>({
   return (
     <CommandItem
       data-disabled={isLocked ? "" : undefined}
+      aria-checked={isLocked || isVisible}
+      className="gap-2.5"
       onSelect={() => {
         if (isLocked) return
         onToggle(column.id)
       }}
     >
+      {/* App fix: a checkbox look, so hidden columns read as unticked. */}
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors",
+          (isVisible || isLocked) &&
+            "border-primary bg-primary text-primary-foreground",
+          isLocked && "opacity-50"
+        )}
+      >
+        {(isVisible || isLocked) && <Check className="size-3" />}
+      </span>
       <span className={cn("truncate", isLocked && "text-muted-foreground")}>
         {getColumnTitle(column)}
       </span>
-      <Check
-        className={cn(
-          "ml-auto size-4 shrink-0",
-          isLocked ? "opacity-50" : isVisible ? "opacity-100" : "opacity-0"
-        )}
-      />
     </CommandItem>
   )
 }) as <TData extends RowData>(props: MenuItemProps<TData>) => React.ReactElement
@@ -318,14 +330,22 @@ export function TableViewDndMenu<TData extends RowData>({
           )
         }
       />
-      <PopoverContent align="end" className="w-fit p-0">
-        <Command shouldFilter={false}>
+      <PopoverContent align="end" className="w-64 gap-0 p-0">
+        <Command shouldFilter={false} className="rounded-lg! p-0">
+          {/* App fix: a titled header with the shown count. */}
+          <div className="flex items-baseline justify-between gap-2 px-3 pt-2.5 pb-1.5">
+            <span className="text-sm font-medium">Columns</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {columns.filter((c) => c.getIsVisible()).length} of{" "}
+              {columns.length} shown
+            </span>
+          </div>
           <CommandInput
-            placeholder="Search columns..."
+            placeholder="Search columns"
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList>
+          <CommandList className="max-h-80 p-1">
             {visibleColumns.length === 0 ? (
               <CommandEmpty>No columns found.</CommandEmpty>
             ) : (
@@ -365,16 +385,17 @@ export function TableViewDndMenu<TData extends RowData>({
           </CommandList>
           {onReset ? (
             <>
-              <div className="border-t" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start gap-2 rounded-none text-muted-foreground"
-                onClick={onReset}
-              >
-                <RotateCcw className="size-4" />
-                {resetLabel ?? "Reset to defaults"}
-              </Button>
+              <div className="border-t p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start gap-2 text-muted-foreground"
+                  onClick={onReset}
+                >
+                  <RotateCcw className="size-3.5" />
+                  {resetLabel ?? "Reset to defaults"}
+                </Button>
+              </div>
             </>
           ) : null}
         </Command>

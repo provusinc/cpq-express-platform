@@ -240,6 +240,13 @@ export interface ListEmpty {
 }
 
 /**
+ * The list look shared with the Line Items grid: a quiet tinted header
+ * row with small muted titles, hairline row rules, hover tint.
+ */
+export const LIST_TABLE_CLASS =
+  "bg-background [&_thead_tr]:bg-muted/60 [&_thead_th]:h-9 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:text-muted-foreground [&_tbody_tr]:transition-colors"
+
+/**
  * The table itself, inside a `DataTableRoot` (or `ServerTableRoot`):
  * header, rows, skeleton rows while the first page loads and the empty
  * state. `rowMenu` is the row's right-click menu (the same component as its
@@ -266,7 +273,10 @@ export function ListTable({
   )
   const showFiltered = filtered && empty.filteredTitle !== undefined
   return (
-    <DataTable maxHeight={maxHeight} className={cn("bg-background", className)}>
+    <DataTable
+      maxHeight={maxHeight}
+      className={cn(LIST_TABLE_CLASS, className)}
+    >
       <DataTableHeader />
       <DataTableBody
         renderRowContextMenu={RowMenu ? renderRowContextMenu : undefined}
@@ -556,10 +566,14 @@ export function ColumnsMenu() {
   )
 }
 
-/** The trigger of the Columns menus. */
-export function ColumnsButton() {
+/**
+ * The trigger of the Columns menus. It is the popover trigger's `render`
+ * element, so it must pass the props (handlers, ref, ARIA) it is given on
+ * to the button.
+ */
+export function ColumnsButton(props: React.ComponentProps<typeof Button>) {
   return (
-    <Button variant="outline" size="sm">
+    <Button variant="outline" size="sm" {...props}>
       <Columns3Icon data-icon="inline-start" />
       Columns
       <ChevronsUpDownIcon data-icon="inline-end" className="opacity-50" />

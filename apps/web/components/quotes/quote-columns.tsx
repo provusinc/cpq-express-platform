@@ -90,12 +90,12 @@ export const QUOTE_COLUMN_LABELS = {
   name: "Name",
   account: "Account",
   status: "Status",
+  total: "Total",
   owner: "Owner",
   startDate: "Start",
   endDate: "End",
   validUntil: "Valid until",
   timePeriod: "Time period",
-  total: "Total",
   description: "Description",
   createdAt: "Created",
   updatedAt: "Updated",
@@ -135,7 +135,7 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
       <Link
         href={`/quotes/${row.original.id}`}
         title={row.original.description ?? undefined}
-        className="font-medium hover:underline"
+        className="block max-w-80 truncate font-medium underline-offset-4 hover:underline"
       >
         {row.original.name}
       </Link>
@@ -151,6 +151,16 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
     header: SortableColumnTitle,
     meta: label("status"),
     cell: ({ row }) => <QuoteStatusBadge status={row.original.status} />,
+  }),
+  helper.accessor("total", {
+    id: "total",
+    header: SortableColumnTitle,
+    meta: { ...label("total"), align: "end" },
+    cell: ({ row }) => (
+      <div className="text-right tabular-nums">
+        {formatMoney(row.original.total, row.original.currencyCode)}
+      </div>
+    ),
   }),
   helper.accessor((r) => r.owner.name ?? r.owner.email, {
     id: "owner",
@@ -176,7 +186,7 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
     cell: ({ row }) =>
       row.original.validUntilPassed ? (
         <span
-          className="inline-flex items-center gap-1 font-medium text-destructive"
+          className="inline-flex items-center gap-1 font-medium text-danger-ink"
           title="Valid Until has passed. The status doesn't change."
         >
           <CalendarX2Icon className="size-3.5" aria-hidden />
@@ -192,16 +202,6 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
     header: SortableColumnTitle,
     meta: label("timePeriod"),
     cell: ({ row }) => TIME_PERIOD_LABELS[row.original.timePeriod],
-  }),
-  helper.accessor("total", {
-    id: "total",
-    header: SortableColumnTitle,
-    meta: { ...label("total"), align: "end" },
-    cell: ({ row }) => (
-      <div className="text-right tabular-nums">
-        {formatMoney(row.original.total, row.original.currencyCode)}
-      </div>
-    ),
   }),
   helper.accessor("description", {
     id: "description",

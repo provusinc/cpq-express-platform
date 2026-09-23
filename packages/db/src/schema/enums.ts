@@ -7,5 +7,5 @@ import { QUOTE_STATUSES } from "@workspace/domain/enums"
  * (area-specific enums live next to their table, e.g. `membership_role`).
  */
 
-/** Quote Status (glossary). Used by Organization settings now, Quotes later. */
+/** Quote Status (glossary). Used by `quotes.status` and Organization settings. */
 export const quoteStatusEnum = pgEnum("quote_status", QUOTE_STATUSES)

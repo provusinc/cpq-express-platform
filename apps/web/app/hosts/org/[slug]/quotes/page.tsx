@@ -1,14 +1,18 @@
 import type { Metadata } from "next"
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page"
+import { INITIAL_QUOTE_LIST_INPUT } from "@/components/quotes/list-input"
+import { QuotesList } from "@/components/quotes/quotes-list"
+import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
 export const metadata: Metadata = { title: "Quotes · CPQ Express" }
 
 export default function QuotesPage() {
+  prefetch(trpc.quote.list.queryOptions(INITIAL_QUOTE_LIST_INPUT))
+  prefetch(trpc.quote.filterOptions.queryOptions())
+  prefetch(trpc.user.preferences.queryOptions())
   return (
-    <PlaceholderPage
-      title="Quotes"
-      description="Priced engagements offered to your Accounts."
-    />
+    <HydrateClient>
+      <QuotesList />
+    </HydrateClient>
   )
 }

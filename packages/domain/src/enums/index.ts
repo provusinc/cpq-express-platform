@@ -58,6 +58,14 @@ export type ApprovalStepAction = (typeof APPROVAL_STEP_ACTIONS)[number]
 export const TIME_PERIODS = ["days", "weeks", "months", "quarters"] as const
 export type TimePeriod = (typeof TIME_PERIODS)[number]
 
+/** How a Time Period is written in UI copy. */
+export const TIME_PERIOD_LABELS: Record<TimePeriod, string> = {
+  days: "Days",
+  weeks: "Weeks",
+  months: "Months",
+  quarters: "Quarters",
+}
+
 /** The bucket an Allocation covers. Days and Weeks both plan by week. */
 export const PERIOD_TYPES = ["week", "month", "quarter"] as const
 export type PeriodType = (typeof PERIOD_TYPES)[number]

@@ -16,6 +16,7 @@
  * - organizations: slug rules (format, reserved), currency codes
  * - members: Membership rules (the last-Admin guard)
  * - settings: Organization settings (Hours Per Day, Label Overrides, logo)
+ * - quotes:  Quote naming (the suggested Name for a new Quote)
  */
 export * from "./enums"
 export * from "./money"
@@ -30,3 +31,4 @@ export * from "./phases"
 export * from "./organizations"
 export * from "./members"
 export * from "./settings"
+export * from "./quotes"

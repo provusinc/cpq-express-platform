@@ -8,7 +8,8 @@
  * and run `pnpm services:up && pnpm db:migrate && pnpm db:seed`.
  *
  * Areas: tenancy (Users, Organizations, Memberships), then `acme`'s demo
- * Accounts with Contacts, Products, Add-ons and Resource Roles. Add later areas as further `seed<Area>(tx, …)`
+ * Accounts with Contacts, Products, Add-ons and Resource Roles, and demo
+ * Quotes (header only) across owners and statuses. Add later areas as further `seed<Area>(tx, …)`
  * steps below, each idempotent the same way.
  */
 import { fileURLToPath } from "node:url"
@@ -18,10 +19,12 @@ import type { Db } from "../index"
 import { SEED_INVITATION, seedInvitations } from "./invitations"
 import { seedAccounts } from "./accounts"
 import { seedCatalog } from "./catalog"
+import { seedQuotes } from "./quotes"
 import { seedTenancy } from "./tenancy"
 
 export { SEED_ACCOUNTS, seedAccounts } from "./accounts"
 export { SEED_CATALOG_ITEMS, SEED_RESOURCE_ROLES, seedCatalog } from "./catalog"
+export { SEED_QUOTES, seedQuotes } from "./quotes"
 export { SEED_ORGANIZATIONS, SEED_PLATFORM_ADMIN, seedTenancy } from "./tenancy"
 export { SEED_INVITATION, seedInvitations } from "./invitations"
 
@@ -31,6 +34,7 @@ export async function seed(db: Db) {
     await seedInvitations(tx, organizations)
     await seedAccounts(tx, organizations.acme)
     await seedCatalog(tx, organizations.acme)
+    await seedQuotes(tx, organizations.acme)
     return { organizations }
   })
 }

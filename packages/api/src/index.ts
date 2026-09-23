@@ -17,6 +17,9 @@ export type {
 } from "./catalog-import"
 export { getCompany, getLabels, getOrganizationSettings } from "./settings"
 export type { OrganizationSettings } from "./settings"
+export type { QuoteCommand, QuoteRow } from "./quotes"
+export { QUOTE_SORT_COLUMNS } from "./routers/quote"
+export type { QuoteSortColumn } from "./routers/quote"
 
 /** `RouterInputs["health"]["check"]` */
 export type RouterInputs = inferRouterInputs<AppRouter>

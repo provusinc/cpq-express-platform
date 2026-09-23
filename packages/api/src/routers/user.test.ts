@@ -60,3 +60,42 @@ describe("authed procedures (user.me)", () => {
       }
     }))
 })
+
+describe("user preferences", () => {
+  it("defaults to the default Quote list layout", () =>
+    withTestDb(async (db) => {
+      const caller = createTestCaller(db, { user: await createUser(db) })
+      expect(await caller.user.preferences()).toEqual({
+        quoteListColumns: { order: [], hidden: [] },
+      })
+    }))
+
+  it("saves the Quote list columns per User", () =>
+    withTestDb(async (db) => {
+      const ada = createTestCaller(db, { user: await createUser(db) })
+      const bob = createTestCaller(db, { user: await createUser(db) })
+      await ada.user.setQuoteListColumns({
+        order: ["name", "account", "name"],
+        hidden: ["description"],
+      })
+      await ada.user.setQuoteListColumns({
+        order: ["account", "name"],
+        hidden: ["owner"],
+      })
+      expect((await ada.user.preferences()).quoteListColumns).toEqual({
+        order: ["account", "name"],
+        hidden: ["owner"],
+      })
+      expect((await bob.user.preferences()).quoteListColumns).toEqual({
+        order: [],
+        hidden: [],
+      })
+    }))
+
+  it("needs a signed-in User", () =>
+    withTestDb(async (db) => {
+      await expect(
+        createTestCaller(db).user.setQuoteListColumns({ order: [], hidden: [] })
+      ).rejects.toMatchObject({ code: "UNAUTHORIZED" })
+    }))
+})

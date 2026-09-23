@@ -1,6 +1,7 @@
 /** zod building blocks shared by router inputs, plus small query helpers. */
 import { z } from "zod"
 
+import { isIsoDate } from "@workspace/domain/dates"
 import { ROLES } from "@workspace/domain/enums"
 import { Decimal, toMoneyString } from "@workspace/domain/money"
 import { checkSlug, isCurrencyCode } from "@workspace/domain/organizations"
@@ -30,6 +31,11 @@ export const currencyInput = z
   .toUpperCase()
   .refine(isCurrencyCode, "Use a three-letter ISO 4217 currency code.")
 
+/** A calendar date as an ISO `yyyy-MM-dd` string (`IsoDate`), never a `Date`. */
+export const isoDateInput = z
+  .string()
+  .trim()
+  .refine(isIsoDate, "Enter a date as yyyy-MM-dd.")
 
 /** Required text: trimmed, non-empty. */
 export const requiredText = (max = 200) => z.string().trim().min(1).max(max)

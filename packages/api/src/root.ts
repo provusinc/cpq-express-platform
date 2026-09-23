@@ -7,6 +7,7 @@ import { invitationRouter } from "./routers/invitation"
 import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
 import { platformRouter } from "./routers/platform"
+import { quoteRouter } from "./routers/quote"
 import { resourceRoleRouter } from "./routers/resource-role"
 import { settingsRouter } from "./routers/settings"
 import { userRouter } from "./routers/user"
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   membership: membershipRouter,
   organization: organizationRouter,
   platform: platformRouter,
+  quote: quoteRouter,
   resourceRole: resourceRoleRouter,
   settings: settingsRouter,
   user: userRouter,

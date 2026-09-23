@@ -251,3 +251,47 @@ function requireTransition(
     ? deny("wrong_status", "This isn't possible in the Quote's current status.")
     : ALLOW
 }
+
+/** What the viewer may do to one Quote, for showing and hiding actions. */
+export interface QuotePermissions {
+  canEdit: boolean
+  canDelete: boolean
+  canSubmit: boolean
+  canApprove: boolean
+  canReject: boolean
+  canRecall: boolean
+  canMarkSent: boolean
+  canRecordCustomerOutcome: boolean
+  /**
+   * Why the Quote can't be edited (`locked`, or the Role rule), or `null`
+   * when it can. The editor shows it as the read-only notice.
+   */
+  editDenial: { reason: DenialReason; message: string } | null
+}
+
+/**
+ * Every Quote action's decision for `actor` at once (`can` per action). The
+ * API computes it for `quote.byId`; each command still re-checks `can`.
+ */
+export function quotePermissions(
+  actor: Actor,
+  quote: QuoteFacts,
+  settings?: PolicySettings
+): QuotePermissions {
+  const allowed = (action: QuoteAction) =>
+    can(actor, action, quote, settings).allowed
+  const edit = can(actor, "quote.edit", quote)
+  return {
+    canEdit: edit.allowed,
+    canDelete: allowed("quote.delete"),
+    canSubmit: allowed("quote.submit"),
+    canApprove: allowed("quote.approve"),
+    canReject: allowed("quote.reject"),
+    canRecall: allowed("quote.recall"),
+    canMarkSent: allowed("quote.markSent"),
+    canRecordCustomerOutcome: allowed("quote.recordCustomerOutcome"),
+    editDenial: edit.allowed
+      ? null
+      : { reason: edit.reason, message: edit.message },
+  }
+}

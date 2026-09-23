@@ -10,6 +10,7 @@ import {
   type DenialReason,
   ORGANIZATION_ACTIONS,
   type QuoteFacts,
+  quotePermissions,
 } from "./index"
 
 const actor = (userId: string, role: Role, isApprover = false): Actor => ({
@@ -430,5 +431,40 @@ describe("Organization actions are Admin-only", () => {
     )
   )("%s by %o → %s", (action, who, expected) => {
     expectDecision(can(who, action), expected)
+  })
+})
+
+describe("quotePermissions", () => {
+  it("summarises every action for the viewer", () => {
+    expect(quotePermissions(member, quote(member))).toEqual({
+      canEdit: true,
+      canDelete: true,
+      canSubmit: true,
+      canApprove: false,
+      canReject: false,
+      canRecall: false,
+      canMarkSent: false,
+      canRecordCustomerOutcome: false,
+      editDenial: null,
+    })
+  })
+
+  it("explains why a locked Quote can't be edited", () => {
+    const p = quotePermissions(admin, quote(member, "pending_approval"))
+    expect(p.canEdit).toBe(false)
+    expect(p.canRecall).toBe(true)
+    expect(p.editDenial?.reason).toBe("locked")
+  })
+
+  it("explains the Role rule, and applies the deletable statuses", () => {
+    const p = quotePermissions(otherMember, quote(member), {
+      deletableStatuses: ["rejected"],
+    })
+    expect(p.editDenial?.reason).toBe("not_allowed_to_edit")
+    expect(
+      quotePermissions(member, quote(member), {
+        deletableStatuses: ["rejected"],
+      }).canDelete
+    ).toBe(false)
   })
 })

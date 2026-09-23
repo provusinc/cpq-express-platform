@@ -17,7 +17,12 @@ import {
 } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
 
-import { inUseError, isUniqueViolation, notFound } from "../errors"
+import {
+  IN_USE_EXAMPLE_LIMIT,
+  inUseError,
+  isUniqueViolation,
+  notFound,
+} from "../errors"
 import type { InUseCounts } from "../errors"
 import {
   containsPattern,
@@ -28,7 +33,7 @@ import {
 } from "../inputs"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 
-const { accounts, contacts } = schema
+const { accounts, contacts, quotes } = schema
 
 /** Account fields a user edits (name handled separately: it's unique). */
 const accountFields = {
@@ -79,15 +84,43 @@ async function withNameGuard<T>(name: string, write: () => Promise<T>) {
 }
 
 /**
- * What references each Account and would block its deletion. Quotes don't
- * exist yet; the Quotes ticket adds their count and example names here
- * (and references Accounts with ON DELETE RESTRICT).
+ * What references each Account and would block its deletion: its Quotes
+ * (which also RESTRICT the delete in the database), counted, with the
+ * newest few Quote names as examples.
  */
 async function accountUsage(
-  _scope: OrganizationScope,
+  scope: OrganizationScope,
   ids: string[]
 ): Promise<Map<string, { counts: InUseCounts; examples: string[] }>> {
-  return new Map(ids.map((id) => [id, { counts: {}, examples: [] }]))
+  const usage = new Map<string, { counts: InUseCounts; examples: string[] }>(
+    ids.map((id) => [id, { counts: {}, examples: [] }])
+  )
+  if (ids.length === 0) return usage
+  const ranked = scope.db
+    .select({
+      accountId: quotes.accountId,
+      name: quotes.name,
+      rank: sql<number>`row_number() over (partition by ${quotes.accountId} order by ${quotes.createdAt} desc, ${quotes.id} desc)`.as(
+        "rank"
+      ),
+      total: sql<number>`count(*) over (partition by ${quotes.accountId})`.as(
+        "total"
+      ),
+    })
+    .from(quotes)
+    .where(scope.where(quotes, inArray(quotes.accountId, ids)))
+    .as("ranked")
+  const rows = await scope.db
+    .select()
+    .from(ranked)
+    .where(sql`${ranked.rank} <= ${IN_USE_EXAMPLE_LIMIT}`)
+    .orderBy(asc(ranked.rank))
+  for (const row of rows) {
+    const used = usage.get(row.accountId)!
+    used.counts.quotes = Number(row.total)
+    used.examples.push(row.name)
+  }
+  return usage
 }
 
 /** Throws the structured "in use" CONFLICT for the first referenced Account. */

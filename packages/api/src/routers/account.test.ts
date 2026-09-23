@@ -8,6 +8,7 @@ import {
   createContact,
   createMember,
   createOrganization,
+  createQuote,
   createUser,
   expectIsolated,
   organizationCaller,
@@ -363,6 +364,78 @@ describe("account.delete", () => {
         call: (caller) => caller.account.delete({ id: account.id }),
         snapshot: snapshotAccount(db, account.id),
       })
+    }))
+})
+
+describe("deleting an Account with Quotes", () => {
+  /** An Account with `n` Quotes named "Quote 1"… (newest last). */
+  async function quotedAccount(db: Db, n: number) {
+    const s = await setup(db)
+    const account = await createAccount(db, s.organization, {
+      name: "Initech",
+    })
+    for (let i = 1; i <= n; i++) {
+      await createQuote(db, s.organization, {
+        owner: s.user,
+        account,
+        name: `Quote ${i}`,
+        createdAt: new Date(Date.UTC(2026, 0, i)),
+      })
+    }
+    return { ...s, account }
+  }
+
+  it("delete is refused with the structured in-use error", () =>
+    withTestDb(async (db) => {
+      const { caller, account } = await quotedAccount(db, 7)
+      const error = await caller.account
+        .delete({ id: account.id })
+        .catch((e: unknown) => e)
+      expect(error).toMatchObject({ code: "CONFLICT" })
+      const cause = (error as { cause?: { details?: unknown } }).cause
+      expect(cause?.details).toEqual({
+        kind: "in_use",
+        entity: "account",
+        name: "Initech",
+        counts: { quotes: 7 },
+        // The newest five.
+        examples: ["Quote 7", "Quote 6", "Quote 5", "Quote 4", "Quote 3"],
+        suggestion: "archive",
+      })
+      expect((error as Error).message).toMatch(/used by 7 Quotes.*Archive/)
+      expect(await snapshotAccount(db, account.id)()).toHaveLength(1)
+    }))
+
+  it("deleteMany deletes nothing when any Account has Quotes", () =>
+    withTestDb(async (db) => {
+      const { organization, caller, account } = await quotedAccount(db, 1)
+      const unused = await createAccount(db, organization)
+      await expect(
+        caller.account.deleteMany({ ids: [unused.id, account.id] })
+      ).rejects.toMatchObject({
+        code: "CONFLICT",
+        message: /1 Quote \(Quote 1\)/,
+      })
+      expect(await snapshotAccount(db, unused.id)()).toHaveLength(1)
+    }))
+
+  it("the database RESTRICTs it too", () =>
+    withTestDb(async (db) => {
+      const { account } = await quotedAccount(db, 1)
+      await expect(
+        db.transaction((tx) =>
+          tx.delete(accounts).where(eq(accounts.id, account.id))
+        )
+      ).rejects.toThrow()
+      expect(await snapshotAccount(db, account.id)()).toHaveLength(1)
+    }))
+
+  it("archiving still works", () =>
+    withTestDb(async (db) => {
+      const { caller, account } = await quotedAccount(db, 1)
+      await expect(
+        caller.account.archive({ id: account.id })
+      ).resolves.toMatchObject({ archived: true })
     }))
 })
 

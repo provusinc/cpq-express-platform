@@ -249,3 +249,43 @@ export async function createResourceRole(
     .returning()
   return role!
 }
+
+type NewQuote = Omit<
+  typeof schema.quotes.$inferInsert,
+  "organizationId" | "ownerId" | "createdById" | "updatedById" | "accountId"
+>
+
+/**
+ * Inserts a Quote owned (and created) by `owner`, for `account` (a new
+ * Account when omitted): Draft, Oct–Dec 2026, Months, USD, unless overridden.
+ *
+ *   const quote = await createQuote(db, acme, { owner: member.user, status: "approved" })
+ */
+export async function createQuote(
+  db: Db,
+  organization: { id: string },
+  {
+    owner,
+    account,
+    ...overrides
+  }: { owner: { id: string }; account?: { id: string } } & Partial<NewQuote>
+) {
+  const accountId = account?.id ?? (await createAccount(db, organization)).id
+  const [quote] = await db
+    .insert(schema.quotes)
+    .values({
+      name: `Quote ${uuidv7().slice(-12)}`,
+      startDate: "2026-10-01",
+      endDate: "2026-12-31",
+      timePeriod: "months",
+      currencyCode: "USD",
+      ...overrides,
+      organizationId: organization.id,
+      accountId,
+      ownerId: owner.id,
+      createdById: owner.id,
+      updatedById: owner.id,
+    })
+    .returning()
+  return quote!
+}

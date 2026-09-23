@@ -1,10 +1,13 @@
 /**
  * `dashboard.overview`: everything on the Dashboard besides the Key
  * Insights and the recent Quotes (`quote.insights`), aggregated in SQL
- * for the whole Organization (every member sees every Quote). The rules
- * — which statuses are open, the months charted — are the domain's
+ * for the whole Organization (every member sees every Quote), and
+ * `dashboard.valueOverTime`, the Quote value chart. The rules — which
+ * statuses are open, the chart's ranges and buckets — are the domain's
  * (`@workspace/domain/dashboard`).
  */
+import { z } from "zod"
+
 import {
   and,
   asc,
@@ -19,10 +22,9 @@ import {
 } from "@workspace/db"
 import {
   DASHBOARD_LIST_LIMIT,
-  DASHBOARD_MONTHS,
-  fillMonths,
   OPEN_STATUSES,
-  recentUtcMonths,
+  VALUE_RANGES,
+  valueBuckets,
 } from "@workspace/domain/dashboard"
 import { ageInDays } from "@workspace/domain/insights"
 import { toMoneyString } from "@workspace/domain/money"
@@ -36,8 +38,6 @@ export const dashboardRouter = createTRPCRouter({
    * The Dashboard's figures, computed now (months and days are UTC):
    * - `open`: the Quotes without a customer outcome yet, counted and their
    *   Totals summed (the header's pipeline figure);
-   * - `months`: Quotes created per month over the last `DASHBOARD_MONTHS`
-   *   (this one included, zeros filled) with their summed Total;
    * - `approvalQueue`: the Pending Approval Quotes that need the caller —
    *   for an Approver the ones waiting for them (not their own), for
    *   anyone else their own — longest wait first (from each Quote's
@@ -46,9 +46,7 @@ export const dashboardRouter = createTRPCRouter({
    */
   overview: organizationProcedure.query(async ({ ctx }) => {
     const now = Date.now()
-    const months = recentUtcMonths(now, DASHBOARD_MONTHS)
     const isApprover = ctx.membership.isApprover
-    const month = sql<string>`to_char(date_trunc('month', ${quotes.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`
 
     // The latest submit step of each Quote: when it entered the queue.
     const submitted = ctx.scope.db
@@ -69,7 +67,7 @@ export const dashboardRouter = createTRPCRouter({
         : eq(quotes.ownerId, ctx.user.id)
     )
 
-    const [[open], byMonth, queue, [queueCount]] = await Promise.all([
+    const [[open], queue, [queueCount]] = await Promise.all([
       ctx.scope.db
         .select({
           count: count(),
@@ -77,20 +75,6 @@ export const dashboardRouter = createTRPCRouter({
         })
         .from(quotes)
         .where(ctx.scope.where(quotes, inArray(quotes.status, OPEN_STATUSES))),
-      ctx.scope.db
-        .select({
-          month,
-          count: count(),
-          value: sql<string>`coalesce(sum(${quotes.total}), 0)`,
-        })
-        .from(quotes)
-        .where(
-          ctx.scope.where(
-            quotes,
-            gte(quotes.createdAt, new Date(`${months[0]}T00:00:00.000Z`))
-          )
-        )
-        .groupBy(month),
       ctx.scope.db
         .select({
           id: quotes.id,
@@ -124,7 +108,6 @@ export const dashboardRouter = createTRPCRouter({
         count: open?.count ?? 0,
         value: toMoneyString(open?.value ?? "0"),
       },
-      months: fillMonths(months, byMonth),
       approvalQueue: {
         total: queueCount?.total ?? 0,
         rows: queue.map((row) => {
@@ -138,4 +121,97 @@ export const dashboardRouter = createTRPCRouter({
       },
     }
   }),
+
+  /**
+   * The Quote value chart: per UTC bucket of `range` (days or weeks, the
+   * domain's `valueBuckets`, oldest first, zero-filled in SQL with
+   * `generate_series`), the Quotes `created` in it and the Quotes that
+   * reached Customer Approved in it (dated by that Approval Step; the
+   * status is final, so a Quote counts once), each counted with their
+   * Totals summed (4 dp).
+   */
+  valueOverTime: organizationProcedure
+    .input(z.object({ range: z.enum(VALUE_RANGES) }))
+    .query(async ({ ctx, input }) => {
+      const { unit, from, last } = valueBuckets(Date.now(), input.range)
+      const since = new Date(`${from}T00:00:00.000Z`)
+      // `unit` is the domain's "day" | "week", never user text.
+      const bucketOf = (
+        at: typeof quotes.createdAt | typeof approvalSteps.createdAt
+      ) =>
+        sql<string>`date_trunc('${sql.raw(unit)}', ${at} at time zone 'UTC')::date`
+
+      const created = ctx.scope.db
+        .select({
+          bucket: bucketOf(quotes.createdAt).as("bucket"),
+          count: count().as("count"),
+          value: sql<string>`sum(${quotes.total})`.as("value"),
+        })
+        .from(quotes)
+        .where(ctx.scope.where(quotes, gte(quotes.createdAt, since)))
+        .groupBy(sql`1`)
+        .as("created")
+      const approved = ctx.scope.db
+        .select({
+          bucket: bucketOf(approvalSteps.createdAt).as("bucket"),
+          count: count().as("count"),
+          value: sql<string>`sum(${quotes.total})`.as("value"),
+        })
+        .from(approvalSteps)
+        .innerJoin(
+          quotes,
+          and(
+            eq(quotes.organizationId, approvalSteps.organizationId),
+            eq(quotes.id, approvalSteps.quoteId)
+          )
+        )
+        .where(
+          and(
+            ctx.scope.where(
+              approvalSteps,
+              eq(approvalSteps.toStatus, "customer_approved"),
+              gte(approvalSteps.createdAt, since)
+            ),
+            ctx.scope.where(quotes)
+          )
+        )
+        .groupBy(sql`1`)
+        .as("approved")
+
+      // Qualified by hand: drizzle leaves a subquery's aliased fields bare
+      // when the outer `from` is raw SQL, and "bucket" is in all three.
+      const bucket = sql`buckets.bucket`
+      const col = (from: "created" | "approved", field: string) =>
+        sql.raw(`"${from}"."${field}"`)
+      const rows = await ctx.scope.db
+        .select({
+          start: sql<string>`to_char(${bucket}, 'YYYY-MM-DD')`,
+          createdCount: sql<number>`coalesce(${col("created", "count")}, 0)::int`,
+          createdValue: sql<string>`coalesce(${col("created", "value")}, 0)`,
+          approvedCount: sql<number>`coalesce(${col("approved", "count")}, 0)::int`,
+          approvedValue: sql<string>`coalesce(${col("approved", "value")}, 0)`,
+        })
+        .from(
+          sql`generate_series(${from}::date, ${last}::date, ${`1 ${unit}`}::interval) as buckets(bucket)`
+        )
+        .leftJoin(created, sql`${col("created", "bucket")} = ${bucket}`)
+        .leftJoin(approved, sql`${col("approved", "bucket")} = ${bucket}`)
+        .orderBy(bucket)
+
+      return {
+        range: input.range,
+        unit,
+        buckets: rows.map((row) => ({
+          start: row.start,
+          created: {
+            count: row.createdCount,
+            value: toMoneyString(row.createdValue),
+          },
+          approved: {
+            count: row.approvedCount,
+            value: toMoneyString(row.approvedValue),
+          },
+        })),
+      }
+    }),
 })

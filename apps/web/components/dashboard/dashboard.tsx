@@ -8,15 +8,16 @@ import { PageHeader } from "@/components/shell/page-header"
 import { wholeMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
-import { ActivityCard } from "./activity-card"
 import { DashboardCard } from "./dashboard-card"
 import { ApprovalQueueList, RecentList } from "./dashboard-lists"
 import { KeyInsights } from "./key-insights"
+import { QuoteValueCard } from "./quote-value-card"
 
 /**
  * The Dashboard, the Organization's landing page, kept to a glance: the
  * open pipeline value in the header, the four Key Insights that ask for
- * action, one chart of the value created per month, and two short lists —
+ * action, one chart of the Quote value created and Customer Approved
+ * over a chosen range, and two short lists —
  * the approval queue that needs the caller and their recent Quotes. Every
  * cell and list links into the Quote list (`?insight=`), the approvals
  * page or the Quote itself.
@@ -29,7 +30,6 @@ export function Dashboard() {
   )
   const currency = data.currencyCode
   const { open, approvalQueue: queue, isApprover } = data
-  const created = data.months.reduce((n, m) => n + m.count, 0)
 
   return (
     <>
@@ -44,13 +44,7 @@ export function Dashboard() {
 
       <KeyInsights />
 
-      <DashboardCard
-        title="Value created per month"
-        description={`${created} ${created === 1 ? "Quote" : "Quotes"} created in the last 12 months.`}
-        link={{ href: "/quotes?insight=this_month", label: "This month" }}
-      >
-        <ActivityCard months={data.months} currencyCode={currency} />
-      </DashboardCard>
+      <QuoteValueCard currencyCode={currency} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <DashboardCard

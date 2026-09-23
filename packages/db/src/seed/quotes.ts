@@ -32,7 +32,10 @@ export const SEED_QUOTES: readonly {
   validInDays?: number
   /** Created this many days before the seed run. */
   createdDaysAgo?: number
-  /** Moves its approval history this many days further back. */
+  /**
+   * Moves its approval history this many days further back (negative:
+   * forward).
+   */
   historyDaysAgo?: number
   /** No approval history (its owner is the demo Approver). */
   noHistory?: boolean
@@ -119,7 +122,9 @@ export const SEED_QUOTES: readonly {
     validUntil: "2026-12-01",
     timePeriod: "weeks",
   },
-  // Older and more recent Quotes, for the Dashboard's months.
+  // Older and more recent Quotes for the Dashboard's Quote value chart:
+  // created across the year, and Customer Approved across the last three
+  // months (the Approval Step lands 20 + `historyDaysAgo` days back).
   ...(
     [
       [
@@ -136,8 +141,8 @@ export const SEED_QUOTES: readonly {
         "Retail Express",
         "member@acme.test",
         "customer_approved",
-        280,
-        240,
+        60,
+        -14,
         null,
       ],
       [
@@ -154,8 +159,8 @@ export const SEED_QUOTES: readonly {
         "TechStart Express CPQ Demo",
         "manager@acme.test",
         "customer_approved",
-        210,
-        170,
+        130,
+        55,
         null,
       ],
       [
@@ -163,8 +168,8 @@ export const SEED_QUOTES: readonly {
         "Acme Corp Express CPQ Demo",
         "member@acme.test",
         "customer_approved",
-        180,
-        140,
+        100,
+        25,
         null,
       ],
       [
@@ -208,8 +213,8 @@ export const SEED_QUOTES: readonly {
         "TechStart Express CPQ Demo",
         "member@acme.test",
         "customer_approved",
-        75,
         40,
+        0,
         null,
       ],
       [
@@ -217,7 +222,7 @@ export const SEED_QUOTES: readonly {
         "TechStart Express CPQ Demo",
         "member@acme.test",
         "draft",
-        60,
+        5,
         0,
         3,
       ],
@@ -262,7 +267,7 @@ export const SEED_QUOTES: readonly {
         "Healthcare Express",
         "manager@acme.test",
         "draft",
-        8,
+        3,
         0,
         12,
       ],

@@ -1,11 +1,11 @@
 /**
  * The Dashboard: the Organization's landing page (glossary: Dashboard).
  * Besides the Key Insights (`../insights`) it shows the open pipeline
- * value and charts Quotes created per month. This module owns those
- * rules; the API aggregates in SQL and the web app draws them.
+ * value and charts the Quote value created and Customer Approved over a
+ * time range. This module owns those rules; the API aggregates in SQL
+ * and the web app draws them.
  */
 import type { QuoteStatus } from "../enums"
-import { Decimal } from "../money"
 
 /**
  * Open: the Quote hasn't had a customer outcome yet (Draft, Pending
@@ -20,51 +20,55 @@ export const OPEN_STATUSES = [
   "pending_customer_approval",
 ] as const satisfies readonly QuoteStatus[]
 
-/** How many months the activity chart covers (this month included). */
-export const DASHBOARD_MONTHS = 12
-
 /** How many rows each Dashboard list shows. */
 export const DASHBOARD_LIST_LIMIT = 5
 
 /**
- * The first days (`yyyy-MM-01`) of the `count` UTC months ending with the
- * one containing `now`, oldest first.
+ * The Quote value chart's time ranges (glossary: Dashboard), each a run
+ * of UTC buckets ending with the one containing now: weeks (Monday
+ * starts, as Postgres `date_trunc('week')`) for the long ranges, where
+ * days would be mostly empty, and days for the short ones.
  */
-export function recentUtcMonths(now: string | number, count: number): string[] {
-  const at = new Date(now)
-  const year = at.getUTCFullYear()
-  const month = at.getUTCMonth()
-  return Array.from({ length: count }, (_, i) => {
-    const d = new Date(Date.UTC(year, month - (count - 1 - i), 1))
-    return d.toISOString().slice(0, 10)
-  })
+export const VALUE_RANGES = ["12m", "90d", "30d", "7d"] as const
+export type ValueRange = (typeof VALUE_RANGES)[number]
+
+/** The range the Dashboard opens on. */
+export const DEFAULT_VALUE_RANGE: ValueRange = "90d"
+
+export type BucketUnit = "day" | "week"
+
+/** Each range's bucket unit, bucket count and label ("Last 3 months"). */
+export const VALUE_RANGE_SPECS: Record<
+  ValueRange,
+  { unit: BucketUnit; count: number; label: string }
+> = {
+  // 53 weeks, so the current partial week doesn't cut the year short.
+  "12m": { unit: "week", count: 53, label: "Last 12 months" },
+  "90d": { unit: "week", count: 13, label: "Last 3 months" },
+  "30d": { unit: "day", count: 30, label: "Last 30 days" },
+  "7d": { unit: "day", count: 7, label: "Last 7 days" },
 }
 
-/** One month of Quote activity. */
-export interface MonthActivity {
-  /** The month's first day, `yyyy-MM-01`. */
-  month: string
-  /** Quotes created that month. */
-  count: number
-  /** The sum of their Totals (4 dp). */
-  value: string
-}
+const DAY_MS = 86_400_000
 
 /**
- * `months` with the activity found in `rows` (by `month`), zeros where a
- * month had none; rows outside `months` are dropped.
+ * The buckets of `range` at `now`: their `unit`, the first bucket's start
+ * (`from`, inclusive, `yyyy-MM-dd` UTC), the last one's (`last`, the
+ * bucket containing `now`) and every start, oldest first.
  */
-export function fillMonths(
-  months: readonly string[],
-  rows: readonly { month: string; count: number; value: Decimal.Value }[]
-): MonthActivity[] {
-  const byMonth = new Map(rows.map((r) => [r.month, r]))
-  return months.map((month) => {
-    const row = byMonth.get(month)
-    return {
-      month,
-      count: row?.count ?? 0,
-      value: new Decimal(row?.value ?? 0).toFixed(4),
-    }
-  })
+export function valueBuckets(
+  now: string | number,
+  range: ValueRange
+): { unit: BucketUnit; from: string; last: string; starts: string[] } {
+  const { unit, count } = VALUE_RANGE_SPECS[range]
+  const at = new Date(now)
+  const today = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate())
+  const step = unit === "week" ? 7 * DAY_MS : DAY_MS
+  // Monday of this week: getUTCDay() is 0 on Sunday.
+  const lastStart =
+    unit === "week" ? today - ((at.getUTCDay() + 6) % 7) * DAY_MS : today
+  const starts = Array.from({ length: count }, (_, i) =>
+    new Date(lastStart - (count - 1 - i) * step).toISOString().slice(0, 10)
+  )
+  return { unit, from: starts[0]!, last: starts.at(-1)!, starts }
 }

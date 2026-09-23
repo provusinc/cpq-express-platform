@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
+import { VALUE_RANGES, valueBuckets } from "@workspace/domain/dashboard"
 import type { QuoteStatus } from "@workspace/domain/enums"
 
 import {
@@ -72,9 +73,6 @@ describe("dashboard.overview", () => {
       const { caller } = await setup(db)
       const result = await caller.dashboard.overview()
       expect(result.open).toEqual({ count: 0, value: "0.0000" })
-      expect(result.months).toHaveLength(12)
-      expect(result.months.at(-1)!.month).toBe(day(0).slice(0, 8) + "01")
-      expect(result.months.every((m) => m.count === 0)).toBe(true)
       expect(result.approvalQueue).toEqual({ total: 0, rows: [] })
       expect(result.currencyCode).toBe("USD")
     }))
@@ -89,39 +87,6 @@ describe("dashboard.overview", () => {
       await quote("customer_rejected", { total: "70" })
       const { open } = await caller.dashboard.overview()
       expect(open).toEqual({ count: 3, value: "175.5000" })
-    }))
-
-  it("counts Quotes created per UTC month over the last twelve", () =>
-    withTestDb(async (db) => {
-      const { caller, quote } = await setup(db)
-      const now = new Date()
-      const monthStart = (back: number) =>
-        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1))
-      await quote("draft", { total: "10", createdAt: monthStart(0) })
-      await quote("approved", { total: "20", createdAt: new Date() })
-      await quote("draft", {
-        total: "5",
-        createdAt: new Date(monthStart(0).getTime() - 1000),
-      })
-      await quote("draft", { total: "7", createdAt: monthStart(11) })
-      // Too old for the chart.
-      await quote("draft", {
-        total: "99",
-        createdAt: new Date(monthStart(11).getTime() - 1000),
-      })
-      const { months } = await caller.dashboard.overview()
-      expect(months.at(-1)).toEqual({
-        month: monthStart(0).toISOString().slice(0, 10),
-        count: 2,
-        value: "30.0000",
-      })
-      expect(months.at(-2)).toMatchObject({ count: 1, value: "5.0000" })
-      expect(months[0]).toEqual({
-        month: monthStart(11).toISOString().slice(0, 10),
-        count: 1,
-        value: "7.0000",
-      })
-      expect(months.reduce((n, m) => n + m.count, 0)).toBe(4)
     }))
 
   it("queues what waits for an Approver, and a Member's own pending Quotes", () =>
@@ -182,7 +147,6 @@ describe("dashboard.overview", () => {
       }
       const result = await caller.dashboard.overview()
       expect(result.open).toEqual({ count: 1, value: "100.0000" })
-      expect(result.months.reduce((n, m) => n + m.count, 0)).toBe(1)
       expect((await asApprover.dashboard.overview()).approvalQueue.total).toBe(
         0
       )
@@ -199,5 +163,133 @@ describe("dashboard.overview", () => {
           user: await createUser(db),
         }).dashboard.overview()
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
+    }))
+})
+
+describe("dashboard.valueOverTime", () => {
+  it("is every bucket of the range, zero-filled, oldest first", () =>
+    withTestDb(async (db) => {
+      const { caller } = await setup(db)
+      for (const range of VALUE_RANGES) {
+        const result = await caller.dashboard.valueOverTime({ range })
+        const expected = valueBuckets(Date.now(), range)
+        expect(result.range).toBe(range)
+        expect(result.unit).toBe(expected.unit)
+        expect(result.buckets.map((b) => b.start)).toEqual(expected.starts)
+        expect(result.buckets[0]).toEqual({
+          start: expected.from,
+          created: { count: 0, value: "0.0000" },
+          approved: { count: 0, value: "0.0000" },
+        })
+      }
+    }))
+
+  it("sums created Quotes by UTC day, leaving out older ones", () =>
+    withTestDb(async (db) => {
+      const { caller, quote } = await setup(db)
+      const today = new Date(`${day(0)}T00:00:00.000Z`)
+      await quote("draft", { total: "10", createdAt: today })
+      await quote("customer_approved", { total: "20", createdAt: new Date() })
+      // The last second of yesterday (UTC).
+      await quote("draft", {
+        total: "5",
+        createdAt: new Date(today.getTime() - 1000),
+      })
+      // Six days ago is the first day of "7d"; seven is outside it.
+      await quote("draft", { total: "7", createdAt: daysAgo(6) })
+      await quote("draft", { total: "99", createdAt: daysAgo(7.5) })
+
+      const { buckets } = await caller.dashboard.valueOverTime({ range: "7d" })
+      expect(buckets).toHaveLength(7)
+      expect(buckets.at(-1)!.created).toEqual({ count: 2, value: "30.0000" })
+      expect(buckets.at(-2)!.created).toEqual({ count: 1, value: "5.0000" })
+      expect(buckets[0]!.created).toEqual({ count: 1, value: "7.0000" })
+      expect(buckets.reduce((n, b) => n + b.created.count, 0)).toBe(4)
+      // Created isn't Customer Approved: that needs its Approval Step.
+      expect(buckets.every((b) => b.approved.count === 0)).toBe(true)
+    }))
+
+  it("dates Customer Approved by its Approval Step, in weeks", () =>
+    withTestDb(async (db) => {
+      const { organization, user, caller, quote } = await setup(db)
+      const won = await quote("customer_approved", {
+        total: "300",
+        createdAt: daysAgo(200),
+      })
+      const other = await quote("customer_approved", {
+        total: "50.5",
+        createdAt: daysAgo(20),
+      })
+      const lost = await quote("customer_rejected", { total: "999" })
+      const step = (quoteId: string, toStatus: QuoteStatus, at: Date) =>
+        db.insert(schema.approvalSteps).values({
+          organizationId: organization.id,
+          quoteId,
+          action:
+            toStatus === "customer_approved"
+              ? "customer_approved"
+              : "customer_rejected",
+          fromStatus: "pending_customer_approval",
+          toStatus,
+          actorId: user.id,
+          createdAt: at,
+        })
+      await step(won.id, "customer_approved", new Date())
+      await step(other.id, "customer_approved", new Date())
+      await step(lost.id, "customer_rejected", new Date())
+
+      const result = await caller.dashboard.valueOverTime({ range: "90d" })
+      expect(result.unit).toBe("week")
+      expect(result.buckets).toHaveLength(13)
+      expect(result.buckets.at(-1)!.approved).toEqual({
+        count: 2,
+        value: "350.5000",
+      })
+      expect(result.buckets.at(-1)!.start).toBe(
+        valueBuckets(Date.now(), "90d").last
+      )
+      // `won` was created before the range; `other` and `lost` in it.
+      expect(result.buckets.reduce((n, b) => n + b.created.count, 0)).toBe(2)
+    }))
+
+  it("counts only this Organization's Quotes, and refuses non-members", () =>
+    withTestDb(async (db) => {
+      const { organization, caller, quote } = await setup(db)
+      await quote("draft", { total: "100" })
+      const globex = await createOrganization(db)
+      const { user: outsider } = await createMember(db, globex)
+      const theirs = await createQuote(db, globex, {
+        owner: outsider,
+        status: "customer_approved",
+        total: "5000",
+        marginPct: "1",
+      })
+      await db.insert(schema.approvalSteps).values({
+        organizationId: globex.id,
+        quoteId: theirs.id,
+        action: "customer_approved",
+        fromStatus: "pending_customer_approval",
+        toStatus: "customer_approved",
+        actorId: outsider.id,
+      })
+
+      const { buckets } = await caller.dashboard.valueOverTime({ range: "30d" })
+      expect(buckets.at(-1)!.created).toEqual({ count: 1, value: "100.0000" })
+      expect(buckets.every((b) => b.approved.count === 0)).toBe(true)
+
+      await expect(
+        organizationCaller(db, {
+          organization,
+          user: outsider,
+        }).dashboard.valueOverTime({ range: "30d" })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" })
+    }))
+
+  it("refuses an unknown range", () =>
+    withTestDb(async (db) => {
+      const { caller } = await setup(db)
+      await expect(
+        caller.dashboard.valueOverTime({ range: "1y" as never })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" })
     }))
 })

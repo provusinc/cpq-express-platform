@@ -10,6 +10,8 @@ import { TooltipProvider } from "@workspace/ui/components/tooltip"
 
 import type { Labels } from "@workspace/domain/settings"
 
+import { ThemeToggle } from "@/components/theme-toggle"
+
 import { AppSidebar } from "./app-sidebar"
 import { LabelsProvider } from "./labels"
 import type { ShellOrganization, ShellUser } from "./types"
@@ -50,6 +52,9 @@ export function AppShell({
               <span className="truncate text-sm text-muted-foreground">
                 {sidebar.organization.name}
               </span>
+              <div className="ml-auto">
+                <ThemeToggle />
+              </div>
             </header>
             <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6">
               {children}

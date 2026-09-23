@@ -43,6 +43,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 
+import { Decimal } from "@workspace/domain/money"
 import { canPlacePhase, MAX_PHASE_DEPTH } from "@workspace/domain/phases"
 import type { PhaseRollup } from "@workspace/domain/phases"
 import { Badge } from "@workspace/ui/components/badge"
@@ -251,7 +252,7 @@ function NameCell({ row }: Cell) {
   const labels = useLabels()
   const { line, depth } = lineOf(row)
   return (
-    <div className="flex min-w-48 flex-col" style={indent(depth)}>
+    <div className="flex min-w-40 flex-col" style={indent(depth)}>
       <InlineText
         label="Name"
         value={line.name}
@@ -284,7 +285,7 @@ function NotesCell({ row }: Cell) {
       maxLength={2000}
       disabled={readOnly}
       placeholder={readOnly ? "" : "Add notes"}
-      className="min-w-40 text-sm"
+      className="min-w-24 text-sm"
       onSave={(notes) => onUpdate({ id: line.id, notes })}
     />
   )
@@ -337,7 +338,7 @@ function QuantityCell({ row }: Cell) {
           ? null
           : "Enter a quantity of 0 or more with up to 3 decimals."
       }
-      className="w-24 text-right tabular-nums"
+      className="w-20 text-right tabular-nums"
       onSave={(quantity) => quantity && onUpdate({ id: line.id, quantity })}
     />
   )
@@ -391,7 +392,7 @@ function UnitPriceCell({ row }: Cell) {
             : "Enter a price of 0 or more with up to 4 decimals."
         }
         className={cn(
-          "w-28 text-right tabular-nums",
+          "w-20 text-right tabular-nums",
           overridden && "font-medium text-warning-ink"
         )}
         onSave={(unitPrice) =>
@@ -420,7 +421,7 @@ function MarginCell({ row }: Cell) {
         pct.startsWith("-") && "text-destructive"
       )}
     >
-      {trimMoney(pct)}%
+      {new Decimal(pct).toFixed(1)}%
     </div>
   )
 }
@@ -798,7 +799,7 @@ function PhaseRowCells({
         cells.push(
           <TableCell
             key={columnId}
-            className="px-4 py-1 text-right font-semibold tabular-nums"
+            className="py-1 pr-4 text-right font-semibold tabular-nums"
           >
             {formatMoney(rollup.total, currency)}
           </TableCell>
@@ -809,11 +810,11 @@ function PhaseRowCells({
           <TableCell
             key={columnId}
             className={cn(
-              "px-4 py-1 text-right text-muted-foreground tabular-nums",
+              "py-1 pr-4 text-right text-muted-foreground tabular-nums",
               rollup.marginPct.startsWith("-") && "text-destructive"
             )}
           >
-            {trimMoney(rollup.marginPct)}%
+            {new Decimal(rollup.marginPct).toFixed(1)}%
           </TableCell>
         )
         break

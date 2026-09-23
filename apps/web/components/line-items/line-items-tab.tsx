@@ -47,7 +47,6 @@ import { useLineItemCommands } from "./commands"
 import { LineItemsGrid, phaseRowId } from "./line-items-grid"
 import type { GridActions, GridRow } from "./line-items-grid"
 import { PhaseDialog } from "./phase-dialog"
-import { QuoteSummary } from "./quote-summary"
 
 const NO_COLLAPSED: ReadonlySet<string> = new Set()
 
@@ -57,8 +56,9 @@ const plural = (n: number, one: string, many: string) =>
 /**
  * The Quote editor's Line Items tab: the grid of Phases (nested up to
  * three levels, expand/collapse) and Line Items with inline autosaving
- * edits, drag-and-drop, bulk move/clone/delete with undo, the Add Items
- * sheet and the Summary with the Quote Discount. Read-only (no add, edit,
+ * edits, drag-and-drop, bulk move/clone/delete with undo and the Add Items
+ * sheet, at full width (the figures and the Quote Discount are in the
+ * header). Read-only (no add, edit,
  * move or delete) when the Quote is locked or the viewer may not edit it;
  * the server refuses regardless.
  */
@@ -162,8 +162,8 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
     : undefined
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 2xl:flex-row 2xl:items-start">
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {!readOnly && (
             <>
@@ -297,13 +297,6 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
           />
         )}
       </div>
-      <QuoteSummary
-        totals={editor.totals}
-        readOnly={readOnly}
-        onSetDiscount={(discount) =>
-          commands.setDiscount.mutate({ id: quoteId, discount })
-        }
-      />
       {!readOnly && (
         <>
           <AddItemsSheet

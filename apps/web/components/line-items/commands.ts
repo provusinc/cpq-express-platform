@@ -48,8 +48,7 @@ const count = (n: number, one: string, many: string) =>
  *   or into another Phase);
  * - Phases: `createPhase`, `renamePhase` and `movePhase` (optimistic),
  *   `removePhase` (cascades, with an Undo toast that calls `restorePhase`)
- *   and `clonePhase`;
- * - `setDiscount` (the Summary).
+ *   and `clonePhase`.
  */
 export function useLineItemCommands(quoteId: string) {
   const trpc = useTRPC()
@@ -207,22 +206,6 @@ export function useLineItemCommands(quoteId: string) {
     }
   )
 
-  const setDiscount = useQuoteCommand(
-    quoteId,
-    trpc.quote.setDiscount.mutationOptions(),
-    {
-      optimistic: (editor, input) => ({
-        ...editor,
-        totals: {
-          ...editor.totals,
-          discountKind: input.discount?.kind ?? null,
-          discountValue:
-            input.discount === null ? null : String(input.discount.value),
-        },
-      }),
-    }
-  )
-
   return {
     add,
     update,
@@ -236,7 +219,6 @@ export function useLineItemCommands(quoteId: string) {
     removePhase,
     restorePhase,
     clonePhase,
-    setDiscount,
   }
 }
 

@@ -22,11 +22,12 @@ import {
   quoteDuration,
 } from "@/lib/figures"
 import { formatDate } from "@/lib/format"
-import { trimMoney, wholeMoney } from "@/lib/money"
+import { wholeMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
 import { useQuoteCommand } from "./autosave"
 import { InlineText } from "./inline-text"
+import { QuoteDiscountControl } from "./quote-discount"
 import { QuoteHeaderActions } from "./quote-actions"
 import { WithQuoteFigures } from "./quote-figures"
 import type { QuoteFigures } from "./quote-figures"
@@ -223,7 +224,7 @@ const TONE_INK = {
 
 /**
  * The headline figures, divided by hairlines: Total (and the Quote
- * Discount it is after), Margin % (success at or above the low-margin line,
+ * Discount it is after, which opens the discount editor), Margin % (success at or above the low-margin line,
  * warning below it, danger negative; the amount under it), Effort in hours
  * (with the Time Period it is planned in) and Duration in weeks (with the
  * Quote dates, which open the dates editor).
@@ -240,7 +241,6 @@ function QuoteMetrics({
   const currency = figures.currencyCode
   const tone = marginTone(figures.total, figures.marginPct)
   const duration = quoteDuration(quote.startDate, quote.endDate)
-  const hasDiscount = !new Decimal(figures.discountAmount).isZero()
   return (
     <dl
       aria-label="Quote figures"
@@ -249,11 +249,11 @@ function QuoteMetrics({
       <Metric
         label="Total"
         sub={
-          hasDiscount
-            ? figures.discountKind === "percent" && figures.discountValue
-              ? `−${trimMoney(figures.discountValue)}% Quote Discount`
-              : `−${wholeMoney(figures.discountAmount, currency)} Quote Discount`
-            : "No Quote Discount"
+          <QuoteDiscountControl
+            quoteId={quote.id}
+            figures={figures}
+            canEdit={canEdit}
+          />
         }
       >
         {wholeMoney(figures.total, currency)}

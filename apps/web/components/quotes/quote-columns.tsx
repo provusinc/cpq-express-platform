@@ -104,10 +104,17 @@ export type QuoteColumnId = keyof typeof QUOTE_COLUMN_LABELS
 
 /** Always shown and first (after the select column). */
 export const FIXED_QUOTE_COLUMNS: readonly QuoteColumnId[] = ["name"]
-/** Hidden until the user shows them. */
+/**
+ * Hidden until the user shows them. Of the dates only Valid Until shows by
+ * default (it flags lapsed offers); Start, End, Created and Updated are a
+ * Columns-menu choice, so a row doesn't read as a wall of dates.
+ */
 export const DEFAULT_HIDDEN_QUOTE_COLUMNS: readonly QuoteColumnId[] = [
   "description",
+  "startDate",
+  "endDate",
   "timePeriod",
+  "createdAt",
   "updatedAt",
 ]
 

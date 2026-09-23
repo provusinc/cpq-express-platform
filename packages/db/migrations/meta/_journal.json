@@ -36,6 +36,20 @@
       "when": 1790156031009,
       "tag": "0004_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790157858546,
+      "tag": "0005_auth_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790157859310,
+      "tag": "0006_accounts",
+      "breakpoints": true
     }
   ]
 }

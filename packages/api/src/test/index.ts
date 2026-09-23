@@ -17,7 +17,8 @@
  * becomes a SAVEPOINT, so commit/rollback semantics are preserved.
  *
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
- * `createSession`, `createOrganization`, `createMembership`, `createMember`.
+ * `createSession`, `createOrganization`, `createMembership`, `createMember`,
+ * and per area `createAccount`, `createContact`, ….
  *
  * Email: every caller gets an in-memory `mailer` (default: a fresh one per
  * caller). Pass your own to read what was sent, and `tokenFromEmail` to pull
@@ -45,6 +46,8 @@ import { toSessionUser } from "./fixtures"
 
 export { createMemoryMailer }
 export {
+  createAccount,
+  createContact,
   createInvitation,
   createMember,
   createMembership,

@@ -83,7 +83,7 @@ if (env.AUTH_MICROSOFT_ENTRA_ID_ID && env.AUTH_MICROSOFT_ENTRA_ID_SECRET) {
 const config = {
   adapter: DrizzleAdapter(db, {
     usersTable: schema.users,
-    accountsTable: schema.accounts,
+    accountsTable: schema.authAccounts,
     sessionsTable: schema.sessions,
     verificationTokensTable: schema.verificationTokens,
   }),

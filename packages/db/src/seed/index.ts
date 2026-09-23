@@ -7,7 +7,8 @@
  * else. For a clean slate, drop the database volume (`docker compose down -v`)
  * and run `pnpm services:up && pnpm db:migrate && pnpm db:seed`.
  *
- * Add later areas (Accounts, catalog, …) as further `seed<Area>(tx, orgs)`
+ * Areas: tenancy (Users, Organizations, Memberships), then `acme`'s demo
+ * Accounts with Contacts. Add later areas as further `seed<Area>(tx, …)`
  * steps below, each idempotent the same way.
  */
 import { fileURLToPath } from "node:url"
@@ -15,8 +16,10 @@ import { fileURLToPath } from "node:url"
 import { createDb } from "../index"
 import type { Db } from "../index"
 import { SEED_INVITATION, seedInvitations } from "./invitations"
+import { seedAccounts } from "./accounts"
 import { seedTenancy } from "./tenancy"
 
+export { SEED_ACCOUNTS, seedAccounts } from "./accounts"
 export { SEED_ORGANIZATIONS, SEED_PLATFORM_ADMIN, seedTenancy } from "./tenancy"
 export { SEED_INVITATION, seedInvitations } from "./invitations"
 
@@ -24,6 +27,7 @@ export async function seed(db: Db) {
   return db.transaction(async (tx) => {
     const organizations = await seedTenancy(tx)
     await seedInvitations(tx, organizations)
+    await seedAccounts(tx, organizations.acme)
     return { organizations }
   })
 }

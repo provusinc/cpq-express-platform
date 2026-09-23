@@ -158,3 +158,45 @@ export async function createInvitation(
     .returning()
   return { invitation: invitation!, token }
 }
+
+type NewAccount = Omit<typeof schema.accounts.$inferInsert, "organizationId">
+
+/** Inserts an Account in `organization` (unique name by default). */
+export async function createAccount(
+  db: Db,
+  organization: { id: string },
+  overrides: Partial<NewAccount> = {}
+) {
+  const [account] = await db
+    .insert(schema.accounts)
+    .values({
+      name: `Account ${uuidv7().slice(-12)}`,
+      ...overrides,
+      organizationId: organization.id,
+    })
+    .returning()
+  return account!
+}
+
+type NewContact = Omit<
+  typeof schema.contacts.$inferInsert,
+  "organizationId" | "accountId"
+>
+
+/** Inserts a Contact at `account` (not primary unless `isPrimary`). */
+export async function createContact(
+  db: Db,
+  account: { id: string; organizationId: string },
+  overrides: Partial<NewContact> = {}
+) {
+  const [contact] = await db
+    .insert(schema.contacts)
+    .values({
+      name: "Casey Contact",
+      ...overrides,
+      organizationId: account.organizationId,
+      accountId: account.id,
+    })
+    .returning()
+  return contact!
+}

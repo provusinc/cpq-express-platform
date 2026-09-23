@@ -8,6 +8,7 @@ export { createTRPCContext } from "./trpc"
 export { ORGANIZATION_SLUG_HEADER } from "./headers"
 export type { CreateContextOptions, TRPCContext } from "./trpc"
 export type { InvitationStatus } from "./invitations"
+export type { InUseDetails, InUseEntity, InUseCounts } from "./errors"
 
 /** `RouterInputs["health"]["check"]` */
 export type RouterInputs = inferRouterInputs<AppRouter>

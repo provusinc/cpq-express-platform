@@ -43,6 +43,7 @@ import type { Db } from "@workspace/db"
 import { can } from "@workspace/domain/policy"
 import type { Actor, OrganizationAction } from "@workspace/domain/policy"
 
+import { inUseDetails } from "./errors"
 import { ORGANIZATION_SLUG_HEADER } from "./headers"
 
 export interface CreateContextOptions {
@@ -99,6 +100,8 @@ const t = initTRPC.context<TRPCContext>().create({
       ...shape.data,
       zodError:
         error.cause instanceof ZodError ? z.flattenError(error.cause) : null,
+      /** Set when a delete was blocked by references (`inUseError`). */
+      inUse: inUseDetails(error.cause),
     },
   }),
 })

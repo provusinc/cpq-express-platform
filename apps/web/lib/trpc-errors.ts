@@ -1,8 +1,13 @@
 /**
  * Reading tRPC errors in client components. Input validation failures carry
- * zod's flattened issues in `data.zodError` (see the API's error formatter);
- * everything else carries a human message.
+ * zod's flattened issues in `data.zodError`, and deletes blocked by
+ * references (`inUseError` in the API) carry `data.inUse` (see the API's
+ * error formatter); everything else carries a human message.
  */
+import type { InUseDetails } from "@workspace/api"
+
+export type InUse = InUseDetails
+
 interface ErrorShape {
   message?: unknown
   data?: {
@@ -11,6 +16,7 @@ interface ErrorShape {
       formErrors?: string[]
       fieldErrors?: Record<string, string[] | undefined>
     } | null
+    inUse?: unknown
   } | null
 }
 
@@ -32,7 +38,18 @@ export function fieldErrors(error: unknown): Record<string, string> {
   return result
 }
 
-/** One sentence to show the person (a toast, a form alert). */
+/** The structured details of a blocked delete ("in use"), or null. */
+export function inUseOf(error: unknown): InUse | null {
+  const inUse = (error as ErrorShape | null)?.data?.inUse
+  return inUse && typeof inUse === "object" && "kind" in inUse
+    ? (inUse as InUse)
+    : null
+}
+
+/**
+ * One sentence to show the person (a toast, a form alert). Internal server
+ * errors show the fallback, never their technical message.
+ */
 export function errorMessage(error: unknown, fallback = FALLBACK): string {
   const shape = error as ErrorShape | null
   const zod = shape?.data?.zodError
@@ -41,6 +58,7 @@ export function errorMessage(error: unknown, fallback = FALLBACK): string {
       zod.formErrors?.[0] ?? Object.values(fieldErrors(error))[0] ?? fallback
     )
   }
+  if (errorCode(error) === "INTERNAL_SERVER_ERROR") return fallback
   return typeof shape?.message === "string" && shape.message
     ? shape.message
     : fallback

@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   return (
     <PlaceholderPage
       title="Settings"
-      description="Members, Hours Per Day, labels and document settings."
+      description="Hours Per Day, labels and document settings."
     />
   )
 }

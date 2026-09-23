@@ -16,7 +16,7 @@ import {
   SidebarRail,
 } from "@workspace/ui/components/sidebar"
 
-import { NAV_ITEMS, SETTINGS_NAV_ITEM } from "./nav"
+import { ADMIN_NAV_ITEMS, NAV_ITEMS } from "./nav"
 import type { NavItem } from "./nav"
 import { OrganizationSwitcher } from "./organization-switcher"
 import type { ShellOrganization, ShellUser } from "./types"
@@ -55,7 +55,7 @@ export function AppSidebar({
         {isAdmin && (
           <SidebarGroup className="mt-auto">
             <SidebarGroupContent>
-              <NavMenu items={[SETTINGS_NAV_ITEM]} />
+              <NavMenu items={ADMIN_NAV_ITEMS} />
             </SidebarGroupContent>
           </SidebarGroup>
         )}

@@ -2,18 +2,30 @@ import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import {
+  asc,
   eq,
   hashInvitationToken,
+  isNull,
   organizationScope,
   schema,
 } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
-import { invitationStatus } from "../invitations"
+import { emailInput, roleInput } from "../inputs"
+import {
+  invitationStatus,
+  issueInvitation,
+  reissueInvitation,
+} from "../invitations"
 import type { InvitationStatus } from "../invitations"
-import { authedProcedure, createTRPCRouter, publicProcedure } from "../trpc"
+import {
+  authedProcedure,
+  createTRPCRouter,
+  permittedProcedure,
+  publicProcedure,
+} from "../trpc"
 
-const { invitations, memberships, organizations } = schema
+const { invitations, memberships, organizations, users } = schema
 
 const tokenInput = z.object({ token: z.string().min(1).max(200) })
 
@@ -44,6 +56,8 @@ async function findByToken(db: Db, token: string) {
     .limit(1)
   return row
 }
+
+const manageMembers = permittedProcedure("members.manage")
 
 export const invitationRouter = createTRPCRouter({
   /**
@@ -133,4 +147,116 @@ export const invitationRouter = createTRPCRouter({
       }
     })
   ),
+
+  /** The Organization's open Invitations (pending or expired), by email. */
+  list: manageMembers.query(async ({ ctx }) => {
+    const rows = await ctx.scope.db
+      .select({
+        id: invitations.id,
+        email: invitations.email,
+        role: invitations.role,
+        expiresAt: invitations.expiresAt,
+        acceptedAt: invitations.acceptedAt,
+        revokedAt: invitations.revokedAt,
+        createdAt: invitations.createdAt,
+        updatedAt: invitations.updatedAt,
+        invitedBy: { name: users.name, email: users.email },
+      })
+      .from(invitations)
+      .leftJoin(users, eq(users.id, invitations.invitedById))
+      .where(
+        ctx.scope.where(
+          invitations,
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt)
+        )
+      )
+      .orderBy(asc(invitations.email))
+    return rows.map(({ acceptedAt, revokedAt, ...row }) => ({
+      ...row,
+      status: invitationStatus({
+        acceptedAt,
+        revokedAt,
+        expiresAt: row.expiresAt,
+      }) as "pending" | "expired",
+    }))
+  }),
+
+  /**
+   * Invites `email` to this Organization with `role` and emails the link.
+   * Replaces any open Invitation for the same email; CONFLICT if they're
+   * already a member.
+   */
+  create: manageMembers
+    .input(z.object({ email: emailInput, role: roleInput }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        const invitation = await issueInvitation(
+          { ...ctx, db: tx },
+          {
+            organization: ctx.organization,
+            email: input.email,
+            role: input.role,
+            invitedBy: ctx.user,
+          }
+        )
+        return {
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          expiresAt: invitation.expiresAt,
+        }
+      })
+    ),
+
+  /** Emails a new link (the old one stops working) and extends the expiry. */
+  resend: manageMembers
+    .input(z.object({ id: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        const scope = organizationScope(tx, ctx.organization.id)
+        const invitation = await scope.findById(invitations, input.id)
+        if (!invitation) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Invitation not found.",
+          })
+        }
+        const updated = await reissueInvitation(
+          { ...ctx, db: tx },
+          { organization: ctx.organization, invitation, invitedBy: ctx.user }
+        )
+        return {
+          id: updated.id,
+          email: updated.email,
+          expiresAt: updated.expiresAt,
+        }
+      })
+    ),
+
+  /** Withdraws an open Invitation; its link stops working. Idempotent. */
+  revoke: manageMembers
+    .input(z.object({ id: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      ctx.scope.transaction(async (scope) => {
+        const invitation = await scope.findById(invitations, input.id)
+        if (!invitation) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Invitation not found.",
+          })
+        }
+        if (invitation.acceptedAt) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `${invitation.email} has already accepted this Invitation. Remove them from Members instead.`,
+          })
+        }
+        if (invitation.revokedAt) return { id: invitation.id }
+        await scope.update(invitations, invitation.id, {
+          revokedAt: new Date(),
+        })
+        return { id: invitation.id }
+      })
+    ),
 })

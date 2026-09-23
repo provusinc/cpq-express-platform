@@ -5,6 +5,7 @@ import {
   PackagePlusIcon,
   SettingsIcon,
   UserCogIcon,
+  UsersIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -29,9 +30,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Resource Roles", href: "/resource-roles", icon: UserCogIcon },
 ]
 
-export const SETTINGS_NAV_ITEM: NavItem = {
-  label: "Settings",
-  href: "/settings",
-  icon: SettingsIcon,
-  adminOnly: true,
-}
+/** The Admin-only entries at the bottom of the sidebar. */
+export const ADMIN_NAV_ITEMS: NavItem[] = [
+  { label: "Members", href: "/members", icon: UsersIcon, adminOnly: true },
+  { label: "Settings", href: "/settings", icon: SettingsIcon, adminOnly: true },
+]

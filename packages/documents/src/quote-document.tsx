@@ -240,7 +240,7 @@ function Header({ snapshot, logo, styles, date }: Ctx) {
         <Text style={styles.muted}>Date: {date(snapshot.generatedAt)}</Text>
         {quote.validUntil && (
           <Text style={styles.muted}>
-            Valid until: {date(quote.validUntil)}
+            Valid Until: {date(quote.validUntil)}
           </Text>
         )}
         <Text style={styles.muted}>

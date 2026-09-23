@@ -77,7 +77,7 @@ describe("insightListFilters", () => {
       },
     ],
     [
-      { kind: "insight", key: "expiring_soon" },
+      { kind: "insight", key: "valid_until_soon" },
       {
         statuses: [
           "draft",

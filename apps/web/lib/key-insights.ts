@@ -6,8 +6,8 @@
 import { QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import {
-  EXPIRING_STATUSES,
-  expiringWindow,
+  VALID_UNTIL_STATUSES,
+  validUntilWindow,
   INSIGHT_KEYS,
   LOW_MARGIN_STATUSES,
   LOW_MARGIN_THRESHOLD,
@@ -87,7 +87,7 @@ export const insightFocusKey = (focus: InsightFocus | null) =>
  * - high-value pipeline → Draft + Pending Approval, largest Total first;
  * - low margin → the undecided statuses with Margin % below 15 (the API
  *   also requires a positive Total);
- * - expiring soon → the offers in play with Valid Until from today to 14
+ * - Valid Until soon → the offers in play with Valid Until from today to 14
  *   days ahead, soonest first;
  * - this month → created on or after the month's first day;
  * - rejected → Rejected + Customer Rejected;
@@ -112,10 +112,10 @@ export function insightListFilters(
         statuses: [...LOW_MARGIN_STATUSES],
         marginBelow: LOW_MARGIN_THRESHOLD,
       }
-    case "expiring_soon": {
-      const { from, to } = expiringWindow(today)
+    case "valid_until_soon": {
+      const { from, to } = validUntilWindow(today)
       return {
-        statuses: [...EXPIRING_STATUSES],
+        statuses: [...VALID_UNTIL_STATUSES],
         validUntilFrom: from,
         validUntilTo: to,
         sort: { by: "validUntil", direction: "asc" },

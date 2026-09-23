@@ -23,8 +23,8 @@ import { QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import {
   ageInDays,
-  EXPIRING_STATUSES,
-  expiringWindow,
+  VALID_UNTIL_STATUSES,
+  validUntilWindow,
   INSIGHT_KEYS,
   insightSeverity,
   LOW_MARGIN_STATUSES,
@@ -64,7 +64,7 @@ export const quoteInsightsProcedures = {
    * - `high_value_pipeline`: Draft + Pending Approval, count and value;
    * - `low_margin`: Margin % < 15 with Total > 0, excluding decided
    *   statuses (Approved, Rejected, Customer Approved/Rejected);
-   * - `expiring_soon`: Valid Until from today to 14 days ahead, on an
+   * - `valid_until_soon`: Valid Until from today to 14 days ahead, on an
    *   offer still in play (Draft, Pending Approval, Approved, Pending
    *   Customer Approval);
    * - `this_month`: Quotes created since the start of this UTC month;
@@ -78,7 +78,7 @@ export const quoteInsightsProcedures = {
     const now = new Date()
     const thisMonthFrom = startOfUtcMonth(now.getTime())
     const today = utcDay(now.getTime())
-    const expiring = expiringWindow(today)
+    const validUntilSoon = validUntilWindow(today)
 
     // The latest submit step of each Quote: when it entered the queue.
     const submitted = ctx.scope.db
@@ -98,10 +98,10 @@ export const quoteInsightsProcedures = {
         inArray(quotes.status, LOW_MARGIN_STATUSES),
         marginBelow(LOW_MARGIN_THRESHOLD)
       )!,
-      expiring_soon: and(
-        inArray(quotes.status, EXPIRING_STATUSES),
-        gte(quotes.validUntil, expiring.from),
-        lte(quotes.validUntil, expiring.to)
+      valid_until_soon: and(
+        inArray(quotes.status, VALID_UNTIL_STATUSES),
+        gte(quotes.validUntil, validUntilSoon.from),
+        lte(quotes.validUntil, validUntilSoon.to)
       )!,
       this_month: gte(quotes.createdAt, utcDayStart(thisMonthFrom)),
       rejected: inArray(quotes.status, REJECTED_STATUSES),

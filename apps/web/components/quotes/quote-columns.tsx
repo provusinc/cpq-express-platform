@@ -94,7 +94,7 @@ export const QUOTE_COLUMN_LABELS = {
   owner: "Owner",
   startDate: "Start",
   endDate: "End",
-  validUntil: "Valid until",
+  validUntil: "Valid Until",
   timePeriod: "Time period",
   description: "Description",
   createdAt: "Created",

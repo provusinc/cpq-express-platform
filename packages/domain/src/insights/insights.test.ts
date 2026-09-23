@@ -6,8 +6,8 @@ import {
   ageInDays,
   daysUntil,
   DECIDED_STATUSES,
-  expiringWindow,
-  isExpiringSoon,
+  validUntilWindow,
+  isValidUntilSoon,
   utcDay,
   type InsightKey,
   type InsightSeverity,
@@ -49,8 +49,8 @@ describe("insightSeverity: the other cards", () => {
     ["rejected", 10, "warning"],
     ["low_margin", 0, "info"],
     ["low_margin", 1, "warning"],
-    ["expiring_soon", 0, "info"],
-    ["expiring_soon", 1, "warning"],
+    ["valid_until_soon", 0, "info"],
+    ["valid_until_soon", 1, "warning"],
     ["high_value_pipeline", 0, "info"],
     ["high_value_pipeline", 100, "info"],
     ["this_month", 0, "info"],
@@ -120,12 +120,12 @@ describe("startOfUtcMonth", () => {
   })
 })
 
-describe("expiring soon", () => {
+describe("Valid Until soon", () => {
   const today = "2026-09-23"
 
   it("spans today to 14 days ahead", () => {
-    expect(expiringWindow(today)).toEqual({ from: today, to: "2026-10-07" })
-    expect(expiringWindow("2026-12-25")).toEqual({
+    expect(validUntilWindow(today)).toEqual({ from: today, to: "2026-10-07" })
+    expect(validUntilWindow("2026-12-25")).toEqual({
       from: "2026-12-25",
       to: "2027-01-08",
     })
@@ -143,7 +143,7 @@ describe("expiring soon", () => {
     [null, "draft", false],
   ]
   it.each(cases)("Valid Until %s, %s → %s", (validUntil, status, expected) => {
-    expect(isExpiringSoon({ validUntil, status }, today)).toBe(expected)
+    expect(isValidUntilSoon({ validUntil, status }, today)).toBe(expected)
   })
 
   it("counts days until a date", () => {

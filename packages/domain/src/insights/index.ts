@@ -13,7 +13,7 @@ export const INSIGHT_KEYS = [
   "pending_approval",
   "high_value_pipeline",
   "low_margin",
-  "expiring_soon",
+  "valid_until_soon",
   "this_month",
   "rejected",
 ] as const
@@ -28,7 +28,7 @@ export const INSIGHT_LABELS: Record<InsightKey, string> = {
   pending_approval: "Pending approval",
   high_value_pipeline: "High-value pipeline",
   low_margin: "Low margin",
-  expiring_soon: "Expiring soon",
+  valid_until_soon: "Valid Until soon",
   this_month: "This month",
   rejected: "Rejected",
 }
@@ -74,19 +74,19 @@ export const LOW_MARGIN_STATUSES = [
 ] as const satisfies readonly QuoteStatus[]
 
 /**
- * Expiring soon counts Quotes whose offer is still in play (not rejected,
+ * Valid Until soon counts Quotes whose offer is still in play (not rejected,
  * not a customer outcome): Draft, Pending Approval, Approved and Pending
  * Customer Approval.
  */
-export const EXPIRING_STATUSES = [
+export const VALID_UNTIL_STATUSES = [
   "draft",
   "pending_approval",
   "approved",
   "pending_customer_approval",
 ] as const satisfies readonly QuoteStatus[]
 
-/** Expiring soon: Valid Until from today to this many days ahead. */
-export const EXPIRING_SOON_DAYS = 14
+/** Valid Until soon: Valid Until from today to this many days ahead. */
+export const VALID_UNTIL_SOON_DAYS = 14
 
 /** A Quote is low-margin below this Margin % (with a positive Total). */
 export const LOW_MARGIN_THRESHOLD = "15"
@@ -122,7 +122,7 @@ export interface InsightFacts {
  *   ≥ 7 days; warning if ≥ 2 Quotes or ≥ 3 days; else info.
  * - Low margin: warning whenever there is one.
  * - Rejected: warning if ≥ 3.
- * - Expiring soon: warning whenever there is one.
+ * - Valid Until soon: warning whenever there is one.
  * - High-value pipeline and this month's activity: always info.
  */
 export function insightSeverity(
@@ -138,7 +138,7 @@ export function insightSeverity(
       return "info"
     }
     case "low_margin":
-    case "expiring_soon":
+    case "valid_until_soon":
       return count > 0 ? "warning" : "info"
     case "rejected":
       return count >= 3 ? "warning" : "info"
@@ -177,29 +177,31 @@ export function utcDay(now: string | number): string {
 }
 
 /**
- * The Valid Until window of the expiring-soon card: `from` today to `to`,
- * `EXPIRING_SOON_DAYS` later, both inclusive (`yyyy-MM-dd`, UTC days).
+ * The Valid Until window of the Valid Until soon card: `from` today to `to`,
+ * `VALID_UNTIL_SOON_DAYS` later, both inclusive (`yyyy-MM-dd`, UTC days).
  */
-export function expiringWindow(today: string): { from: string; to: string } {
+export function validUntilWindow(today: string): { from: string; to: string } {
   const to = new Date(`${today}T00:00:00.000Z`)
-  to.setUTCDate(to.getUTCDate() + EXPIRING_SOON_DAYS)
+  to.setUTCDate(to.getUTCDate() + VALID_UNTIL_SOON_DAYS)
   return { from: today, to: to.toISOString().slice(0, 10) }
 }
 
 /**
- * Whether a Quote counts as expiring soon on `today`: an offer still in
- * play (`EXPIRING_STATUSES`) whose Valid Until falls in `expiringWindow`.
+ * Whether a Quote counts as Valid Until soon on `today`: an offer still in
+ * play (`VALID_UNTIL_STATUSES`) whose Valid Until falls in `validUntilWindow`.
  * Valid Until is informational: this never changes the status.
  */
-export function isExpiringSoon(
+export function isValidUntilSoon(
   quote: { status: QuoteStatus; validUntil: string | null },
   today: string
 ): boolean {
   if (!quote.validUntil) return false
-  if (!(EXPIRING_STATUSES as readonly QuoteStatus[]).includes(quote.status)) {
+  if (
+    !(VALID_UNTIL_STATUSES as readonly QuoteStatus[]).includes(quote.status)
+  ) {
     return false
   }
-  const { from, to } = expiringWindow(today)
+  const { from, to } = validUntilWindow(today)
   return quote.validUntil >= from && quote.validUntil <= to
 }
 

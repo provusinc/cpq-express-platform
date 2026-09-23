@@ -93,7 +93,7 @@ export function SummaryTab({ quoteId }: { quoteId: string }) {
             <dd>
               {formatDate(summary.startDate)} – {formatDate(summary.endDate)}
             </dd>
-            <dt className="text-muted-foreground">Valid until</dt>
+            <dt className="text-muted-foreground">Valid Until</dt>
             <dd>
               {summary.validUntil ? (
                 <span

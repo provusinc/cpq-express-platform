@@ -198,26 +198,29 @@ never be deleted.
 _Avoid_: PDF version, proposal
 
 **Valid Until**:
-The date a Quote's offer lapses. Informational only — it never changes the Quote Status.
+The last day a Quote's offer stands; after it the Valid Until has passed. Informational
+only — it never changes the Quote Status. "Valid Until soon" means it falls within the
+next 14 days.
+_Avoid_: expires, expiry, expiring, expiration date, lapse
 
 **Decided**:
 A Quote Status in which an Approver or the customer has ruled on the Quote: Approved,
 Rejected, Customer Approved, or Customer Rejected. Its margin is no longer actionable.
 
 **Key Insight**:
-A card at the top of the Dashboard counting the Organization's Quotes that need attention —
-pending approval (with value and oldest wait since the latest Submission), the high-value
-pipeline (Draft + Pending Approval), low margin (under 15 % with a positive Total, not
-Decided), expiring soon (Valid Until within 14 days on a Draft, Pending Approval, Approved
-or Pending Customer Approval Quote), this month's activity, and rejected — coloured info,
-warning, or critical by its severity. Choosing one opens the Quote list filtered to those
-Quotes.
+A count of the Organization's Quotes that need attention, with their value: pending
+approval (with the oldest wait since the latest Submission), low margin (under 15 % with a
+positive Total, not Decided), Valid Until soon (Valid Until within 14 days on a Draft,
+Pending Approval, Approved or Pending Customer Approval Quote) and rejected — the four
+cells at the top of the Dashboard, each info, warning, or critical by its severity — plus
+the high-value pipeline (Draft + Pending Approval) and this month's activity, which are
+Quote list filters only. Choosing one opens the Quote list filtered to those Quotes.
 _Avoid_: KPI, alert
 
 **Dashboard**:
 An Organization's landing page, kept to a glance: the open pipeline value (Quotes without a
 customer outcome yet), the Key Insights that ask for action (pending approval, low margin,
-expiring soon, rejected), the value of Quotes created per month, what needs the viewer (for
+Valid Until soon, rejected), the value of Quotes created per month, what needs the viewer (for
 an Approver the Quotes waiting for them, for anyone else their own Quotes pending approval)
 and the viewer's recent Quotes. Read-only; everything on it leads into the Quote list or the
 record.

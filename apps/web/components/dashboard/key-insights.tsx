@@ -10,7 +10,10 @@ import {
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 
-import { EXPIRING_SOON_DAYS, INSIGHT_LABELS } from "@workspace/domain/insights"
+import {
+  VALID_UNTIL_SOON_DAYS,
+  INSIGHT_LABELS,
+} from "@workspace/domain/insights"
 import type { InsightKey, InsightSeverity } from "@workspace/domain/insights"
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -26,7 +29,7 @@ import { useTRPC } from "@/trpc/react"
 const STRIP = [
   "pending_approval",
   "low_margin",
-  "expiring_soon",
+  "valid_until_soon",
   "rejected",
 ] as const satisfies readonly InsightKey[]
 type StripKey = (typeof STRIP)[number]
@@ -34,7 +37,7 @@ type StripKey = (typeof STRIP)[number]
 const ICONS: Record<StripKey, LucideIcon> = {
   pending_approval: ClockIcon,
   low_margin: TrendingDownIcon,
-  expiring_soon: CalendarClockIcon,
+  valid_until_soon: CalendarClockIcon,
   rejected: XCircleIcon,
 }
 
@@ -42,7 +45,7 @@ const ICONS: Record<StripKey, LucideIcon> = {
 const DESCRIPTIONS: Record<StripKey, string> = {
   pending_approval: "Waiting for an Approver",
   low_margin: "Under 15 % margin, undecided",
-  expiring_soon: `Valid Until within ${EXPIRING_SOON_DAYS} days`,
+  valid_until_soon: `Valid Until within ${VALID_UNTIL_SOON_DAYS} days`,
   rejected: "Rejected and Customer Rejected",
 }
 

@@ -94,7 +94,7 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
  * Description, the actions at the top right (`actions`: approval actions,
  * #19, before Clone and the menu with Delete, `QuoteHeaderActions`), and a
  * spec row with Account, Owner, the Quote dates (`QuoteDatesEditor`:
- * shift/clamp with an impact preview), Valid until and Time Period
+ * shift/clamp with an impact preview), Valid Until and Time Period
  * (`TimePeriodControl`: warns, then discards all Allocations). A read-only
  * notice explains when the viewer can't edit.
  */
@@ -178,7 +178,7 @@ export function QuoteHeader({
         <Meta label="Dates" className="xl:min-w-60">
           <QuoteDatesEditor quote={quote} disabled={!canEdit} />
         </Meta>
-        <Meta label="Valid until">
+        <Meta label="Valid Until">
           {quote.validUntil ? (
             <span
               className={

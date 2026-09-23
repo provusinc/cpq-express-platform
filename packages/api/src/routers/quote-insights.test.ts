@@ -72,7 +72,7 @@ describe("quote.insights", () => {
         "pending_approval",
         "high_value_pipeline",
         "low_margin",
-        "expiring_soon",
+        "valid_until_soon",
         "this_month",
         "rejected",
       ])
@@ -194,7 +194,7 @@ describe("quote.insights", () => {
       await quote("customer_approved", { total: "1", validUntil: day(3) })
       const result = await caller.quote.insights()
       expect(result.today).toBe(day(0))
-      expect(card(result, "expiring_soon")).toMatchObject({
+      expect(card(result, "valid_until_soon")).toMatchObject({
         count: 3,
         value: "60.0000",
         severity: "warning",

@@ -288,7 +288,7 @@ export function CreateQuoteDialog({
               {dateField("endDate", "End date")}
               {dateField(
                 "validUntil",
-                "Valid until",
+                "Valid Until",
                 "Optional. Informational only."
               )}
               <Controller

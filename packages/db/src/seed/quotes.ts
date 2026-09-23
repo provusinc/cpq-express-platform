@@ -12,7 +12,7 @@ import type { Organization } from "../schema"
  * last twelve months so the list's filters, the Role rules, the lock and
  * the Dashboard's charts can be tried straight away. One has a Valid Until
  * in the past (highlighted in the list); a few lapse within two weeks of
- * the seed run (`validInDays`), so "Expiring soon" always has rows.
+ * the seed run (`validInDays`), so "Valid Until soon" always has rows.
  *
  * Idempotent: matched by (Organization, owner, Name) and reset to these values
  * (`createdDaysAgo` resets the creation time relative to the run).

@@ -1,4 +1,5 @@
 import { accountRouter } from "./routers/account"
+import { allocationRouter } from "./routers/allocation"
 import { authRouter } from "./routers/auth"
 import { catalogItemRouter } from "./routers/catalog-item"
 import { contactRouter } from "./routers/contact"
@@ -20,6 +21,7 @@ import { createCallerFactory, createTRPCRouter } from "./trpc"
  */
 export const appRouter = createTRPCRouter({
   account: accountRouter,
+  allocation: allocationRouter,
   auth: authRouter,
   catalogItem: catalogItemRouter,
   contact: contactRouter,

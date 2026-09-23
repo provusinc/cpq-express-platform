@@ -11,7 +11,10 @@
  *   { quoteId, lines: LineItemView[], deletedLineIds: string[], totals }
  *
  * - `lines`: the inserted or changed Line Items as now stored, with their
- *   recomputed `lineTotal` / `lineMarginPct`;
+ *   recomputed `lineTotal` / `lineMarginPct` and their Allocations
+ *   (`allocations`, by period start; empty unless planner-managed), so a
+ *   command that changes Allocations (the Resource Planner, date changes)
+ *   returns them on the lines it touched;
  * - `deletedLineIds`: Line Items the command removed;
  * - `totals`: the Quote's new Subtotal, Quote Discount, Total, cost and
  *   Margin (`QuoteTotalsRow`), always recomputed by the server.
@@ -42,6 +45,7 @@ import {
   uuidv7,
 } from "@workspace/db"
 import type { OrganizationScope, QuoteTotalsRow } from "@workspace/db"
+import type { Allocation } from "@workspace/domain/allocations"
 
 import type { InUseCounts } from "./errors"
 import { IN_USE_EXAMPLE_LIMIT, notFound } from "./errors"
@@ -59,6 +63,11 @@ export type LineItemView = Omit<LineItemRow, "organizationId" | "createdAt"> & {
    * domain's allocation-aware rules.
    */
   plannerManaged: boolean
+  /**
+   * Its Allocations in the Quote's current bucket, by period start
+   * (`amount` at quantity scale). Empty when not planner-managed.
+   */
+  allocations: Allocation[]
 }
 
 /** What every editor command returns (see the module comment). */
@@ -71,9 +80,13 @@ export interface EditorResult {
 
 export function toLineItemView(
   row: LineItemRow,
-  plannerManaged: boolean
+  lineAllocations: readonly Allocation[]
 ): LineItemView {
-  return { ...omit(row, "organizationId", "createdAt"), plannerManaged }
+  return {
+    ...omit(row, "organizationId", "createdAt"),
+    plannerManaged: lineAllocations.length > 0,
+    allocations: [...lineAllocations],
+  }
 }
 
 /** A copy of `value` without `keys`. */
@@ -99,16 +112,42 @@ export async function plannerManagedIds(
   return new Set(rows.map((r) => r.id))
 }
 
-/** Views of `rows`, with `plannerManaged` looked up. */
+/** The stored Allocations of `lineIds`, grouped by line, by period start. */
+export async function allocationsByLine(
+  scope: OrganizationScope,
+  lineIds: readonly string[]
+): Promise<Map<string, Allocation[]>> {
+  const byLine = new Map<string, Allocation[]>()
+  if (lineIds.length === 0) return byLine
+  const rows = await scope.db
+    .select({
+      lineItemId: allocations.lineItemId,
+      periodStart: allocations.periodStart,
+      amount: allocations.amount,
+    })
+    .from(allocations)
+    .where(
+      scope.where(allocations, inArray(allocations.lineItemId, [...lineIds]))
+    )
+    .orderBy(asc(allocations.lineItemId), asc(allocations.periodStart))
+  for (const row of rows) {
+    const list = byLine.get(row.lineItemId) ?? []
+    list.push({ periodStart: row.periodStart, amount: row.amount })
+    byLine.set(row.lineItemId, list)
+  }
+  return byLine
+}
+
+/** Views of `rows`, with their Allocations (and so `plannerManaged`) looked up. */
 export async function lineItemViews(
   scope: OrganizationScope,
   rows: LineItemRow[]
 ): Promise<LineItemView[]> {
-  const managed = await plannerManagedIds(
+  const byLine = await allocationsByLine(
     scope,
     rows.map((r) => r.id)
   )
-  return rows.map((row) => toLineItemView(row, managed.has(row.id)))
+  return rows.map((row) => toLineItemView(row, byLine.get(row.id) ?? []))
 }
 
 /**
@@ -251,10 +290,7 @@ export async function findQuoteLines(
 ): Promise<LineItemRow[]> {
   const unique = [...new Set(ids)]
   const rows = await scope.findMany(lineItems, {
-    where: and(
-      eq(lineItems.quoteId, quoteId),
-      inArray(lineItems.id, unique)
-    ),
+    where: and(eq(lineItems.quoteId, quoteId), inArray(lineItems.id, unique)),
     orderBy: [asc(lineItems.sequence), asc(lineItems.id)],
   })
   if (rows.length !== unique.length) throw notFound("Line Item")

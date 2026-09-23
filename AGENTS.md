@@ -45,7 +45,7 @@ Workspace packages are TypeScript source with no build step, imported as `@works
   - `packages/ui` resolves imports like the bundler (the vendored code uses extensionless relative imports).
 - **Settings** has one route per section under `settings/` (`company`, `quoting`, `labels`, `documents`), listed in `components/settings/tabs.ts` (label, one-line description, icon) and shown as a side nav (a row of links below `lg`); the Admin check is in `settings/layout.tsx`. Add a section with an entry there and its page.
 - **Observing a page's query from above its `HydrateClient`** (the shell, the Quote editor layout): gate the component with `useHydrated()` and read with `enabled: false`. An observer created before the page's boundary hydrates makes it defer that query, so the page's `useSuspenseQuery` fetches it again during SSR without the session and the page 500s ("Sign in required"). The breadcrumbs and the editor ledger do this; the command menu mounts its queries only while open.
-- **No `loading.tsx` above the Quote editor layout.** A Suspense boundary there streams the header in, and a click on Approve before it hydrates is lost (the e2e approval flow catches it). Only `quotes/[quoteId]/loading.tsx` (the tab body) exists.
+- **No `loading.tsx` above the Quote editor layout.** A Suspense boundary there streams the header in, and a click on Approve before it hydrates is lost. Only `quotes/[quoteId]/loading.tsx` (the tab body) exists.
 
 ## UI component policy (apps/web, packages/ui)
 
@@ -222,7 +222,6 @@ Import from `@workspace/domain/<area>`; the root `@workspace/domain` re-exports 
 - Object storage: every test caller gets a fresh `createMemoryStorage()`; pass your own `storage` to `createTestCaller`/`organizationCaller` to inspect `storage.objects`, and simulate a browser's presigned upload with `storage.put(key, bytes, { contentType })`.
 - Email: every test caller gets an in-memory mailer. To read what was sent, pass `mailer: createMemoryMailer()` to `createTestCaller`/`organizationCaller` and inspect `mailer.outbox`; `tokenFromEmail(message)` extracts the Invitation token from the accept link. `createInvitation(db, { organization, email?, role?, expiresAt?, acceptedAt?, revokedAt? })` inserts one directly and returns `{ invitation, token }`.
 - Domain tests are table-driven Vitest in `packages/domain/src/**/*.test.ts`.
-- **E2E smoke** (`e2e/`, `pnpm test:e2e`, not in `pnpm test`): three Playwright flows (sign-in, Quote + Planner autosave, approval → Mark as Sent → Document download) asserting wiring only, never business rules. No baseURL: use `acmeUrl()`/`appUrl()` from `e2e/support/urls.ts`; sign in with `signIn(page, email, callbackUrl?)` from `support/auth.ts` (real magic link read from Mailpit's API); `globalSetup` runs `pnpm db:seed`. Locate by role and accessible name; if a control has none, add an aria label to the app rather than a test id.
 
 ## Before committing
 

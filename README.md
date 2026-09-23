@@ -20,7 +20,6 @@ packages/documents    Quote Document PDF components (react-pdf), browser preview
 packages/storage      S3-compatible object storage (MinIO locally) for logos and Quote Documents
 packages/ui           shadcn/ui components (base-nova, Base UI)
 packages/eslint-config, packages/typescript-config   shared configs
-e2e                   Playwright smoke flows (`pnpm test:e2e`)
 ```
 
 ## Local setup
@@ -78,23 +77,6 @@ it automatically before each run, and every test runs in a transaction that is
 rolled back. The services must be up. `pnpm db:migrate:test` migrates the test
 database by hand.
 
-### End-to-end smoke flows (Playwright)
-
-```sh
-pnpm --filter e2e exec playwright install chromium   # once
-pnpm test:e2e                 # 3 browser flows against the local stack
-```
-
-`e2e/` holds three flows that prove the stack is wired together: magic-link
-sign-in through Mailpit, creating a Quote and planning hours with autosave, and
-submit → approve (as another User) → Mark as Sent → download the captured
-Quote Document. They need the services up and the dev database migrated.
-Before running, `pnpm db:seed` resets the demo data; each run creates new
-Quotes named `E2E …` owned by `member@acme.test`. Playwright builds and starts
-the app on `PORT` (or reuses an app already listening there, e.g. `pnpm dev`).
-It isn't part of `pnpm test`. Failures keep a trace in `e2e/test-results/`
-(`pnpm --filter e2e exec playwright show-trace <trace.zip>`).
-
 ### Everyday scripts (run from the repo root)
 
 | Script                    | What it does                                            |
@@ -104,7 +86,6 @@ It isn't part of `pnpm test`. Failures keep a trace in `e2e/test-results/`
 | `pnpm typecheck`          | `tsc --noEmit` in every package                         |
 | `pnpm lint`               | ESLint in every package (zero warnings allowed)         |
 | `pnpm test`               | Vitest in `domain`, `auth`, `api` and `web`             |
-| `pnpm test:e2e`           | Playwright smoke flows (`e2e/`) against the local stack |
 | `pnpm db:generate`        | Generate a SQL migration from schema changes            |
 | `pnpm db:migrate`         | Apply migrations to `DATABASE_URL`                      |
 | `pnpm db:migrate:test`    | Apply migrations to `TEST_DATABASE_URL`                 |
@@ -170,4 +151,4 @@ skip validation, for example for a CI lint without services.
   `docker compose exec postgres psql -U cpq -c "create database <name>"`),
   then migrate and `pnpm db:seed`.
 - **Demo data looks odd:** `pnpm db:seed` restores the demo Quotes (it's safe to
-  re-run; it doesn't remove Quotes you or the e2e flows created).
+  re-run; it doesn't remove Quotes you created).

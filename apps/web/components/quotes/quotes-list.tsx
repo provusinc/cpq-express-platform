@@ -19,6 +19,7 @@ import { toast } from "sonner"
 
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
+import { INSIGHT_LABELS } from "@workspace/domain/insights"
 import { Button } from "@workspace/ui/components/button"
 import { DataTableSelectionBar } from "@workspace/ui/components/niko-table/components/data-table-selection-bar"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
@@ -38,9 +39,11 @@ import {
   SearchFilter,
 } from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
+import { ViewTabs } from "@/components/shell/view-tabs"
+import type { ListView } from "@/components/shell/view-tabs"
 import { resolveColumnLayout, toSavedLayout } from "@/lib/column-layout"
 import type { ColumnLayout } from "@/lib/column-layout"
-import { fromLocalDay, toLocalDay } from "@/lib/format"
+import { formatDate, fromLocalDay, toLocalDay } from "@/lib/format"
 import { insightFocusKey } from "@/lib/key-insights"
 import type { InsightFocus } from "@/lib/key-insights"
 import { trimMoney } from "@/lib/money"
@@ -52,6 +55,7 @@ import { CreateQuoteDialog } from "./create-quote-dialog"
 import { INITIAL_QUOTE_LIST_INPUT } from "./list-input"
 import type { QuoteListInput } from "./list-input"
 import { DeleteQuoteDialog } from "./quote-actions"
+import { STATUS_SOLID } from "./quote-status-badge"
 import {
   DEFAULT_HIDDEN_QUOTE_COLUMNS,
   FIXED_QUOTE_COLUMNS,
@@ -85,17 +89,16 @@ const layoutFor = (saved: { order: string[]; hidden: string[] } | null) =>
  * are saved to their preferences. Valid Until dates in the past are
  * highlighted. Each row's menu (and right-click) opens, clones or deletes
  * it; the select column feeds bulk delete, which reports the Quotes it
- * skipped. `insights` renders above the filters (the Key Insight cards).
- * `focus` is the card chosen in the URL (`?insight=…` / `?status=…`) and
- * `initialFilters` the list input it resolves to (the page prefetches
- * exactly that); choosing another card resets the filters to its input.
+ * skipped. Status tabs above the table (with each status's count under the
+ * other filters) set the status filter. `focus` is the Dashboard card
+ * chosen in the URL (`?insight=…` / `?status=…`) and `initialFilters` the
+ * list input it resolves to (the page prefetches exactly that); another
+ * card resets the filters to its input.
  */
 export function QuotesList({
-  insights,
   focus = null,
   initialFilters = INITIAL_QUOTE_LIST_INPUT,
 }: {
-  insights?: React.ReactNode
   focus?: InsightFocus | null
   initialFilters?: QuoteListInput
 }) {
@@ -228,6 +231,8 @@ export function QuotesList({
     Boolean(filters.accountId) ||
     Boolean(filters.createdFrom) ||
     Boolean(filters.createdTo) ||
+    Boolean(filters.validUntilFrom) ||
+    Boolean(filters.validUntilTo) ||
     filters.marginBelow !== undefined ||
     filters.owner === "mine"
   const clearFilters = () => {
@@ -238,6 +243,23 @@ export function QuotesList({
   }
 
   const rows = list.data?.rows ?? []
+  const listTotal = list.data?.total ?? 0
+  const counts = list.data?.statusCounts
+  const statusViews: ListView<QuoteStatus | "all">[] = [
+    {
+      value: "all",
+      label: "All",
+      count: counts
+        ? QUOTE_STATUSES.reduce((n, status) => n + counts[status], 0)
+        : undefined,
+    },
+    ...QUOTE_STATUSES.map((status) => ({
+      value: status,
+      label: QUOTE_STATUS_LABELS[status],
+      count: counts?.[status],
+      dot: STATUS_SOLID[status],
+    })),
+  ]
   const selectedRows = rows.filter((row) => selection[row.id])
 
   const deleteMany = useMutation(
@@ -273,6 +295,7 @@ export function QuotesList({
         }
         await queryClient.invalidateQueries(trpc.quote.list.pathFilter())
         await queryClient.invalidateQueries(trpc.quote.insights.pathFilter())
+        await queryClient.invalidateQueries(trpc.dashboard.pathFilter())
         await queryClient.invalidateQueries(
           trpc.quote.filterOptions.pathFilter()
         )
@@ -293,7 +316,32 @@ export function QuotesList({
         </Button>
       </PageHeader>
 
-      {insights}
+      <ViewTabs
+        label="Quote status"
+        views={statusViews}
+        value={
+          statuses.length === 0
+            ? "all"
+            : statuses.length === 1
+              ? statuses[0]!
+              : null
+        }
+        onValueChange={(view) =>
+          setFilter({ statuses: view === "all" ? undefined : [view] })
+        }
+        summary={
+          <>
+            {focus?.kind === "insight" && (
+              <span className="mr-1.5 font-medium text-foreground">
+                {INSIGHT_LABELS[focus.key]} ·
+              </span>
+            )}
+            <span className="tabular-nums">{listTotal}</span>{" "}
+            {listTotal === 1 ? "Quote" : "Quotes"}
+            {filtered ? " match" : ""}
+          </>
+        }
+      />
 
       <QuoteRowActionsContext value={rowActions}>
         <ServerTableRoot
@@ -358,6 +406,26 @@ export function QuotesList({
               limitToFilteredRows={false}
             />
             <DateRangeFilter accessorKey="createdAt" />
+            {(filters.validUntilFrom || filters.validUntilTo) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  setFilter({
+                    validUntilFrom: undefined,
+                    validUntilTo: undefined,
+                  })
+                }
+              >
+                Valid Until{" "}
+                {filters.validUntilFrom
+                  ? formatDate(filters.validUntilFrom)
+                  : "…"}
+                {" – "}
+                {filters.validUntilTo ? formatDate(filters.validUntilTo) : "…"}
+                <XIcon data-icon="inline-end" />
+              </Button>
+            )}
             {filters.marginBelow !== undefined && (
               <Button
                 variant="secondary"
@@ -410,6 +478,18 @@ export function QuotesList({
               description: "Create a Quote for one of your Accounts.",
               filteredTitle: "No Quotes match",
               filteredDescription: "Try another search or clear the filters.",
+              action: (
+                <Button onClick={() => setCreating(true)}>
+                  <PlusIcon data-icon="inline-start" />
+                  New Quote
+                </Button>
+              ),
+              filteredAction: (
+                <Button variant="outline" onClick={clearFilters}>
+                  <XIcon data-icon="inline-start" />
+                  Clear filters
+                </Button>
+              ),
             }}
           />
           <ServerPagination

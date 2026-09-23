@@ -1,17 +1,14 @@
 import type { Metadata } from "next"
 
-import { KeyInsights } from "@/components/quotes/key-insights"
 import { INITIAL_QUOTE_LIST_INPUT } from "@/components/quotes/list-input"
 import type { QuoteListInput } from "@/components/quotes/list-input"
 import { QuotesList } from "@/components/quotes/quotes-list"
-import { insightListFilters, parseInsightFocus } from "@/lib/key-insights"
 import {
-  getQueryClient,
-  HydrateClient,
-  prefetch,
-  prefetchNow,
-  trpc,
-} from "@/trpc/server"
+  insightDays,
+  insightListFilters,
+  parseInsightFocus,
+} from "@/lib/key-insights"
+import { HydrateClient, prefetch, prefetchNow, trpc } from "@/trpc/server"
 
 export const metadata: Metadata = { title: "Quotes · CPQ Express" }
 
@@ -20,27 +17,21 @@ export default async function QuotesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  // `?insight=…` / `?status=…`: a Key Insight card's filter (shareable).
+  // `?insight=…` / `?status=…`: a Dashboard card's filter (shareable).
   const focus = parseInsightFocus(await searchParams)
   prefetch(trpc.quote.filterOptions.queryOptions())
   prefetch(trpc.user.preferences.queryOptions())
-  // The insights say which month "this month" is (UTC, server clock).
-  const { thisMonthFrom } = await getQueryClient().fetchQuery(
-    trpc.quote.insights.queryOptions()
-  )
+  // "This month" and "today" are UTC days on the server's clock, as in
+  // `quote.insights`.
   const initialFilters: QuoteListInput = {
     ...INITIAL_QUOTE_LIST_INPUT,
-    ...insightListFilters(focus, thisMonthFrom),
+    ...insightListFilters(focus, insightDays()),
   }
   // The list reads it with `useQuery`: settle it before rendering.
   await prefetchNow(trpc.quote.list.queryOptions(initialFilters))
   return (
     <HydrateClient>
-      <QuotesList
-        insights={<KeyInsights focus={focus} />}
-        focus={focus}
-        initialFilters={initialFilters}
-      />
+      <QuotesList focus={focus} initialFilters={initialFilters} />
     </HydrateClient>
   )
 }

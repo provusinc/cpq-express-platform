@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { formatMoney, isMoneyInput, trimMoney } from "./money"
+import {
+  compactMoney,
+  formatMoney,
+  isMoneyInput,
+  trimMoney,
+  wholeMoney,
+} from "./money"
 
 describe("formatMoney", () => {
   it.each([
@@ -37,5 +43,27 @@ describe("trimMoney", () => {
     ["100", "100"],
   ])("%s → %s", (amount, expected) => {
     expect(trimMoney(amount)).toBe(expected)
+  })
+})
+
+describe("compactMoney", () => {
+  it.each([
+    [0, "$0"],
+    [950, "$950"],
+    [12_345, "$12.3K"],
+    ["1250000.0000", "$1.3M"],
+  ] as const)("%s → %s", (value, expected) => {
+    expect(compactMoney(value, "USD")).toBe(expected)
+  })
+})
+
+describe("wholeMoney", () => {
+  it.each([
+    ["1234.5000", "$1,235"],
+    ["1234.4999", "$1,234"],
+    ["0.0000", "$0"],
+    ["-10.5000", "-$11"],
+  ])("%s → %s", (value, expected) => {
+    expect(wholeMoney(value, "USD")).toBe(expected)
   })
 })

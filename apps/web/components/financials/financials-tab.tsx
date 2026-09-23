@@ -41,7 +41,7 @@ import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
 import { QUOTE_POLL_MS } from "@/components/quotes/autosave"
 import { useLabels } from "@/components/shell/labels"
-import { formatMoney } from "@/lib/money"
+import { compactMoney, formatMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
 import { SERIES } from "./chart-colors"
@@ -67,16 +67,6 @@ const config = {
   margin: { label: "Margin", theme: SERIES.three },
   headcount: { label: "Headcount (FTE)", theme: SERIES.three },
 } satisfies ChartConfig
-
-/** Compact money for axis ticks: "$12K". */
-function compactMoney(value: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency,
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value)
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

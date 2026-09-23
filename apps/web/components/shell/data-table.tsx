@@ -62,6 +62,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -295,6 +296,10 @@ export interface ListEmpty {
   description?: React.ReactNode
   filteredTitle?: string
   filteredDescription?: React.ReactNode
+  /** The primary action under an empty list (e.g. "New Quote"). */
+  action?: React.ReactNode
+  /** The action under "no matches" (e.g. "Clear filters"). */
+  filteredAction?: React.ReactNode
 }
 
 /**
@@ -335,7 +340,7 @@ export function ListTable({
       <DataTableBody>
         <DataTableSkeleton rows={skeletonRows} />
         <DataTableEmptyBody>
-          <Empty className="py-6">
+          <Empty className="py-10">
             <EmptyHeader>
               <EmptyMedia variant="icon">{empty.icon}</EmptyMedia>
               <EmptyTitle>
@@ -349,6 +354,11 @@ export function ListTable({
                 </EmptyDescription>
               )}
             </EmptyHeader>
+            {(showFiltered ? empty.filteredAction : empty.action) && (
+              <EmptyContent>
+                {showFiltered ? empty.filteredAction : empty.action}
+              </EmptyContent>
+            )}
           </Empty>
         </DataTableEmptyBody>
       </DataTableBody>

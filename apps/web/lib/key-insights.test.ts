@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   insightFocusKey,
   insightFocusQuery,
+  insightDays,
   insightListFilters,
   parseInsightFocus,
 } from "./key-insights"
@@ -54,9 +55,13 @@ describe("insightFocusQuery / insightFocusKey", () => {
 
 describe("insightListFilters", () => {
   const month = "2026-09-01"
+  const days = { thisMonthFrom: month, today: "2026-09-23" }
   it.each([
     [null, {}],
-    [{ kind: "insight", key: "pending_approval" }, { statuses: ["pending_approval"] }],
+    [
+      { kind: "insight", key: "pending_approval" },
+      { statuses: ["pending_approval"] },
+    ],
     [
       { kind: "insight", key: "high_value_pipeline" },
       {
@@ -71,6 +76,20 @@ describe("insightListFilters", () => {
         marginBelow: "15",
       },
     ],
+    [
+      { kind: "insight", key: "expiring_soon" },
+      {
+        statuses: [
+          "draft",
+          "pending_approval",
+          "approved",
+          "pending_customer_approval",
+        ],
+        validUntilFrom: "2026-09-23",
+        validUntilTo: "2026-10-07",
+        sort: { by: "validUntil", direction: "asc" },
+      },
+    ],
     [{ kind: "insight", key: "this_month" }, { createdFrom: month }],
     [
       { kind: "insight", key: "rejected" },
@@ -78,6 +97,15 @@ describe("insightListFilters", () => {
     ],
     [{ kind: "status", status: "approved" }, { statuses: ["approved"] }],
   ] as Array<[InsightFocus | null, object]>)("%j", (focus, expected) => {
-    expect(insightListFilters(focus, month)).toEqual(expected)
+    expect(insightListFilters(focus, days)).toEqual(expected)
+  })
+})
+
+describe("insightDays", () => {
+  it("gives the UTC month start and day", () => {
+    expect(insightDays(Date.parse("2026-09-30T23:30:00.000Z"))).toEqual({
+      thisMonthFrom: "2026-09-01",
+      today: "2026-09-30",
+    })
   })
 })

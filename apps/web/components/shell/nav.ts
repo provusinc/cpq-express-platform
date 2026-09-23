@@ -2,6 +2,7 @@ import {
   Building2Icon,
   ClipboardCheckIcon,
   FileTextIcon,
+  LayoutDashboardIcon,
   PackageIcon,
   PackagePlusIcon,
   SettingsIcon,
@@ -40,6 +41,12 @@ export type NavSection = (typeof NAV_SECTIONS)[number] | "Organization"
  * `href` has a page under `app/hosts/org/[slug]/`.
  */
 export const NAV_ITEMS: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/",
+    icon: LayoutDashboardIcon,
+    section: "Quoting",
+  },
   { label: "Quotes", href: "/quotes", icon: FileTextIcon, section: "Quoting" },
   {
     label: "Awaiting my approval",

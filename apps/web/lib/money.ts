@@ -1,3 +1,5 @@
+import { Decimal } from "@workspace/domain/money"
+
 /**
  * Money display and input helpers. Amounts stay decimal strings end to end
  * (ADR-0002): they are formatted from the string, never parsed to a float.
@@ -33,4 +35,26 @@ export function formatMoney(
 /** "150.0000" → "150", "12.5000" → "12.5": for editing a stored amount. */
 export function trimMoney(amount: string) {
   return amount.includes(".") ? amount.replace(/\.?0+$/, "") : amount
+}
+
+/**
+ * Compact money for chart axes and dense cards: "$12K", "$1.2M". Display
+ * only (it rounds through a float, fine for a glance).
+ */
+export function compactMoney(value: number | string, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(Number(value))
+}
+
+/** A whole-unit amount for a figure: "1234.5000" → "$1,235". */
+export function wholeMoney(amount: string, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(new Decimal(amount).toFixed(0) as unknown as number)
 }

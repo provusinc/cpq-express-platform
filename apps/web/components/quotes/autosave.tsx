@@ -264,6 +264,7 @@ export function useQuoteCommand<TData, TError, TVariables>(
         queryClient.invalidateQueries({ queryKey: quoteKey }),
         queryClient.invalidateQueries(trpc.quote.list.pathFilter()),
         queryClient.invalidateQueries(trpc.quote.insights.pathFilter()),
+        queryClient.invalidateQueries(trpc.dashboard.pathFilter()),
       ])
     },
   })

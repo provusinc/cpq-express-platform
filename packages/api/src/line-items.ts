@@ -8,7 +8,8 @@
  * editor shows (Line Items, the Quote Discount; later Phases, Allocations,
  * dates) returns an `EditorResult`:
  *
- *   { quoteId, lines: LineItemView[], deletedLineIds: string[], totals }
+ *   { quoteId, lines: LineItemView[], deletedLineIds: string[],
+ *     phases: PhaseView[], deletedPhaseIds: string[], totals }
  *
  * - `lines`: the inserted or changed Line Items as now stored, with their
  *   recomputed `lineTotal` / `lineMarginPct` and their Allocations
@@ -16,19 +17,25 @@
  *   command that changes Allocations (the Resource Planner, date changes)
  *   returns them on the lines it touched;
  * - `deletedLineIds`: Line Items the command removed;
+ * - `phases` / `deletedPhaseIds`: the inserted or changed Phases (a move
+ *   returns every sibling it renumbered) and the removed ones;
  * - `totals`: the Quote's new Subtotal, Quote Discount, Total, cost and
  *   Margin (`QuoteTotalsRow`), always recomputed by the server.
  *
  * The client merges it into the `quote.editor` cache (`useQuoteCommand` in
- * the web app). Build it with `editorResult(cmd, { lineIds, deletedLineIds })`
- * at the end of a `quoteCommand` body: it reprices the Quote and picks the
- * named lines. Later tickets extend the shape additively (e.g. `phases` /
- * `deletedPhaseIds` for #14) rather than inventing another.
+ * the web app). Build it with `editorResult(cmd, { lineIds, deletedLineIds,
+ * phaseIds, deletedPhaseIds })` at the end of a `quoteCommand` body: it
+ * reprices the Quote and picks the named rows. Later tickets extend the
+ * shape additively rather than inventing another.
  *
  * **Undo.** A destructive command stores what it removed with
  * `saveUndoSnapshot(scope, …)` and returns the id as `undoToken`; its
  * restore command reads it back once with `takeUndoSnapshot` (NOT_FOUND
  * when unknown, used or another Quote's; PRECONDITION_FAILED once expired).
+ * Lines (with their Allocations) are captured with `snapshotLines` and put
+ * back with `restoreSnapshotLines`, which refuses once the Quote's dates or
+ * Time Period changed or a source was deleted. `copyLines` duplicates lines
+ * with their Allocations (clone).
  */
 import { TRPCError } from "@trpc/server"
 
@@ -47,13 +54,38 @@ import {
 import type { OrganizationScope, QuoteTotalsRow } from "@workspace/db"
 import type { Allocation } from "@workspace/domain/allocations"
 
+import type { IsoDate } from "@workspace/domain/dates"
+import type { TimePeriod } from "@workspace/domain/enums"
+
 import type { InUseCounts } from "./errors"
 import { IN_USE_EXAMPLE_LIMIT, notFound } from "./errors"
-import type { QuoteCommand } from "./quotes"
+import type { QuoteCommand, QuoteRow } from "./quotes"
 
-const { allocations, lineItems, quotes, undoSnapshots } = schema
+const {
+  allocations,
+  catalogItems,
+  lineItems,
+  phases,
+  quotes,
+  resourceRoles,
+  undoSnapshots,
+} = schema
 
 type LineItemRow = typeof lineItems.$inferSelect
+type AllocationRow = typeof allocations.$inferSelect
+type PhaseRow = typeof phases.$inferSelect
+
+/** A Phase as the editor reads it. */
+export type PhaseView = Pick<PhaseRow, "id" | "parentId" | "name" | "sequence">
+
+export function toPhaseView(row: PhaseRow): PhaseView {
+  return {
+    id: row.id,
+    parentId: row.parentId,
+    name: row.name,
+    sequence: row.sequence,
+  }
+}
 
 /** A Line Item as the editor reads it. */
 export type LineItemView = Omit<LineItemRow, "organizationId" | "createdAt"> & {
@@ -75,6 +107,8 @@ export interface EditorResult {
   quoteId: string
   lines: LineItemView[]
   deletedLineIds: string[]
+  phases: PhaseView[]
+  deletedPhaseIds: string[]
   totals: QuoteTotalsRow
 }
 
@@ -152,17 +186,34 @@ export async function lineItemViews(
 
 /**
  * Reprices the Quote (`cmd.reprice()`) and returns the standard result with
- * the lines named in `lineIds` (inserted or changed) as now stored.
+ * the lines named in `lineIds` and the Phases named in `phaseIds`
+ * (inserted or changed) as now stored.
  */
 export async function editorResult(
   cmd: QuoteCommand,
   {
     lineIds = [],
     deletedLineIds = [],
-  }: { lineIds?: readonly string[]; deletedLineIds?: readonly string[] }
+    phaseIds = [],
+    deletedPhaseIds = [],
+  }: {
+    lineIds?: readonly string[]
+    deletedLineIds?: readonly string[]
+    phaseIds?: readonly string[]
+    deletedPhaseIds?: readonly string[]
+  }
 ): Promise<EditorResult> {
   const { totals, lines } = await cmd.reprice()
   const wanted = new Set(lineIds)
+  const phaseRows = phaseIds.length
+    ? await cmd.scope.findMany(phases, {
+        where: and(
+          eq(phases.quoteId, cmd.quote.id),
+          inArray(phases.id, [...new Set(phaseIds)])
+        ),
+        orderBy: [asc(phases.sequence), asc(phases.id)],
+      })
+    : []
   return {
     quoteId: cmd.quote.id,
     lines: await lineItemViews(
@@ -170,8 +221,156 @@ export async function editorResult(
       lines.filter((line) => wanted.has(line.id))
     ),
     deletedLineIds: [...deletedLineIds],
+    phases: phaseRows.map(toPhaseView),
+    deletedPhaseIds: [...deletedPhaseIds],
     totals,
   }
+}
+
+/** The Quote's Phases, in sibling order. */
+export function quotePhases(scope: OrganizationScope, quoteId: string) {
+  return scope.findMany(phases, {
+    where: eq(phases.quoteId, quoteId),
+    orderBy: [asc(phases.sequence), asc(phases.id)],
+  })
+}
+
+/** Every Line Item of the Quote, by sequence. */
+export function quoteLineRows(scope: OrganizationScope, quoteId: string) {
+  return scope.findMany(lineItems, {
+    where: eq(lineItems.quoteId, quoteId),
+    orderBy: [asc(lineItems.sequence), asc(lineItems.id)],
+  })
+}
+
+/** What a delete keeps so its restore can put the lines back. */
+export interface LinesSnapshot {
+  /** The Quote's window and Time Period at delete time; restore needs them unchanged. */
+  quote: { startDate: IsoDate; endDate: IsoDate; timePeriod: TimePeriod }
+  lines: Array<Omit<LineItemRow, "createdAt" | "updatedAt">>
+  allocations: Array<Omit<AllocationRow, "createdAt" | "updatedAt">>
+}
+
+/** Captures `lines` and their Allocations for an undo snapshot. */
+export async function snapshotLines(
+  scope: OrganizationScope,
+  quote: QuoteRow,
+  lines: readonly LineItemRow[]
+): Promise<LinesSnapshot> {
+  const ids = lines.map((l) => l.id)
+  const stored = ids.length
+    ? await scope.findMany(allocations, {
+        where: inArray(allocations.lineItemId, ids),
+      })
+    : []
+  return {
+    quote: {
+      startDate: quote.startDate,
+      endDate: quote.endDate,
+      timePeriod: quote.timePeriod,
+    },
+    lines: lines.map((l) => omit(l, "createdAt", "updatedAt")),
+    allocations: stored.map((a) => omit(a, "createdAt", "updatedAt")),
+  }
+}
+
+/**
+ * Re-inserts a snapshot's lines (same ids, Base Rates, prices and
+ * Allocations), each in the Phase `phaseFor(line)` gives. PRECONDITION_FAILED
+ * when the Quote's dates or Time Period changed since, or a source was
+ * deleted. Returns the restored rows.
+ */
+export async function restoreSnapshotLines(
+  scope: OrganizationScope,
+  quote: QuoteRow,
+  snapshot: LinesSnapshot,
+  phaseFor: (line: LinesSnapshot["lines"][number]) => string | null
+): Promise<LineItemRow[]> {
+  if (
+    snapshot.quote.startDate !== quote.startDate ||
+    snapshot.quote.endDate !== quote.endDate ||
+    snapshot.quote.timePeriod !== quote.timePeriod
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "The Quote's dates or Time Period changed since, so the delete can't be undone.",
+    })
+  }
+  const catalogIds = [
+    ...new Set(snapshot.lines.flatMap((l) => l.catalogItemId ?? [])),
+  ]
+  const roleIds = [
+    ...new Set(snapshot.lines.flatMap((l) => l.resourceRoleId ?? [])),
+  ]
+  const [catalog, roles] = await Promise.all([
+    catalogIds.length
+      ? scope.findMany(catalogItems, {
+          where: inArray(catalogItems.id, catalogIds),
+        })
+      : [],
+    roleIds.length
+      ? scope.findMany(resourceRoles, {
+          where: inArray(resourceRoles.id, roleIds),
+        })
+      : [],
+  ])
+  if (catalog.length !== catalogIds.length || roles.length !== roleIds.length) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "An item on these lines was deleted since, so the delete can't be undone.",
+    })
+  }
+  const restored = await scope.insertMany(
+    lineItems,
+    snapshot.lines.map((line) => ({
+      ...omit(line, "organizationId"),
+      phaseId: phaseFor(line),
+    }))
+  )
+  await scope.insertMany(
+    allocations,
+    snapshot.allocations.map((a) => omit(a, "organizationId"))
+  )
+  return restored
+}
+
+/**
+ * Copies `lines` with their Allocations under new ids; `place(line)` gives
+ * each copy's Phase and sequence. Returns the copies in the same order.
+ */
+export async function copyLines(
+  scope: OrganizationScope,
+  lines: readonly LineItemRow[],
+  place: (line: LineItemRow) => { phaseId: string | null; sequence: number }
+): Promise<LineItemRow[]> {
+  if (lines.length === 0) return []
+  const newIds = new Map(lines.map((l) => [l.id, uuidv7()]))
+  const copies = await scope.insertMany(
+    lineItems,
+    lines.map((line) => ({
+      ...omit(line, "organizationId", "createdAt", "updatedAt"),
+      id: newIds.get(line.id)!,
+      ...place(line),
+    }))
+  )
+  const stored = await scope.findMany(allocations, {
+    where: inArray(
+      allocations.lineItemId,
+      lines.map((l) => l.id)
+    ),
+  })
+  await scope.insertMany(
+    allocations,
+    stored.map((a) => ({
+      lineItemId: newIds.get(a.lineItemId)!,
+      periodType: a.periodType,
+      periodStart: a.periodStart,
+      amount: a.amount,
+    }))
+  )
+  return copies
 }
 
 /** The next free `sequence` on the Quote (appends after every line). */

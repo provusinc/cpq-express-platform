@@ -32,6 +32,7 @@ import { TagsFilter } from "@/components/catalog/tags-filter"
 import { FilterSelect } from "@/components/shell/filter-select"
 import { useLabels } from "@/components/shell/labels"
 import { formatMoney } from "@/lib/money"
+import type { PhaseOption } from "@/lib/phase-tree"
 import { useTRPC } from "@/trpc/react"
 
 /** One picked source. */
@@ -54,20 +55,26 @@ const BILLING_OPTIONS = [
  * The Add Items sheet: tabs for Products, Add-ons and Resource Roles (with
  * the Organization's labels; hidden terms have no tab), each with filters
  * and an infinitely scrolling list of active items. Items picked on any
- * tab are added together, into the chosen Phase, as one `lineItem.add`.
+ * tab are added together, into the chosen Phase (any level; `phaseOptions`
+ * in tree order), as one `lineItem.add`. The Phase is controlled, so "Add
+ * items here" on a Phase row opens the sheet with it chosen.
  */
 export function AddItemsSheet({
   open,
   onOpenChange,
   currency,
-  phases,
+  phaseOptions,
+  phaseId,
+  onPhaseIdChange,
   pending,
   onAdd,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   currency: string
-  phases: { id: string; name: string }[]
+  phaseOptions: readonly PhaseOption[]
+  phaseId: string | null
+  onPhaseIdChange: (phaseId: string | null) => void
   pending: boolean
   onAdd: (
     input: { phaseId: string | null; items: Picked[] },
@@ -80,7 +87,6 @@ export function AddItemsSheet({
   )
   const [tab, setTab] = useState<SourceKind>(tabs[0] ?? "resource_role")
   const [selection, setSelection] = useState<Selection>(new Map())
-  const [phaseId, setPhaseId] = useState<string | undefined>()
 
   const toggle = (item: Picked, on: boolean) =>
     setSelection((current) => {
@@ -96,7 +102,7 @@ export function AddItemsSheet({
   }
 
   const add = () =>
-    onAdd({ phaseId: phaseId ?? null, items: [...selection.values()] }, () => {
+    onAdd({ phaseId, items: [...selection.values()] }, () => {
       toast.success(
         selection.size === 1
           ? `Added “${[...selection.values()][0]!.name}”.`
@@ -155,9 +161,9 @@ export function AddItemsSheet({
             label={`Add to ${labels.phase.singular}`}
             allLabel={`No ${labels.phase.singular}`}
             className="w-48"
-            value={phaseId}
-            options={phases.map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setPhaseId}
+            value={phaseId ?? undefined}
+            options={phaseOptions}
+            onChange={(next) => onPhaseIdChange(next ?? null)}
           />
           <Button disabled={selection.size === 0 || pending} onClick={add}>
             {pending

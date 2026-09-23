@@ -32,7 +32,7 @@ import {
   percentInput,
   requiredText,
 } from "../inputs"
-import { editorResult, lineItemViews } from "../line-items"
+import { editorResult, lineItemViews, toPhaseView } from "../line-items"
 import { quoteCommand, quoteFacts } from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
@@ -418,12 +418,7 @@ export const quoteRouter = createTRPCRouter({
       ])
       return {
         quoteId: quote.id,
-        phases: phaseRows.map((p) => ({
-          id: p.id,
-          parentId: p.parentId,
-          name: p.name,
-          sequence: p.sequence,
-        })),
+        phases: phaseRows.map(toPhaseView),
         lines: await lineItemViews(ctx.scope, lineRows),
         totals: {
           currencyCode: quote.currencyCode,

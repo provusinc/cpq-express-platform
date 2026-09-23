@@ -8,6 +8,7 @@ import { invitationRouter } from "./routers/invitation"
 import { lineItemRouter } from "./routers/line-item"
 import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
+import { phaseRouter } from "./routers/phase"
 import { platformRouter } from "./routers/platform"
 import { quoteRouter } from "./routers/quote"
 import { quoteDocumentRouter } from "./routers/quote-document"
@@ -31,6 +32,7 @@ export const appRouter = createTRPCRouter({
   lineItem: lineItemRouter,
   membership: membershipRouter,
   organization: organizationRouter,
+  phase: phaseRouter,
   platform: platformRouter,
   quote: quoteRouter,
   quoteDocument: quoteDocumentRouter,

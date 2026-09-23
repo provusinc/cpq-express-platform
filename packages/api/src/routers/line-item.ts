@@ -1,14 +1,14 @@
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { and, eq, inArray, schema } from "@workspace/db"
+import { eq, inArray, schema } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
 import { resizeAllocatedEffort } from "@workspace/domain/allocations"
 import type { AllocationInput } from "@workspace/domain/allocations"
 import { compareDates } from "@workspace/domain/dates"
 import type { IsoDate } from "@workspace/domain/dates"
 import { SOURCE_KINDS } from "@workspace/domain/enums"
-import type { TimePeriod } from "@workspace/domain/enums"
+import { phaseTreeOrder, placeBefore } from "@workspace/domain/phases"
 import { defaultLineItemQuantity } from "@workspace/domain/pricing"
 import { changeLineItemStart } from "@workspace/domain/schedule"
 
@@ -23,13 +23,19 @@ import {
   stripUndefined,
 } from "../inputs"
 import {
+  copyLines,
   editorResult,
   findQuoteLines,
   nextLineSequence,
   omit,
+  quoteLineRows,
+  quotePhases,
+  restoreSnapshotLines,
   saveUndoSnapshot,
+  snapshotLines,
   takeUndoSnapshot,
 } from "../line-items"
+import type { LinesSnapshot } from "../line-items"
 import type { QuoteCommand } from "../quotes"
 import { quoteCommand } from "../quotes"
 import { getOrganizationSettings } from "../settings"
@@ -38,9 +44,8 @@ import { createTRPCRouter, organizationProcedure } from "../trpc"
 const { allocations, catalogItems, lineItems, phases, resourceRoles } = schema
 
 type LineItemRow = typeof lineItems.$inferSelect
-type AllocationRow = typeof allocations.$inferSelect
 
-/** The most sources one Add Items gesture may add, and lines one delete may remove. */
+/** The most sources one Add Items gesture may add, and lines one delete, move or clone may touch. */
 export const LINE_ITEM_BATCH_MAX = 200
 
 const NAME_MAX = 200
@@ -48,14 +53,6 @@ const TEXT_MAX = 2000
 
 /** Undo snapshot kind written by `lineItem.delete`. */
 const DELETE_UNDO_KIND = "line_items.delete"
-
-/** What `lineItem.delete` keeps so `lineItem.restore` can put it back. */
-interface DeletedLinesSnapshot {
-  /** The Quote's window and Time Period at delete time; restore needs them unchanged. */
-  quote: { startDate: IsoDate; endDate: IsoDate; timePeriod: TimePeriod }
-  lines: Array<Omit<LineItemRow, "createdAt" | "updatedAt">>
-  allocations: Array<Omit<AllocationRow, "createdAt" | "updatedAt">>
-}
 
 /** Why `[start, end]` can't be a Line Item's dates on this Quote, or null. */
 function lineDatesProblem(
@@ -360,18 +357,7 @@ export const lineItemRouter = createTRPCRouter({
         const { scope, quote } = cmd
         const lines = await findQuoteLines(scope, quote.id, input.ids)
         const ids = lines.map((l) => l.id)
-        const stored = await scope.findMany(allocations, {
-          where: inArray(allocations.lineItemId, ids),
-        })
-        const snapshot: DeletedLinesSnapshot = {
-          quote: {
-            startDate: quote.startDate,
-            endDate: quote.endDate,
-            timePeriod: quote.timePeriod,
-          },
-          lines: lines.map((l) => omit(l, "createdAt", "updatedAt")),
-          allocations: stored.map((a) => omit(a, "createdAt", "updatedAt")),
-        }
+        const snapshot = await snapshotLines(scope, quote, lines)
         await scope.db
           .delete(lineItems)
           .where(scope.where(lineItems, inArray(lineItems.id, ids)))
@@ -400,70 +386,166 @@ export const lineItemRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.quoteId, "quote.edit", async (cmd) => {
         const { scope, quote } = cmd
-        const snapshot = await takeUndoSnapshot<DeletedLinesSnapshot>(scope, {
+        const snapshot = await takeUndoSnapshot<LinesSnapshot>(scope, {
           token: input.undoToken,
           quoteId: quote.id,
           kind: DELETE_UNDO_KIND,
         })
-        if (
-          snapshot.quote.startDate !== quote.startDate ||
-          snapshot.quote.endDate !== quote.endDate ||
-          snapshot.quote.timePeriod !== quote.timePeriod
-        ) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message:
-              "The Quote's dates or Time Period changed since, so the delete can't be undone.",
-          })
-        }
-        const phaseIds = [
-          ...new Set(snapshot.lines.flatMap((l) => l.phaseId ?? [])),
-        ]
-        const livePhases = phaseIds.length
-          ? await scope.findMany(phases, {
-              where: and(
-                eq(phases.quoteId, quote.id),
-                inArray(phases.id, phaseIds)
-              ),
-            })
-          : []
-        const live = new Set(livePhases.map((p) => p.id))
-        const catalogIds = snapshot.lines.flatMap((l) => l.catalogItemId ?? [])
-        const roleIds = snapshot.lines.flatMap((l) => l.resourceRoleId ?? [])
-        const [catalog, roles] = await Promise.all([
-          catalogIds.length
-            ? scope.findMany(catalogItems, {
-                where: inArray(catalogItems.id, catalogIds),
-              })
-            : [],
-          roleIds.length
-            ? scope.findMany(resourceRoles, {
-                where: inArray(resourceRoles.id, roleIds),
-              })
-            : [],
-        ])
-        if (
-          catalog.length !== new Set(catalogIds).size ||
-          roles.length !== new Set(roleIds).size
-        ) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message:
-              "An item on these lines was deleted since, so the delete can't be undone.",
-          })
-        }
-        const restored = await scope.insertMany(
-          lineItems,
-          snapshot.lines.map((line) => ({
-            ...omit(line, "organizationId"),
-            phaseId: line.phaseId && live.has(line.phaseId) ? line.phaseId : null,
-          }))
+        const live = new Set(
+          (await quotePhases(scope, quote.id)).map((p) => p.id)
         )
-        await scope.insertMany(
-          allocations,
-          snapshot.allocations.map((a) => omit(a, "organizationId"))
+        const restored = await restoreSnapshotLines(
+          scope,
+          quote,
+          snapshot,
+          (line) =>
+            line.phaseId && live.has(line.phaseId) ? line.phaseId : null
         )
         return editorResult(cmd, { lineIds: restored.map((l) => l.id) })
       })
     ),
+
+  /**
+   * Moves Line Items (one or many: a drop or a bulk move is one gesture)
+   * into a Phase of the Quote, or outside every Phase (`phaseId: null`),
+   * right before `beforeId` (a line staying in that Phase) or at its end.
+   * The moved lines keep their grid order relative to each other. Returns
+   * every line whose Phase or position changed.
+   */
+  move: organizationProcedure
+    .input(
+      z.object({
+        quoteId: z.uuid(),
+        ids: z.array(z.uuid()).min(1).max(LINE_ITEM_BATCH_MAX),
+        phaseId: z.uuid().nullable(),
+        beforeId: z.uuid().nullish(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.quoteId, "quote.edit", async (cmd) => {
+        const { scope, quote } = cmd
+        const moving = await findQuoteLines(scope, quote.id, input.ids)
+        if (input.phaseId) await assertPhaseOfQuote(cmd, input.phaseId)
+        const [phaseRows, lines] = await Promise.all([
+          quotePhases(scope, quote.id),
+          quoteLineRows(scope, quote.id),
+        ])
+        const movingIds = new Set(moving.map((l) => l.id))
+        const ordered = phaseTreeOrder(phaseRows, lines)
+          .filter((row) => row.kind === "line" && movingIds.has(row.id))
+          .map((row) => row.id)
+        const target = lines
+          .filter((l) => l.phaseId === input.phaseId)
+          .map((l) => l.id)
+        const order = placeBefore(target, ordered, input.beforeId ?? null)
+        if (!order) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Drop the lines before a line of the target, or at its end.",
+          })
+        }
+        const byId = new Map(lines.map((l) => [l.id, l]))
+        const changed = await resequenceLines(scope, order, byId, input.phaseId)
+        return editorResult(cmd, { lineIds: changed })
+      })
+    ),
+
+  /**
+   * Clones Line Items with their Allocations (Base Rates, prices, dates and
+   * notes kept). Without `phaseId` each copy goes right after its original;
+   * with `phaseId` (a Phase of the Quote, or `null` for none) the copies are
+   * appended there instead (duplicate into another Phase). Returns the
+   * copies and every line whose position changed.
+   */
+  clone: organizationProcedure
+    .input(
+      z.object({
+        quoteId: z.uuid(),
+        ids: z.array(z.uuid()).min(1).max(LINE_ITEM_BATCH_MAX),
+        phaseId: z.uuid().nullable().optional(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.quoteId, "quote.edit", async (cmd) => {
+        const { scope, quote } = cmd
+        const originals = await findQuoteLines(scope, quote.id, input.ids)
+        if (input.phaseId) await assertPhaseOfQuote(cmd, input.phaseId)
+        const [phaseRows, lines] = await Promise.all([
+          quotePhases(scope, quote.id),
+          quoteLineRows(scope, quote.id),
+        ])
+        const treeIndex = new Map(
+          phaseTreeOrder(phaseRows, lines).map((row, i) => [row.id, i])
+        )
+        const sources = [...originals].sort(
+          (a, b) => treeIndex.get(a.id)! - treeIndex.get(b.id)!
+        )
+
+        if (input.phaseId !== undefined) {
+          const target = input.phaseId
+          const next =
+            Math.max(
+              -1,
+              ...lines
+                .filter((l) => l.phaseId === target)
+                .map((l) => l.sequence)
+            ) + 1
+          const copies = await copyLines(scope, sources, (line) => ({
+            phaseId: target,
+            sequence: next + sources.indexOf(line),
+          }))
+          return editorResult(cmd, { lineIds: copies.map((l) => l.id) })
+        }
+
+        // In place: each copy right after its original, per container.
+        const copies = await copyLines(scope, sources, (line) => ({
+          phaseId: line.phaseId,
+          sequence: line.sequence,
+        }))
+        const copyOf = new Map(sources.map((s, i) => [s.id, copies[i]!]))
+        const byId = new Map(
+          [...lines, ...copies].map((l) => [l.id, l] as const)
+        )
+        const changed = new Set<string>(copies.map((c) => c.id))
+        for (const container of new Set(sources.map((s) => s.phaseId))) {
+          const order = lines
+            .filter((l) => l.phaseId === container)
+            .flatMap((l) => {
+              const copy = copyOf.get(l.id)
+              return copy ? [l.id, copy.id] : [l.id]
+            })
+          for (const id of await resequenceLines(
+            scope,
+            order,
+            byId,
+            container
+          )) {
+            changed.add(id)
+          }
+        }
+        return editorResult(cmd, { lineIds: [...changed] })
+      })
+    ),
 })
+
+/**
+ * Puts the lines `order` (ids, in their new order) into `phaseId` with
+ * sequences 0…n−1, writing only those whose Phase or sequence changed.
+ * Returns the changed ids.
+ */
+async function resequenceLines(
+  scope: OrganizationScope,
+  order: readonly string[],
+  current: ReadonlyMap<string, LineItemRow>,
+  phaseId: string | null
+): Promise<string[]> {
+  const changed: string[] = []
+  for (const [sequence, id] of order.entries()) {
+    const line = current.get(id)!
+    if (line.sequence === sequence && line.phaseId === phaseId) continue
+    await scope.update(lineItems, id, { phaseId, sequence })
+    changed.push(id)
+  }
+  return changed
+}

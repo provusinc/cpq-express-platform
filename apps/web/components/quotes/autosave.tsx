@@ -15,7 +15,8 @@
  *      `priceQuote`, so the Summary moves immediately); `optimisticQuote`
  *      patches the cached `quote.byId` (header fields);
  *   2. on success the command's `EditorResult` (`lines`, `deletedLineIds`,
- *      `totals`) is merged into the editor cache and the totals into
+ *      `phases`, `deletedPhaseIds`, `totals`) is merged into the editor
+ *      cache (`mergeEditorResult`) and the totals into
  *      `quote.byId` — server values always win;
  *   3. on error both caches roll back and a toast shows the server's
  *      message;
@@ -50,6 +51,7 @@ import { useTRPC } from "@/trpc/react"
 
 export type QuoteEditor = RouterOutputs["quote"]["editor"]
 export type EditorLine = QuoteEditor["lines"][number]
+export type EditorPhase = QuoteEditor["phases"][number]
 export type EditorTotals = QuoteEditor["totals"]
 type Quote = RouterOutputs["quote"]["byId"]
 
@@ -57,6 +59,8 @@ type Quote = RouterOutputs["quote"]["byId"]
 export interface EditorResultLike {
   lines?: EditorLine[]
   deletedLineIds?: string[]
+  phases?: EditorPhase[]
+  deletedPhaseIds?: string[]
   totals?: EditorTotals
 }
 
@@ -77,25 +81,38 @@ export function useQuoteEditor(quoteId: string) {
   }).data
 }
 
-const byOrder = (a: EditorLine, b: EditorLine) =>
-  a.sequence - b.sequence || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+const byOrder = (
+  a: { sequence: number; id: string },
+  b: { sequence: number; id: string }
+) => a.sequence - b.sequence || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
+/** `rows` with `changed` replacing (or joining) and `gone` leaving, in order. */
+function mergeRows<T extends { id: string; sequence: number }>(
+  rows: readonly T[],
+  changed: readonly T[] = [],
+  gone: readonly string[] = []
+): T[] {
+  const deleted = new Set(gone)
+  const byId = new Map(
+    rows.filter((r) => !deleted.has(r.id)).map((r) => [r.id, r])
+  )
+  for (const row of changed) byId.set(row.id, row)
+  return [...byId.values()].sort(byOrder)
+}
 
 /**
- * `editor` with a command's result merged in: returned lines replace (or
- * join) the cached ones, deleted ones leave, totals are replaced.
+ * `editor` with a command's result merged in: returned lines and Phases
+ * replace (or join) the cached ones, deleted ones leave, totals are
+ * replaced.
  */
 export function mergeEditorResult(
   editor: QuoteEditor,
   result: EditorResultLike
 ): QuoteEditor {
-  const gone = new Set(result.deletedLineIds ?? [])
-  const lines = new Map(
-    editor.lines.filter((l) => !gone.has(l.id)).map((l) => [l.id, l])
-  )
-  for (const line of result.lines ?? []) lines.set(line.id, line)
   return {
     ...editor,
-    lines: [...lines.values()].sort(byOrder),
+    lines: mergeRows(editor.lines, result.lines, result.deletedLineIds),
+    phases: mergeRows(editor.phases, result.phases, result.deletedPhaseIds),
     totals: result.totals ?? editor.totals,
   }
 }

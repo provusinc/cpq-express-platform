@@ -1,0 +1,5 @@
+import { TabSkeleton } from "@/components/shell/page-skeleton"
+
+export default function Loading() {
+  return <TabSkeleton />
+}

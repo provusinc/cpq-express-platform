@@ -3,10 +3,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import {
   CalendarClockIcon,
-  CalendarPlusIcon,
   ClockIcon,
   TrendingDownIcon,
-  TrendingUpIcon,
   XCircleIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -20,39 +18,51 @@ import { insightFocusQuery } from "@/lib/key-insights"
 import { wholeMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
-const ICONS: Record<InsightKey, LucideIcon> = {
+/**
+ * The insights that ask for action, in strip order. High-value pipeline
+ * and This month stay list filters, but the Dashboard header's open value
+ * and the chart already say them.
+ */
+const STRIP = [
+  "pending_approval",
+  "low_margin",
+  "expiring_soon",
+  "rejected",
+] as const satisfies readonly InsightKey[]
+type StripKey = (typeof STRIP)[number]
+
+const ICONS: Record<StripKey, LucideIcon> = {
   pending_approval: ClockIcon,
-  high_value_pipeline: TrendingUpIcon,
   low_margin: TrendingDownIcon,
   expiring_soon: CalendarClockIcon,
-  this_month: CalendarPlusIcon,
   rejected: XCircleIcon,
 }
 
-/** What each card counts, under its figure. */
-const DESCRIPTIONS: Record<InsightKey, string> = {
+/** What each cell counts, under its figure. */
+const DESCRIPTIONS: Record<StripKey, string> = {
   pending_approval: "Waiting for an Approver",
-  high_value_pipeline: "Draft and Pending Approval",
   low_margin: "Under 15 % margin, undecided",
   expiring_soon: `Valid Until within ${EXPIRING_SOON_DAYS} days`,
-  this_month: "Quotes created this month",
   rejected: "Rejected and Customer Rejected",
 }
 
-/** The severity rule along a card's top edge, and its faint wash. */
-const SEVERITY_CELL: Record<InsightSeverity, string> = {
-  info: "before:bg-transparent",
-  warning: "bg-warning-soft/60 before:bg-warning",
-  critical: "bg-danger-soft/70 before:bg-danger",
+/**
+ * Only a cell that needs attention takes a colour: a warning inks its
+ * icon, a critical one its icon and count.
+ */
+const ICON_INK: Record<InsightSeverity, string> = {
+  info: "text-muted-foreground",
+  warning: "text-warning-ink",
+  critical: "text-danger-ink",
+}
+const COUNT_INK: Record<InsightSeverity, string> = {
+  info: "",
+  warning: "",
+  critical: "text-danger-ink",
 }
 
-const SEVERITY_TAG: Record<Exclude<InsightSeverity, "info">, string> = {
-  warning: "bg-warning-soft text-warning-ink ring-warning/40",
-  critical: "bg-danger-soft text-danger-ink ring-danger/40",
-}
-
-const SEVERITY_LABELS: Record<InsightSeverity, string> = {
-  info: "Info",
+const SEVERITY_LABELS: Record<InsightSeverity, string | null> = {
+  info: null,
   warning: "Needs attention",
   critical: "Critical",
 }
@@ -60,69 +70,63 @@ const SEVERITY_LABELS: Record<InsightSeverity, string> = {
 const days = (n: number) => (n === 1 ? "1 day" : `${n} days`)
 
 /**
- * The Key Insights strip at the top of the Dashboard: one metric cell per
- * insight (big count, its value, a severity rule and tag when it needs
- * attention). Each links to the Quote list filtered to its Quotes
- * (`/quotes?insight=…`, shareable).
+ * The Key Insights strip at the top of the Dashboard: the four insights
+ * that ask for action, each a cell with its count and value that links to
+ * the Quote list filtered to its Quotes (`/quotes?insight=…`, shareable).
+ * Severity is quiet: a cell that needs attention inks its icon (and a
+ * critical one its count), the rest stay neutral; a zero count is muted.
  */
 export function KeyInsights() {
   const trpc = useTRPC()
   const { data } = useSuspenseQuery(trpc.quote.insights.queryOptions())
+  const cards = STRIP.map((key) => data.cards.find((c) => c.key === key)!)
 
   return (
     <section
       aria-label="Key Insights"
-      className="grid gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6"
+      className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border lg:grid-cols-4"
     >
-      {data.cards.map((card) => {
-        const Icon = ICONS[card.key]
+      {cards.map((card) => {
+        const key = card.key as StripKey
+        const Icon = ICONS[key]
+        const severity = SEVERITY_LABELS[card.severity]
         return (
           <Link
-            key={card.key}
-            href={`/quotes${insightFocusQuery({ kind: "insight", key: card.key })}`}
-            className={cn(
-              "group relative flex min-w-0 flex-col gap-2 bg-card px-4 pt-4 pb-3.5 transition-colors outline-none",
-              "before:absolute before:inset-x-0 before:top-0 before:h-[3px]",
-              "hover:bg-muted/60 focus-visible:z-10 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
-              SEVERITY_CELL[card.severity]
-            )}
+            key={key}
+            href={`/quotes${insightFocusQuery({ kind: "insight", key })}`}
+            className="group flex min-w-0 flex-col gap-1.5 bg-card px-4 py-3 transition-colors outline-none hover:bg-muted/60 focus-visible:z-10 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
           >
-            <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Icon
-                className={cn(
-                  "size-4 text-muted-foreground",
-                  card.severity === "warning" && "text-warning-ink",
-                  card.severity === "critical" && "text-danger-ink"
-                )}
+                className={cn("size-4", ICON_INK[card.severity])}
                 aria-hidden
               />
-              <span className="truncate">{INSIGHT_LABELS[card.key]}</span>
+              <span className="truncate font-medium text-foreground">
+                {INSIGHT_LABELS[key]}
+              </span>
+              {severity && <span className="sr-only">, {severity}</span>}
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="figure text-[2.5rem] leading-none font-semibold">
+              <span
+                className={cn(
+                  "figure text-3xl leading-none font-semibold",
+                  card.count === 0
+                    ? "text-muted-foreground"
+                    : COUNT_INK[card.severity]
+                )}
+              >
                 {card.count}
               </span>
-              <span className="figure truncate text-base font-medium text-muted-foreground">
-                {wholeMoney(card.value, data.currencyCode)}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {card.severity === "info" ? (
-                <span className="sr-only">{SEVERITY_LABELS.info}</span>
-              ) : (
-                <span
-                  className={cn(
-                    "mr-1.5 inline-block rounded-sm px-1.5 py-px text-[0.7rem] font-medium whitespace-nowrap ring-1 ring-inset",
-                    SEVERITY_TAG[card.severity]
-                  )}
-                >
-                  {SEVERITY_LABELS[card.severity]}
+              {card.count > 0 && (
+                <span className="figure truncate text-sm text-muted-foreground">
+                  {wholeMoney(card.value, data.currencyCode)}
                 </span>
               )}
-              {DESCRIPTIONS[card.key]}
-              {card.key === "pending_approval" &&
-                card.oldestAgeDays !== null &&
-                `, oldest ${days(card.oldestAgeDays)}`}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">
+              {key === "pending_approval" && card.oldestAgeDays !== null
+                ? `Oldest waiting ${days(card.oldestAgeDays)}`
+                : DESCRIPTIONS[key]}
             </p>
           </Link>
         )

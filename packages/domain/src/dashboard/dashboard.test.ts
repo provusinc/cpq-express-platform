@@ -1,28 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { QUOTE_STATUSES } from "../enums"
-import {
-  fillMonths,
-  LOST_STATUS,
-  OPEN_STATUSES,
-  recentUtcMonths,
-  winRate,
-  WON_STATUS,
-} from "./index"
-
-describe("winRate", () => {
-  const cases: Array<[number, number, string | null]> = [
-    [0, 0, null],
-    [1, 0, "100.0000"],
-    [0, 3, "0.0000"],
-    [1, 1, "50.0000"],
-    [2, 1, "66.6667"],
-    [1, 2, "33.3333"],
-  ]
-  it.each(cases)("%i won, %i lost → %s", (won, lost, expected) => {
-    expect(winRate(won, lost)).toBe(expected)
-  })
-})
+import { fillMonths, OPEN_STATUSES, recentUtcMonths } from "./index"
 
 describe("recentUtcMonths", () => {
   it("ends with the current UTC month, oldest first", () => {
@@ -76,8 +55,8 @@ describe("fillMonths", () => {
 
 describe("status sets", () => {
   it("open statuses are every status without a customer outcome", () => {
-    expect([...OPEN_STATUSES, WON_STATUS, LOST_STATUS].sort()).toEqual(
-      [...QUOTE_STATUSES].sort()
-    )
+    expect(
+      [...OPEN_STATUSES, "customer_approved", "customer_rejected"].sort()
+    ).toEqual([...QUOTE_STATUSES].sort())
   })
 })

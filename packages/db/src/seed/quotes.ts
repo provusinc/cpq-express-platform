@@ -119,7 +119,7 @@ export const SEED_QUOTES: readonly {
     validUntil: "2026-12-01",
     timePeriod: "weeks",
   },
-  // Older and more recent Quotes, for the Dashboard's months and outcomes.
+  // Older and more recent Quotes, for the Dashboard's months.
   ...(
     [
       [

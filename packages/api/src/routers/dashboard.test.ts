@@ -71,52 +71,24 @@ describe("dashboard.overview", () => {
     withTestDb(async (db) => {
       const { caller } = await setup(db)
       const result = await caller.dashboard.overview()
-      expect(result.pipeline).toHaveLength(7)
-      for (const p of result.pipeline) {
-        expect(p).toMatchObject({ count: 0, value: "0.0000" })
-      }
+      expect(result.open).toEqual({ count: 0, value: "0.0000" })
       expect(result.months).toHaveLength(12)
       expect(result.months.at(-1)!.month).toBe(day(0).slice(0, 8) + "01")
       expect(result.months.every((m) => m.count === 0)).toBe(true)
-      expect(result.outcomes).toEqual({
-        won: { count: 0, value: "0.0000" },
-        lost: { count: 0, value: "0.0000" },
-        winRate: null,
-      })
-      expect(result.approvalQueue).toEqual({
-        total: 0,
-        waitingForMe: 0,
-        rows: [],
-      })
-      expect(result.lowMargin).toEqual([])
-      expect(result.expiring).toEqual([])
-      expect(result.topAccounts).toEqual([])
+      expect(result.approvalQueue).toEqual({ total: 0, rows: [] })
       expect(result.currencyCode).toBe("USD")
     }))
 
-  it("sums the pipeline by status and the win rate", () =>
+  it("sums the open pipeline, leaving out customer outcomes", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
       await quote("draft", { total: "100" })
-      await quote("draft", { total: "50.5" })
+      await quote("rejected", { total: "50.5" })
+      await quote("pending_customer_approval", { total: "25" })
       await quote("customer_approved", { total: "300" })
-      await quote("customer_approved", { total: "200" })
       await quote("customer_rejected", { total: "70" })
-      const result = await caller.dashboard.overview()
-      const byStatus = Object.fromEntries(
-        result.pipeline.map((p) => [p.status, p])
-      )
-      expect(byStatus.draft).toEqual({
-        status: "draft",
-        count: 2,
-        value: "150.5000",
-      })
-      expect(byStatus.approved!.count).toBe(0)
-      expect(result.outcomes).toEqual({
-        won: { count: 2, value: "500.0000" },
-        lost: { count: 1, value: "70.0000" },
-        winRate: "66.6667",
-      })
+      const { open } = await caller.dashboard.overview()
+      expect(open).toEqual({ count: 3, value: "175.5000" })
     }))
 
   it("counts Quotes created per UTC month over the last twelve", () =>
@@ -152,7 +124,7 @@ describe("dashboard.overview", () => {
       expect(months.reduce((n, m) => n + m.count, 0)).toBe(4)
     }))
 
-  it("lists the approval queue longest wait first, reviewable by Approvers", () =>
+  it("queues what waits for an Approver, and a Member's own pending Quotes", () =>
     withTestDb(async (db) => {
       const { caller, asApprover, approver, quote, submitted } = await setup(db)
       const recent = await quote("pending_approval", { name: "Recent" })
@@ -167,74 +139,29 @@ describe("dashboard.overview", () => {
       await quote("draft")
 
       const member = await caller.dashboard.overview()
-      expect(member.approvalQueue.total).toBe(3)
-      expect(member.approvalQueue.waitingForMe).toBe(0)
+      expect(member.isApprover).toBe(false)
+      expect(member.approvalQueue.total).toBe(2)
       expect(member.approvalQueue.rows.map((r) => r.name)).toEqual([
         "Old",
-        "Approver's own",
         "Recent",
       ])
       expect(member.approvalQueue.rows[0]).toMatchObject({
         ageDays: 9,
-        canReview: false,
         account: { name: "Initech" },
       })
 
       const approverView = await asApprover.dashboard.overview()
       expect(approverView.isApprover).toBe(true)
-      expect(approverView.approvalQueue.waitingForMe).toBe(2)
-      expect(
-        Object.fromEntries(
-          approverView.approvalQueue.rows.map((r) => [r.name, r.canReview])
-        )
-      ).toEqual({ Old: true, "Approver's own": false, Recent: true })
-      expect(
-        approverView.approvalQueue.rows.filter((r) => r.mine).map((r) => r.name)
-      ).toEqual(["Approver's own"])
-    }))
-
-  it("lists low-margin and expiring Quotes by the domain rules", () =>
-    withTestDb(async (db) => {
-      const { caller, quote } = await setup(db)
-      await quote("draft", { name: "Thin", marginPct: "10" })
-      await quote("pending_approval", { name: "Negative", marginPct: "-5" })
-      await quote("approved", { name: "Decided", marginPct: "1" })
-      await quote("draft", { name: "Empty", marginPct: "0", total: "0" })
-      await quote("draft", { name: "Healthy", marginPct: "15" })
-
-      await quote("approved", { name: "In a week", validUntil: day(7) })
-      await quote("draft", { name: "Today", validUntil: day(0) })
-      await quote("draft", { name: "Lapsed", validUntil: day(-1) })
-      await quote("draft", { name: "Far", validUntil: day(15) })
-      await quote("customer_approved", { name: "Won", validUntil: day(2) })
-
-      const result = await caller.dashboard.overview()
-      expect(result.lowMargin.map((q) => q.name)).toEqual(["Negative", "Thin"])
-      expect(result.expiring.map((q) => [q.name, q.daysLeft])).toEqual([
-        ["Today", 0],
-        ["In a week", 7],
-      ])
-      expect(result.expiringTo).toBe(day(14))
-    }))
-
-  it("ranks Accounts by their open Total", () =>
-    withTestDb(async (db) => {
-      const { organization, caller, quote, account } = await setup(db)
-      const globex = await createAccount(db, organization, { name: "Globex" })
-      await quote("draft", { total: "100" })
-      await quote("pending_customer_approval", { total: "150" })
-      await quote("customer_approved", { total: "9999" })
-      await quote("approved", { total: "400", account: globex })
-      const { topAccounts } = await caller.dashboard.overview()
-      expect(topAccounts).toEqual([
-        { id: globex.id, name: "Globex", count: 1, value: "400.0000" },
-        { id: account.id, name: "Initech", count: 2, value: "250.0000" },
+      expect(approverView.approvalQueue.total).toBe(2)
+      expect(approverView.approvalQueue.rows.map((r) => r.name)).toEqual([
+        "Old",
+        "Recent",
       ])
     }))
 
   it("counts only this Organization's Quotes, and refuses non-members", () =>
     withTestDb(async (db) => {
-      const { organization, caller, quote } = await setup(db)
+      const { organization, caller, asApprover, quote } = await setup(db)
       await quote("draft", { total: "100" })
       const globex = await createOrganization(db)
       const { user: outsider } = await createMember(db, globex, {
@@ -254,12 +181,11 @@ describe("dashboard.overview", () => {
         })
       }
       const result = await caller.dashboard.overview()
-      expect(result.pipeline.reduce((n, p) => n + p.count, 0)).toBe(1)
-      expect(result.approvalQueue.total).toBe(0)
-      expect(result.lowMargin).toEqual([])
-      expect(result.expiring).toEqual([])
-      expect(result.outcomes.won.count).toBe(0)
-      expect(result.topAccounts.map((a) => a.value)).toEqual(["100.0000"])
+      expect(result.open).toEqual({ count: 1, value: "100.0000" })
+      expect(result.months.reduce((n, m) => n + m.count, 0)).toBe(1)
+      expect((await asApprover.dashboard.overview()).approvalQueue.total).toBe(
+        0
+      )
 
       await expect(
         organizationCaller(db, {

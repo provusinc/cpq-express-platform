@@ -215,11 +215,12 @@ Quotes.
 _Avoid_: KPI, alert
 
 **Dashboard**:
-An Organization's landing page: the Key Insights, then the pipeline by status, Quotes
-created per month, the win rate (Customer Approved out of every customer outcome), the
-approval queue, low-margin and expiring Quotes, the top Accounts by open value (Quotes
-without a customer outcome yet) and the viewer's recent Quotes. Read-only; every tile leads
-into the Quote list or the record.
+An Organization's landing page, kept to a glance: the open pipeline value (Quotes without a
+customer outcome yet), the Key Insights that ask for action (pending approval, low margin,
+expiring soon, rejected), the value of Quotes created per month, what needs the viewer (for
+an Approver the Quotes waiting for them, for anyone else their own Quotes pending approval)
+and the viewer's recent Quotes. Read-only; everything on it leads into the Quote list or the
+record.
 _Avoid_: home, overview, analytics
 
 ### Administration

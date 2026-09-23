@@ -1,17 +1,16 @@
 /**
  * The Dashboard: the Organization's landing page (glossary: Dashboard).
- * Besides the Key Insights (`../insights`) it charts the pipeline by
- * status, Quotes created per month, the customer outcome rate and the
- * Accounts with the most open value. This module owns those rules; the
- * API aggregates in SQL and the web app draws them.
+ * Besides the Key Insights (`../insights`) it shows the open pipeline
+ * value and charts Quotes created per month. This module owns those
+ * rules; the API aggregates in SQL and the web app draws them.
  */
 import type { QuoteStatus } from "../enums"
-import { Decimal, toPercentString } from "../money"
+import { Decimal } from "../money"
 
 /**
  * Open: the Quote hasn't had a customer outcome yet (Draft, Pending
- * Approval, Approved, Rejected, Pending Customer Approval). Top Accounts
- * rank by the Total of their open Quotes.
+ * Approval, Approved, Rejected, Pending Customer Approval). The Dashboard
+ * header sums their Totals.
  */
 export const OPEN_STATUSES = [
   "draft",
@@ -21,26 +20,11 @@ export const OPEN_STATUSES = [
   "pending_customer_approval",
 ] as const satisfies readonly QuoteStatus[]
 
-/** The customer outcomes the win rate compares. */
-export const WON_STATUS = "customer_approved" satisfies QuoteStatus
-export const LOST_STATUS = "customer_rejected" satisfies QuoteStatus
-
 /** How many months the activity chart covers (this month included). */
 export const DASHBOARD_MONTHS = 12
 
 /** How many rows each Dashboard list shows. */
 export const DASHBOARD_LIST_LIMIT = 5
-
-/**
- * The customer win rate: Customer Approved as a percentage of every
- * customer outcome (Customer Approved + Customer Rejected), 4 dp, or
- * `null` before the first outcome.
- */
-export function winRate(won: number, lost: number): string | null {
-  const decided = won + lost
-  if (decided <= 0) return null
-  return toPercentString(new Decimal(won).times(100).dividedBy(decided))
-}
 
 /**
  * The first days (`yyyy-MM-01`) of the `count` UTC months ending with the

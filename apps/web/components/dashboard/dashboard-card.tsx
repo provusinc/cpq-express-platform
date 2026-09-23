@@ -32,7 +32,7 @@ export function DashboardCard({
   contentClassName,
   children,
 }: {
-  title: string
+  title: React.ReactNode
   description?: React.ReactNode
   link?: { href: string; label: string }
   className?: string

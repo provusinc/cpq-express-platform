@@ -1,15 +1,7 @@
-import {
-  Building2Icon,
-  CalendarCheckIcon,
-  ClipboardCheckIcon,
-  FileTextIcon,
-  ShieldCheckIcon,
-} from "lucide-react"
+import { FileTextIcon, ShieldCheckIcon } from "lucide-react"
 import Link from "next/link"
 
 import type { RouterOutputs } from "@workspace/api"
-import { QUOTE_STATUS_LABELS } from "@workspace/domain/enums"
-import { Decimal } from "@workspace/domain/money"
 import {
   Item,
   ItemActions,
@@ -18,23 +10,21 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@workspace/ui/components/item"
-import { Progress } from "@workspace/ui/components/progress"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge"
-import { formatDate } from "@/lib/format"
 import { wholeMoney } from "@/lib/money"
 
 import { TileEmpty } from "./dashboard-card"
 
-type Overview = RouterOutputs["dashboard"]["overview"]
+type Queue = RouterOutputs["dashboard"]["overview"]["approvalQueue"]
 type Recent = RouterOutputs["quote"]["insights"]["recent"]
 
 const days = (n: number) => (n === 1 ? "1 day" : `${n} days`)
 const ownerName = (owner: { name: string | null; email: string }) =>
   owner.name ?? owner.email
 
-/** A Quote row: Name over its Account, a figure and a tag at the right. */
+/** A Quote row: Name over a detail line, a tag and a figure at the right. */
 function QuoteItem({
   href,
   name,
@@ -45,60 +35,61 @@ function QuoteItem({
   href: string
   name: string
   detail: React.ReactNode
-  figure?: React.ReactNode
-  tag?: React.ReactNode
+  figure: React.ReactNode
+  tag: React.ReactNode
 }) {
   return (
     <Item
       size="xs"
-      className="-mx-2.5 w-auto flex-nowrap"
+      className="-mx-2.5 w-auto flex-nowrap py-1"
       render={<Link href={href} />}
     >
       <ItemContent className="min-w-0">
         <ItemTitle className="block w-full truncate">{name}</ItemTitle>
         <ItemDescription className="truncate">{detail}</ItemDescription>
       </ItemContent>
-      <ItemActions className="shrink-0 flex-col items-end gap-0.5">
-        {figure && (
-          <span className="text-sm font-medium tabular-nums">{figure}</span>
-        )}
+      <ItemActions className="shrink-0 gap-3">
         {tag}
+        <span className="min-w-20 text-right text-sm font-medium tabular-nums">
+          {figure}
+        </span>
       </ItemActions>
     </Item>
   )
 }
 
-/** How long a Quote has waited, toned by the pending-approval thresholds. */
+/** How long a Quote has waited; only a week or more is toned. */
 function WaitTag({ ageDays }: { ageDays: number }) {
   return (
     <span
       className={cn(
         "text-xs tabular-nums",
-        ageDays >= 7
-          ? "font-medium text-danger-ink"
-          : ageDays >= 3
-            ? "font-medium text-warning-ink"
-            : "text-muted-foreground"
+        ageDays >= 7 ? "text-warning-ink" : "text-muted-foreground"
       )}
     >
-      {ageDays === 0 ? "today" : `${days(ageDays)} waiting`}
+      {ageDays === 0 ? "since today" : `${days(ageDays)} waiting`}
     </span>
   )
 }
 
 /**
- * The approval queue, longest wait first. An Approver's rows open the
- * Quote to review (their own Quotes are marked, never reviewable).
+ * "Needs your attention": the approval queue, longest wait first — for an
+ * Approver the Quotes waiting for them, for anyone else their own Quotes
+ * pending approval.
  */
 export function ApprovalQueueList({
   queue,
+  isApprover,
 }: {
-  queue: Overview["approvalQueue"]
+  queue: Queue
+  isApprover: boolean
 }) {
   if (queue.rows.length === 0) {
     return (
       <TileEmpty icon={<ShieldCheckIcon />}>
-        Nothing is waiting for approval.
+        {isApprover
+          ? "Nothing is waiting for your approval."
+          : "None of your Quotes is waiting for approval."}
       </TileEmpty>
     )
   }
@@ -110,142 +101,13 @@ export function ApprovalQueueList({
           href={`/quotes/${q.id}`}
           name={q.name}
           detail={
-            <>
-              {q.account.name} · {ownerName(q.owner)}
-              {q.mine && " · yours"}
-            </>
+            isApprover
+              ? `${q.account.name} · ${ownerName(q.owner)}`
+              : q.account.name
           }
           figure={wholeMoney(q.total, q.currencyCode)}
           tag={<WaitTag ageDays={q.ageDays} />}
         />
-      ))}
-    </ItemGroup>
-  )
-}
-
-/** Undecided Quotes under the margin threshold, lowest margin first. */
-export function LowMarginList({ rows }: { rows: Overview["lowMargin"] }) {
-  if (rows.length === 0) {
-    return (
-      <TileEmpty icon={<ClipboardCheckIcon />}>
-        Every open Quote clears the margin threshold.
-      </TileEmpty>
-    )
-  }
-  return (
-    <ItemGroup className="gap-0.5">
-      {rows.map((q) => {
-        const margin = new Decimal(q.marginPct)
-        return (
-          <QuoteItem
-            key={q.id}
-            href={`/quotes/${q.id}`}
-            name={q.name}
-            detail={q.account.name}
-            figure={
-              <span
-                className={cn(
-                  margin.isNegative() ? "text-danger-ink" : "text-warning-ink"
-                )}
-              >
-                {margin.toFixed(1)} %
-              </span>
-            }
-            tag={
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {wholeMoney(q.total, q.currencyCode)}
-              </span>
-            }
-          />
-        )
-      })}
-    </ItemGroup>
-  )
-}
-
-/** Offers in play whose Valid Until is close, soonest first. */
-export function ExpiringList({ rows }: { rows: Overview["expiring"] }) {
-  if (rows.length === 0) {
-    return (
-      <TileEmpty icon={<CalendarCheckIcon />}>
-        No offers lapse in the next two weeks.
-      </TileEmpty>
-    )
-  }
-  return (
-    <ItemGroup className="gap-0.5">
-      {rows.map((q) => (
-        <QuoteItem
-          key={q.id}
-          href={`/quotes/${q.id}`}
-          name={q.name}
-          detail={
-            <>
-              {QUOTE_STATUS_LABELS[q.status]} · {formatDate(q.validUntil!)}
-            </>
-          }
-          figure={
-            <span className={cn(q.daysLeft <= 3 && "text-warning-ink")}>
-              {q.daysLeft === 0 ? "Today" : `in ${days(q.daysLeft)}`}
-            </span>
-          }
-          tag={
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {wholeMoney(q.total, q.currencyCode)}
-            </span>
-          }
-        />
-      ))}
-    </ItemGroup>
-  )
-}
-
-/** The Accounts with the most open value, each with a share-of-top bar. */
-export function TopAccountsList({
-  rows,
-  currencyCode,
-}: {
-  rows: Overview["topAccounts"]
-  currencyCode: string
-}) {
-  if (rows.length === 0) {
-    return (
-      <TileEmpty icon={<Building2Icon />}>
-        Open Quotes rank their Accounts here.
-      </TileEmpty>
-    )
-  }
-  const top = Number(rows[0]!.value) || 1
-  return (
-    <ItemGroup className="gap-0.5">
-      {rows.map((a) => (
-        <Item
-          key={a.id}
-          size="xs"
-          className="-mx-2.5 w-auto flex-nowrap"
-          render={<Link href={`/accounts/${a.id}`} />}
-        >
-          <ItemContent className="min-w-0 gap-1.5">
-            <div className="flex items-baseline gap-2">
-              <ItemTitle className="block min-w-0 flex-1 truncate">
-                {a.name}
-              </ItemTitle>
-              <span className="text-sm font-medium tabular-nums">
-                {wholeMoney(a.value, currencyCode)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Progress
-                value={Math.max(2, (Number(a.value) / top) * 100)}
-                aria-label={`${a.name}'s share of the top Account's value`}
-                className="flex-1 **:data-[slot=progress-indicator]:bg-series-1"
-              />
-              <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">
-                {a.count} {a.count === 1 ? "Quote" : "Quotes"}
-              </span>
-            </div>
-          </ItemContent>
-        </Item>
       ))}
     </ItemGroup>
   )

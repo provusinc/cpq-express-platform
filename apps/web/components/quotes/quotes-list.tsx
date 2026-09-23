@@ -39,8 +39,6 @@ import {
   SearchFilter,
 } from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
-import { ViewTabs } from "@/components/shell/view-tabs"
-import type { ListView } from "@/components/shell/view-tabs"
 import { resolveColumnLayout, toSavedLayout } from "@/lib/column-layout"
 import type { ColumnLayout } from "@/lib/column-layout"
 import { formatDate, fromLocalDay, toLocalDay } from "@/lib/format"
@@ -55,7 +53,6 @@ import { CreateQuoteDialog } from "./create-quote-dialog"
 import { INITIAL_QUOTE_LIST_INPUT } from "./list-input"
 import type { QuoteListInput } from "./list-input"
 import { DeleteQuoteDialog } from "./quote-actions"
-import { STATUS_SOLID } from "./quote-status-badge"
 import {
   DEFAULT_HIDDEN_QUOTE_COLUMNS,
   FIXED_QUOTE_COLUMNS,
@@ -244,22 +241,6 @@ export function QuotesList({
 
   const rows = list.data?.rows ?? []
   const listTotal = list.data?.total ?? 0
-  const counts = list.data?.statusCounts
-  const statusViews: ListView<QuoteStatus | "all">[] = [
-    {
-      value: "all",
-      label: "All",
-      count: counts
-        ? QUOTE_STATUSES.reduce((n, status) => n + counts[status], 0)
-        : undefined,
-    },
-    ...QUOTE_STATUSES.map((status) => ({
-      value: status,
-      label: QUOTE_STATUS_LABELS[status],
-      count: counts?.[status],
-      dot: STATUS_SOLID[status],
-    })),
-  ]
   const selectedRows = rows.filter((row) => selection[row.id])
 
   const deleteMany = useMutation(
@@ -308,32 +289,12 @@ export function QuotesList({
     <>
       <PageHeader
         title="Quotes"
-        description="Priced engagements offered to your Accounts."
-      >
-        <Button onClick={() => setCreating(true)}>
-          <PlusIcon data-icon="inline-start" />
-          New Quote
-        </Button>
-      </PageHeader>
-
-      <ViewTabs
-        label="Quote status"
-        views={statusViews}
-        value={
-          statuses.length === 0
-            ? "all"
-            : statuses.length === 1
-              ? statuses[0]!
-              : null
-        }
-        onValueChange={(view) =>
-          setFilter({ statuses: view === "all" ? undefined : [view] })
-        }
-        summary={
+        description={
           <>
+            Priced engagements offered to your Accounts ·{" "}
             {focus?.kind === "insight" && (
-              <span className="mr-1.5 font-medium text-foreground">
-                {INSIGHT_LABELS[focus.key]} ·
+              <span className="font-medium text-foreground">
+                {INSIGHT_LABELS[focus.key]} ·{" "}
               </span>
             )}
             <span className="tabular-nums">{listTotal}</span>{" "}
@@ -341,7 +302,12 @@ export function QuotesList({
             {filtered ? " match" : ""}
           </>
         }
-      />
+      >
+        <Button onClick={() => setCreating(true)}>
+          <PlusIcon data-icon="inline-start" />
+          New Quote
+        </Button>
+      </PageHeader>
 
       <QuoteRowActionsContext value={rowActions}>
         <ServerTableRoot

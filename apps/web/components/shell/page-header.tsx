@@ -5,7 +5,7 @@ export function PageHeader({
   children,
 }: {
   title: string
-  description?: string
+  description?: React.ReactNode
   /** Page actions, right-aligned. */
   children?: React.ReactNode
 }) {

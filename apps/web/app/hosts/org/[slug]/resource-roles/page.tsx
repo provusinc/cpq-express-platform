@@ -5,7 +5,7 @@ import { INITIAL_RESOURCE_ROLE_LIST_INPUT } from "@/components/resource-roles/li
 import { ResourceRolesList } from "@/components/resource-roles/resource-roles-list"
 import { getLabels } from "@/components/shell/get-labels"
 import { organizationAccess } from "@/lib/organization-access"
-import { HydrateClient, prefetch, trpc } from "@/trpc/server"
+import { HydrateClient, prefetch, prefetchNow, trpc } from "@/trpc/server"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { resource_role } = await getLabels()
@@ -14,7 +14,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ResourceRolesPage() {
   const access = await organizationAccess("catalog.manage")
-  prefetch(
+  // The list reads it with `useQuery`: settle it before rendering.
+  await prefetchNow(
     trpc.resourceRole.list.queryOptions(INITIAL_RESOURCE_ROLE_LIST_INPUT)
   )
   prefetch(trpc.resourceRole.locations.queryOptions())

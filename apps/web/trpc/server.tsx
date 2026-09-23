@@ -57,3 +57,18 @@ export function prefetch<T extends ReturnType<TRPCQueryOptions<any>>>(
     void queryClient.prefetchQuery(queryOptions)
   }
 }
+
+/**
+ * `prefetch`, awaited: the query is settled before the page renders, so a
+ * client component reading it with `useQuery` renders the same rows on the
+ * server as at hydration. Use it for what a page shows first through
+ * `useQuery` (server-paged lists): a streamed, still-pending prefetch
+ * renders the loading state on the server but the data on the client (a
+ * hydration mismatch).
+ */
+export async function prefetchNow(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryOptions: ReturnType<TRPCQueryOptions<any>>
+) {
+  await getQueryClient().prefetchQuery(queryOptions)
+}

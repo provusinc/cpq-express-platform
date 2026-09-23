@@ -6,56 +6,38 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import {
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
-  PowerIcon,
-  PowerOffIcon,
-  SearchIcon,
-  Trash2Icon,
-  UserCogIcon,
-} from "lucide-react"
-import { useDeferredValue, useState } from "react"
+import type { ColumnFiltersState } from "@tanstack/react-table"
+import { PlusIcon, UserCogIcon } from "lucide-react"
+import { createContext, useContext, useDeferredValue, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@workspace/ui/components/input-group"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
+import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
+import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
 import { STATUS_OPTIONS } from "@/components/catalog/labels"
 import { PriceRangeFilter } from "@/components/catalog/price-range-filter"
+import {
+  ManagedRowActionsContext,
+  ManagedRowMenu,
+} from "@/components/catalog/row-menu"
+import type { ManagedRowActions } from "@/components/catalog/row-menu"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
-import { FilterSelect } from "@/components/shell/filter-select"
+import {
+  actionsColumn,
+  ColumnsMenu,
+  ColumnTitle,
+  facetValues,
+  ListTable,
+  ServerPagination,
+  ServerTableRoot,
+  toColumnFilters,
+} from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
-import { ListPagination } from "@/components/shell/list-pagination"
 import { PageHeader } from "@/components/shell/page-header"
 import { formatMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
@@ -66,6 +48,118 @@ import type { ResourceRoleListInput } from "./list-input"
 import { ResourceRoleDialog } from "./resource-role-dialog"
 
 type ResourceRole = RouterOutputs["resourceRole"]["list"]["rows"][number]
+
+/** The currency the rate cells format in (the Organization's). */
+const CurrencyContext = createContext("USD")
+
+function RateCell({ value }: { value: string }) {
+  const currency = useContext(CurrencyContext)
+  return (
+    <div className="text-right tabular-nums">
+      {formatMoney(value, currency)}
+    </div>
+  )
+}
+
+const dataColumns: DataTableColumns<ResourceRole> = [
+  {
+    id: "name",
+    accessorKey: "name",
+    header: ColumnTitle,
+    meta: { label: "Name" },
+    enableHiding: false,
+    // One line: the Description is its own (hidden by default) column and
+    // the Name's tooltip.
+    cell: ({ row }) => (
+      <span
+        className="block max-w-80 truncate font-medium"
+        title={row.original.description ?? undefined}
+      >
+        {row.original.name}
+      </span>
+    ),
+  },
+  {
+    id: "description",
+    accessorKey: "description",
+    header: ColumnTitle,
+    meta: { label: "Description" },
+    cell: ({ row }) => (
+      <span className="block max-w-80 truncate text-muted-foreground">
+        {row.original.description}
+      </span>
+    ),
+  },
+  {
+    id: "billRate",
+    accessorKey: "billRate",
+    header: ColumnTitle,
+    meta: { label: "Bill rate / h", align: "end" },
+    cell: ({ row }) => <RateCell value={row.original.billRate} />,
+  },
+  {
+    id: "costRate",
+    accessorKey: "costRate",
+    header: ColumnTitle,
+    meta: { label: "Cost rate / h", align: "end" },
+    cell: ({ row }) => <RateCell value={row.original.costRate} />,
+  },
+  {
+    id: "location",
+    header: ColumnTitle,
+    meta: { label: "Location" },
+    accessorFn: (r) =>
+      [r.locationCity, r.locationState, r.locationCountry]
+        .filter(Boolean)
+        .join(", "),
+  },
+  {
+    id: "active",
+    accessorKey: "active",
+    header: ColumnTitle,
+    meta: { label: "Status" },
+    cell: ({ row }) =>
+      row.original.active ? (
+        <Badge variant="secondary">Active</Badge>
+      ) : (
+        <Badge variant="outline">Inactive</Badge>
+      ),
+  },
+  // Filter-only columns (never shown).
+  {
+    id: "locationCountry",
+    accessorKey: "locationCountry",
+    meta: { label: "Country" },
+    enableHiding: false,
+  },
+  {
+    id: "locationState",
+    accessorKey: "locationState",
+    meta: { label: "State" },
+    enableHiding: false,
+  },
+  {
+    id: "locationCity",
+    accessorKey: "locationCity",
+    meta: { label: "City" },
+    enableHiding: false,
+  },
+]
+const readColumns = dataColumns
+const manageColumns: DataTableColumns<ResourceRole> = [
+  ...dataColumns,
+  actionsColumn<ResourceRole>({
+    label: (role) => `Actions for ${role.name}`,
+    Menu: ManagedRowMenu,
+  }),
+]
+/** Filter-only columns never show; the Description starts hidden. */
+const INITIAL_VISIBILITY = {
+  locationCountry: false,
+  locationState: false,
+  locationCity: false,
+  description: false,
+}
 
 const distinct = (values: (string | null)[]) =>
   [...new Set(values.filter((v): v is string => Boolean(v)))]
@@ -151,7 +245,39 @@ export function ResourceRolesList({
     })
   )
 
-  const rows = list.data?.rows ?? []
+  const [visibility, setVisibility] =
+    useState<Record<string, boolean>>(INITIAL_VISIBILITY)
+  const rowActions: ManagedRowActions = {
+    onEdit: (row) => setDialog({ role: row as ResourceRole }),
+    onDeactivate: (row) => deactivate.mutate({ id: row.id }),
+    onReactivate: (row) => reactivate.mutate({ id: row.id }),
+    onDelete: (row) => setDeleting(row as ResourceRole),
+  }
+
+  const columnFilters = toColumnFilters({
+    active: filters.status === "all" ? undefined : filters.status,
+    locationCountry: filters.country,
+    locationState: filters.state,
+    locationCity: filters.city,
+  })
+  const onColumnFiltersChange = (next: ColumnFiltersState) => {
+    const country = facetValues(next, "locationCountry")[0]
+    // A broader place resets the narrower ones.
+    const state =
+      country === filters.country
+        ? facetValues(next, "locationState")[0]
+        : undefined
+    const city =
+      state === filters.state ? facetValues(next, "locationCity")[0] : undefined
+    setFilter({
+      status: (facetValues(next, "active")[0] ??
+        "all") as ResourceRoleListInput["status"],
+      country,
+      state,
+      city,
+    })
+  }
+
   const filtered =
     Boolean(deferredSearch) ||
     filters.status !== "all" ||
@@ -173,187 +299,87 @@ export function ResourceRolesList({
         )}
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="w-full sm:w-64">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label={`Search ${label.plural}`}
-            placeholder="Search name or description"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
+      <CurrencyContext value={currencyCode}>
+        <ManagedRowActionsContext value={rowActions}>
+          <ServerTableRoot
+            columns={canManage ? manageColumns : readColumns}
+            data={list.data?.rows}
+            isLoading={list.isPending}
+            page={filters.page ?? 1}
+            pageSize={filters.pageSize ?? 25}
+            total={list.data?.total ?? 0}
+            onPageChange={(paging) => setFilter(paging)}
+            columnFilters={columnFilters}
+            onColumnFiltersChange={onColumnFiltersChange}
+            globalFilter={search}
+            onGlobalFilterChange={(value) => {
+              setSearch(value)
               setFilter({})
             }}
-          />
-        </InputGroup>
-        <FilterSelect
-          label="Status"
-          allLabel="Active and inactive"
-          className="w-44"
-          value={filters.status === "all" ? undefined : filters.status}
-          options={STATUS_OPTIONS}
-          onChange={(v) =>
-            setFilter({
-              status: (v ?? "all") as ResourceRoleListInput["status"],
-            })
-          }
-        />
-        <PriceRangeFilter
-          label="rate"
-          onChange={({ min, max }) => setFilter({ minRate: min, maxRate: max })}
-        />
-        <FilterSelect
-          label="Country"
-          allLabel="All countries"
-          value={filters.country}
-          options={distinct(all.map((l) => l.country))}
-          onChange={(country) =>
-            setFilter({ country, state: undefined, city: undefined })
-          }
-        />
-        <FilterSelect
-          label="State"
-          allLabel="All states"
-          value={filters.state}
-          options={distinct(inCountry.map((l) => l.state))}
-          onChange={(state) => setFilter({ state, city: undefined })}
-        />
-        <FilterSelect
-          label="City"
-          allLabel="All cities"
-          value={filters.city}
-          options={distinct(inState.map((l) => l.city))}
-          onChange={(city) => setFilter({ city })}
-        />
-      </div>
-
-      {list.isSuccess && rows.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <UserCogIcon />
-            </EmptyMedia>
-            <EmptyTitle>
-              {filtered ? `No ${label.plural} match` : `No ${label.plural} yet`}
-            </EmptyTitle>
-            <EmptyDescription>
-              {filtered
-                ? "Try another search or clear the filters."
-                : canManage
+            columnVisibility={visibility}
+            onColumnVisibilityChange={setVisibility}
+          >
+            <DataTableToolbarSection className="px-0">
+              <DataTableSearchFilter
+                aria-label={`Search ${label.plural}`}
+                placeholder="Search name or description"
+                className="w-full flex-none sm:w-64"
+              />
+              <DataTableFacetedFilter
+                accessorKey="active"
+                options={[...STATUS_OPTIONS]}
+                showCounts={false}
+                limitToFilteredRows={false}
+              />
+              <DataTableFacetedFilter
+                accessorKey="locationCountry"
+                title="Country"
+                options={distinct(all.map((l) => l.country))}
+                showCounts={false}
+                limitToFilteredRows={false}
+              />
+              <DataTableFacetedFilter
+                accessorKey="locationState"
+                title="State"
+                options={distinct(inCountry.map((l) => l.state))}
+                showCounts={false}
+                limitToFilteredRows={false}
+              />
+              <DataTableFacetedFilter
+                accessorKey="locationCity"
+                title="City"
+                options={distinct(inState.map((l) => l.city))}
+                showCounts={false}
+                limitToFilteredRows={false}
+              />
+              <PriceRangeFilter
+                label="rate"
+                onChange={({ min, max }) =>
+                  setFilter({ minRate: min, maxRate: max })
+                }
+              />
+              <ColumnsMenu />
+            </DataTableToolbarSection>
+            <ListTable
+              filtered={filtered}
+              rowMenu={canManage ? ManagedRowMenu : undefined}
+              empty={{
+                icon: <UserCogIcon />,
+                title: `No ${label.plural} yet`,
+                description: canManage
                   ? `Create your first ${label.singular} or import a CSV.`
-                  : `An Admin adds ${label.plural} here.`}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Bill rate / h</TableHead>
-                <TableHead className="text-right">Cost rate / h</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Status</TableHead>
-                {canManage && <TableHead className="w-10" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((role) => (
-                <TableRow key={role.id}>
-                  <TableCell className="max-w-80">
-                    <div className="font-medium">{role.name}</div>
-                    {role.description && (
-                      <div className="truncate text-muted-foreground">
-                        {role.description}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatMoney(role.billRate, currencyCode)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatMoney(role.costRate, currencyCode)}
-                  </TableCell>
-                  <TableCell>
-                    {[
-                      role.locationCity,
-                      role.locationState,
-                      role.locationCountry,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </TableCell>
-                  <TableCell>
-                    {role.active ? (
-                      <Badge variant="secondary">Active</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  {canManage && (
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`Actions for ${role.name}`}
-                            />
-                          }
-                        >
-                          <MoreHorizontalIcon />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setDialog({ role })}>
-                            <PencilIcon />
-                            Edit
-                          </DropdownMenuItem>
-                          {role.active ? (
-                            <DropdownMenuItem
-                              onClick={() => deactivate.mutate({ id: role.id })}
-                            >
-                              <PowerOffIcon />
-                              Deactivate
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => reactivate.mutate({ id: role.id })}
-                            >
-                              <PowerIcon />
-                              Reactivate
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => setDeleting(role)}
-                          >
-                            <Trash2Icon />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {list.data && list.data.total > 0 && (
-        <ListPagination
-          page={list.data.page}
-          pageSize={list.data.pageSize}
-          total={list.data.total}
-          onPageChange={(page) => setFilter({ page })}
-        />
-      )}
+                  : `An Admin adds ${label.plural} here.`,
+                filteredTitle: `No ${label.plural} match`,
+                filteredDescription: "Try another search or clear the filters.",
+              }}
+            />
+            <ServerPagination
+              total={list.data?.total ?? 0}
+              isFetching={list.isFetching}
+            />
+          </ServerTableRoot>
+        </ManagedRowActionsContext>
+      </CurrencyContext>
 
       {canManage && (
         <>

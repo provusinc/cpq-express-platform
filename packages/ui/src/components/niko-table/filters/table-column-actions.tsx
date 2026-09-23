@@ -18,6 +18,7 @@ import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
@@ -95,9 +96,11 @@ export function TableColumnActions({
         }
       />
       <DropdownMenuContent align={align} className="w-48">
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          {label}
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+            {label}
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         {children}
       </DropdownMenuContent>
     </DropdownMenu>

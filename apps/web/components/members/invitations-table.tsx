@@ -1,29 +1,25 @@
 "use client"
 
 import { useMutation } from "@tanstack/react-query"
-import { MailIcon, MoreHorizontalIcon, XIcon } from "lucide-react"
+import { MailIcon, MailPlusIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
 import { ROLE_LABELS } from "@workspace/domain/enums"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+  RowMenuItem,
+  RowMenuSeparator,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
+import {
+  actionsColumn,
+  ListTable,
+  LocalTableRoot,
+  SortableColumnTitle,
+} from "@/components/shell/data-table"
 import { formatDate } from "@/lib/format"
 import { useTRPC } from "@/trpc/react"
 
@@ -31,37 +27,9 @@ import { useMembersMutationCallbacks } from "./use-members-mutation"
 
 type PendingInvitation = RouterOutputs["invitation"]["list"][number]
 
-/** Open Invitations: resend (new link, new expiry) or revoke. */
-export function InvitationsTable({
-  invitations,
-}: {
-  invitations: PendingInvitation[]
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Invited by</TableHead>
-            <TableHead className="w-0">
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {invitations.map((invitation) => (
-            <InvitationRow key={invitation.id} invitation={invitation} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
-}
-
-function InvitationRow({ invitation }: { invitation: PendingInvitation }) {
+/** Resend (new link, new expiry) or revoke: the "…" and right-click menu. */
+function InvitationRowMenu() {
+  const invitation = useDataTableRow<PendingInvitation>()
   const trpc = useTRPC()
   const { refresh, onError } = useMembersMutationCallbacks()
   const resend = useMutation(
@@ -83,57 +51,91 @@ function InvitationRow({ invitation }: { invitation: PendingInvitation }) {
     })
   )
   const pending = resend.isPending || revoke.isPending
-
   return (
-    <TableRow>
-      <TableCell className="font-medium">{invitation.email}</TableCell>
-      <TableCell>{ROLE_LABELS[invitation.role]}</TableCell>
-      <TableCell className="whitespace-nowrap">
-        {invitation.status === "expired" ? (
-          <Badge variant="destructive">
-            Expired {formatDate(invitation.expiresAt)}
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground">
-            Expires {formatDate(invitation.expiresAt)}
-          </span>
-        )}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {invitation.invitedBy?.name ?? invitation.invitedBy?.email ?? "—"}
-      </TableCell>
-      <TableCell>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={pending}
-                aria-label={`Actions for the Invitation to ${invitation.email}`}
-              />
-            }
-          >
-            <MoreHorizontalIcon />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem
-              onClick={() => resend.mutate({ id: invitation.id })}
-            >
-              <MailIcon />
-              Resend
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => revoke.mutate({ id: invitation.id })}
-            >
-              <XIcon />
-              Revoke
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </TableCell>
-    </TableRow>
+    <>
+      <RowMenuItem
+        disabled={pending}
+        onClick={() => resend.mutate({ id: invitation.id })}
+      >
+        <MailIcon />
+        Resend
+      </RowMenuItem>
+      <RowMenuSeparator />
+      <RowMenuItem
+        variant="destructive"
+        disabled={pending}
+        onClick={() => revoke.mutate({ id: invitation.id })}
+      >
+        <XIcon />
+        Revoke
+      </RowMenuItem>
+    </>
+  )
+}
+
+const columns: DataTableColumns<PendingInvitation> = [
+  {
+    id: "email",
+    accessorKey: "email",
+    header: SortableColumnTitle,
+    meta: { label: "Email" },
+    cell: ({ row }) => (
+      <span className="font-medium">{row.original.email}</span>
+    ),
+  },
+  {
+    id: "role",
+    accessorKey: "role",
+    header: SortableColumnTitle,
+    meta: { label: "Role" },
+    cell: ({ row }) => ROLE_LABELS[row.original.role],
+  },
+  {
+    id: "expiresAt",
+    accessorKey: "expiresAt",
+    header: SortableColumnTitle,
+    meta: { label: "Status" },
+    cell: ({ row }) =>
+      row.original.status === "expired" ? (
+        <Badge variant="destructive">
+          Expired {formatDate(row.original.expiresAt)}
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground">
+          Expires {formatDate(row.original.expiresAt)}
+        </span>
+      ),
+  },
+  {
+    id: "invitedBy",
+    accessorFn: (i) => i.invitedBy?.name ?? i.invitedBy?.email ?? "",
+    header: SortableColumnTitle,
+    meta: { label: "Invited by" },
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {row.original.invitedBy?.name ?? row.original.invitedBy?.email ?? "—"}
+      </span>
+    ),
+  },
+  actionsColumn<PendingInvitation>({
+    label: (invitation) => `Actions for the Invitation to ${invitation.email}`,
+    Menu: InvitationRowMenu,
+    menuClassName: "min-w-44",
+  }),
+]
+
+/** Open Invitations: resend (new link, new expiry) or revoke. */
+export function InvitationsTable({
+  invitations,
+}: {
+  invitations: PendingInvitation[]
+}) {
+  return (
+    <LocalTableRoot columns={columns} data={invitations} sortable>
+      <ListTable
+        rowMenu={InvitationRowMenu}
+        empty={{ icon: <MailPlusIcon />, title: "No pending Invitations" }}
+      />
+    </LocalTableRoot>
   )
 }

@@ -45,6 +45,8 @@ export interface TableSearchFilterProps<TData extends RowData> {
    * @default 0
    */
   debounceMs?: number
+  /** Accessible name of the input. @default "Search table" */
+  "aria-label"?: string
 }
 
 export function TableSearchFilter<TData extends RowData>({
@@ -55,6 +57,7 @@ export function TableSearchFilter<TData extends RowData>({
   onChange,
   value,
   debounceMs = 0,
+  "aria-label": ariaLabel = "Search table",
 }: TableSearchFilterProps<TData>) {
   // Determine if we're in controlled mode
   const isControlled = value !== undefined
@@ -157,7 +160,7 @@ export function TableSearchFilter<TData extends RowData>({
         value={currentValue}
         onChange={handleChange}
         className="pr-9 pl-9"
-        aria-label="Search table"
+        aria-label={ariaLabel}
       />
       {hasValue && showClearButton && (
         <Button

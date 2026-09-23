@@ -1,9 +1,9 @@
 "use client"
 
 import { useMutation } from "@tanstack/react-query"
-import { MoreHorizontalIcon, UserMinusIcon } from "lucide-react"
+import { UserMinusIcon, UsersIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
@@ -21,23 +21,19 @@ import {
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
+  RowMenuItem,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 import { Switch } from "@workspace/ui/components/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
 
+import {
+  actionsColumn,
+  ListTable,
+  LocalTableRoot,
+  SortableColumnTitle,
+} from "@/components/shell/data-table"
 import { formatDate } from "@/lib/format"
 import { useTRPC } from "@/trpc/react"
 
@@ -46,6 +42,177 @@ import { useMembersMutationCallbacks } from "./use-members-mutation"
 
 type Member = RouterOutputs["membership"]["list"][number]
 
+interface MembersContextValue {
+  currentMembershipId: string
+  adminCount: number
+  onRemove: (member: Member) => void
+}
+const MembersContext = createContext<MembersContextValue | null>(null)
+const useMembers = () => useContext(MembersContext)!
+
+const nameOf = (member: Member) => member.user.name ?? member.user.email
+
+/** The same guard the API applies; the API has the final say. */
+function useIsLastAdmin(member: Member) {
+  const { adminCount } = useMembers()
+  return !checkMembershipChange(member, { kind: "remove" }, adminCount).ok
+}
+
+type MemberCell = { row: { original: Member } }
+
+function MemberNameCell({ row }: MemberCell) {
+  const { currentMembershipId } = useMembers()
+  const member = row.original
+  return (
+    <div className="flex items-center gap-2">
+      <span className="truncate font-medium">{nameOf(member)}</span>
+      {member.id === currentMembershipId && (
+        <Badge variant="secondary">You</Badge>
+      )}
+    </div>
+  )
+}
+
+function RoleCell({ row }: MemberCell) {
+  const trpc = useTRPC()
+  const router = useRouter()
+  const { currentMembershipId } = useMembers()
+  const { refresh, onError } = useMembersMutationCallbacks()
+  const changeRole = useMutation(
+    trpc.membership.changeRole.mutationOptions({ onError })
+  )
+  const member = row.original
+  const name = nameOf(member)
+  const lastAdmin = useIsLastAdmin(member)
+
+  async function onRoleChange(role: Role) {
+    await changeRole.mutateAsync({ id: member.id, role })
+    await refresh()
+    toast.success(`${name} is now ${ROLE_LABELS[role]}.`)
+    // Stepping down from Admin: this page (and the nav) no longer apply.
+    if (member.id === currentMembershipId && role !== "admin") router.refresh()
+  }
+
+  return (
+    <div
+      title={
+        lastAdmin
+          ? "The Organization's last Admin keeps the Admin Role."
+          : undefined
+      }
+    >
+      <RoleSelect
+        size="sm"
+        className="w-32"
+        aria-label={`Role of ${name}`}
+        value={member.role}
+        disabled={lastAdmin || changeRole.isPending}
+        onChange={(role) => void onRoleChange(role).catch(() => {})}
+      />
+    </div>
+  )
+}
+
+function ApproverCell({ row }: MemberCell) {
+  const trpc = useTRPC()
+  const { refresh, onError } = useMembersMutationCallbacks()
+  const setApprover = useMutation(
+    trpc.membership.setApprover.mutationOptions({ onError })
+  )
+  const member = row.original
+  const name = nameOf(member)
+
+  async function onApproverChange(isApprover: boolean) {
+    await setApprover.mutateAsync({ id: member.id, isApprover })
+    await refresh()
+    toast.success(
+      isApprover
+        ? `${name} can now approve Quotes.`
+        : `${name} can no longer approve Quotes.`
+    )
+  }
+
+  return (
+    <Switch
+      aria-label={`${name} is an Approver`}
+      checked={member.isApprover}
+      disabled={setApprover.isPending}
+      onCheckedChange={(checked) =>
+        void onApproverChange(checked).catch(() => {})
+      }
+    />
+  )
+}
+
+/** Remove (or Leave, for yourself): the "…" menu and the right-click menu. */
+function MemberRowMenu() {
+  const { currentMembershipId, onRemove } = useMembers()
+  const member = useDataTableRow<Member>()
+  const lastAdmin = useIsLastAdmin(member)
+  return (
+    <RowMenuItem
+      variant="destructive"
+      disabled={lastAdmin}
+      onClick={() => onRemove(member)}
+    >
+      <UserMinusIcon />
+      {member.id === currentMembershipId
+        ? "Leave Organization"
+        : "Remove from Organization"}
+    </RowMenuItem>
+  )
+}
+
+const columns: DataTableColumns<Member> = [
+  {
+    id: "member",
+    accessorFn: nameOf,
+    header: SortableColumnTitle,
+    meta: { label: "Member" },
+    cell: MemberNameCell,
+  },
+  {
+    id: "email",
+    accessorFn: (m) => m.user.email,
+    header: SortableColumnTitle,
+    meta: { label: "Email" },
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">{row.original.user.email}</span>
+    ),
+  },
+  {
+    id: "role",
+    accessorKey: "role",
+    header: SortableColumnTitle,
+    meta: { label: "Role" },
+    cell: RoleCell,
+  },
+  {
+    id: "isApprover",
+    accessorKey: "isApprover",
+    header: SortableColumnTitle,
+    meta: { label: "Approver" },
+    cell: ApproverCell,
+  },
+  {
+    id: "createdAt",
+    accessorKey: "createdAt",
+    header: SortableColumnTitle,
+    meta: { label: "Joined" },
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {formatDate(row.original.createdAt)}
+      </span>
+    ),
+  },
+  actionsColumn<Member>({
+    label: (member) => `Actions for ${nameOf(member)}`,
+    Menu: MemberRowMenu,
+    menuClassName: "min-w-52",
+  }),
+]
+
+/** The Organization's Members: Role, Approver flag, removal (Admins). */
 export function MembersTable({
   members,
   currentMembershipId,
@@ -59,159 +226,22 @@ export function MembersTable({
   const [removing, setRemoving] = useState<Member | null>(null)
 
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Member</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Approver</TableHead>
-            <TableHead>Joined</TableHead>
-            <TableHead className="w-0">
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((member) => (
-            <MemberRow
-              key={member.id}
-              member={member}
-              isYou={member.id === currentMembershipId}
-              adminCount={adminCount}
-              onRemove={() => setRemoving(member)}
-            />
-          ))}
-        </TableBody>
-      </Table>
+    <MembersContext
+      value={{ currentMembershipId, adminCount, onRemove: setRemoving }}
+    >
+      <LocalTableRoot columns={columns} data={members} sortable>
+        <ListTable
+          rowMenu={MemberRowMenu}
+          empty={{ icon: <UsersIcon />, title: "No Members yet" }}
+        />
+      </LocalTableRoot>
       <RemoveMemberDialog
         member={removing}
         isYou={removing?.id === currentMembershipId}
         pickerUrl={pickerUrl}
         onClose={() => setRemoving(null)}
       />
-    </div>
-  )
-}
-
-function MemberRow({
-  member,
-  isYou,
-  adminCount,
-  onRemove,
-}: {
-  member: Member
-  isYou: boolean
-  adminCount: number
-  onRemove: () => void
-}) {
-  const trpc = useTRPC()
-  const router = useRouter()
-  const { refresh, onError } = useMembersMutationCallbacks()
-  const changeRole = useMutation(
-    trpc.membership.changeRole.mutationOptions({ onError })
-  )
-  const setApprover = useMutation(
-    trpc.membership.setApprover.mutationOptions({ onError })
-  )
-  const name = member.user.name ?? member.user.email
-  // The same guard the API applies; the API has the final say.
-  const lastAdmin = !checkMembershipChange(
-    member,
-    { kind: "remove" },
-    adminCount
-  ).ok
-
-  async function onRoleChange(role: Role) {
-    await changeRole.mutateAsync({ id: member.id, role })
-    await refresh()
-    toast.success(`${name} is now ${ROLE_LABELS[role]}.`)
-    // Stepping down from Admin: this page (and the nav) no longer apply.
-    if (isYou && role !== "admin") router.refresh()
-  }
-
-  async function onApproverChange(isApprover: boolean) {
-    await setApprover.mutateAsync({ id: member.id, isApprover })
-    await refresh()
-    toast.success(
-      isApprover
-        ? `${name} can now approve Quotes.`
-        : `${name} can no longer approve Quotes.`
-    )
-  }
-
-  return (
-    <TableRow>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate font-medium">{name}</span>
-            {member.user.name && (
-              <span className="truncate text-xs text-muted-foreground">
-                {member.user.email}
-              </span>
-            )}
-          </div>
-          {isYou && <Badge variant="secondary">You</Badge>}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div
-          title={
-            lastAdmin
-              ? "The Organization's last Admin keeps the Admin Role."
-              : undefined
-          }
-        >
-          <RoleSelect
-            size="sm"
-            className="w-32"
-            aria-label={`Role of ${name}`}
-            value={member.role}
-            disabled={lastAdmin || changeRole.isPending}
-            onChange={(role) => void onRoleChange(role).catch(() => {})}
-          />
-        </div>
-      </TableCell>
-      <TableCell>
-        <Switch
-          aria-label={`${name} is an Approver`}
-          checked={member.isApprover}
-          disabled={setApprover.isPending}
-          onCheckedChange={(checked) =>
-            void onApproverChange(checked).catch(() => {})
-          }
-        />
-      </TableCell>
-      <TableCell className="whitespace-nowrap text-muted-foreground">
-        {formatDate(member.createdAt)}
-      </TableCell>
-      <TableCell>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Actions for ${name}`}
-              />
-            }
-          >
-            <MoreHorizontalIcon />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-52">
-            <DropdownMenuItem
-              variant="destructive"
-              disabled={lastAdmin}
-              onClick={onRemove}
-            >
-              <UserMinusIcon />
-              {isYou ? "Leave Organization" : "Remove from Organization"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </TableCell>
-    </TableRow>
+    </MembersContext>
   )
 }
 

@@ -6,7 +6,7 @@ import { CsvImportButton } from "@/components/catalog/csv-import-dialog"
 import { initialCatalogItemListInput } from "@/components/catalog/list-input"
 import { getLabels } from "@/components/shell/get-labels"
 import { organizationAccess } from "@/lib/organization-access"
-import { HydrateClient, prefetch, trpc } from "@/trpc/server"
+import { HydrateClient, prefetch, prefetchNow, trpc } from "@/trpc/server"
 
 export async function generateMetadata(): Promise<Metadata> {
   const { add_on } = await getLabels()
@@ -17,7 +17,8 @@ export default async function AddOnsPage() {
   // Hidden in Settings → Labels: the Organization doesn't sell them.
   if (!(await getLabels()).add_on.enabled) notFound()
   const access = await organizationAccess("catalog.manage")
-  prefetch(
+  // The list reads it with `useQuery`: settle it before rendering.
+  await prefetchNow(
     trpc.catalogItem.list.queryOptions(initialCatalogItemListInput("add_on"))
   )
   prefetch(trpc.catalogItem.tags.queryOptions({ kind: "add_on" }))

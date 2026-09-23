@@ -1,5 +1,5 @@
 import { DocumentsTab } from "@/components/documents/documents-tab"
-import { HydrateClient, prefetch, trpc } from "@/trpc/server"
+import { HydrateClient, prefetchNow, trpc } from "@/trpc/server"
 
 type Params = Promise<{ slug: string; quoteId: string }>
 
@@ -14,7 +14,8 @@ export default async function QuoteDocumentsPage({
   params: Params
 }) {
   const { quoteId } = await params
-  prefetch(trpc.quoteDocument.list.queryOptions({ quoteId }))
+  // The list reads it with `useQuery`: settle it before rendering.
+  await prefetchNow(trpc.quoteDocument.list.queryOptions({ quoteId }))
   return (
     <HydrateClient>
       <DocumentsTab quoteId={quoteId} />

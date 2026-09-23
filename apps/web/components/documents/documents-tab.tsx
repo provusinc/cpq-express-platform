@@ -10,7 +10,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import dynamic from "next/dynamic"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
@@ -28,14 +28,24 @@ import {
   Empty,
   EmptyDescription,
   EmptyHeader,
-  EmptyMedia,
   EmptyTitle,
 } from "@workspace/ui/components/empty"
 import { Field, FieldLabel } from "@workspace/ui/components/field"
+import {
+  RowMenuItem,
+  RowMenuSeparator,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
+import {
+  ColumnTitle,
+  ListTable,
+  LocalTableRoot,
+} from "@/components/shell/data-table"
 import { formatDate } from "@/lib/format"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -147,35 +157,24 @@ export function DocumentsTab({ quoteId }: { quoteId: string }) {
             Generate
           </Button>
         </div>
-        {documents.data?.length === 0 ? (
-          <Empty className="border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <FileTextIcon />
-              </EmptyMedia>
-              <EmptyTitle>No Quote Documents yet</EmptyTitle>
-              <EmptyDescription>
-                Generate one to keep a PDF of the Quote as it is now.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {(documents.data ?? []).map((document) => (
-              <DocumentRow
-                key={document.id}
-                document={document}
-                onDelete={() => setDeleting(document)}
-              />
-            ))}
-            {!documents.data &&
-              [0, 1].map((i) => (
-                <li key={i} className="p-3">
-                  <Skeleton className="h-10 w-full" />
-                </li>
-              ))}
-          </ul>
-        )}
+        <DocumentActionsContext value={{ onDelete: setDeleting }}>
+          <LocalTableRoot
+            columns={documentColumns}
+            data={documents.data}
+            isLoading={!documents.data}
+          >
+            <ListTable
+              rowMenu={DocumentRowMenu}
+              skeletonRows={2}
+              empty={{
+                icon: <FileTextIcon />,
+                title: "No Quote Documents yet",
+                description:
+                  "Generate one to keep a PDF of the Quote as it is now.",
+              }}
+            />
+          </LocalTableRoot>
+        </DocumentActionsContext>
       </section>
 
       <Dialog
@@ -230,16 +229,18 @@ export function DocumentsTab({ quoteId }: { quoteId: string }) {
   )
 }
 
-function DocumentRow({
-  document,
-  onDelete,
-}: {
-  document: QuoteDocumentItem
-  onDelete: () => void
-}) {
+/** The list's delete action, provided by the tab (columns are module-level). */
+const DocumentActionsContext = createContext<{
+  onDelete: (document: QuoteDocumentItem) => void
+} | null>(null)
+
+type DocumentCell = { row: { original: QuoteDocumentItem } }
+
+function VersionCell({ row }: DocumentCell) {
+  const document = row.original
   const generatedAt = new Date(document.generatedAt)
   return (
-    <li className="flex flex-col gap-1.5 p-3 text-sm">
+    <div className="flex flex-col gap-1 text-sm whitespace-normal">
       <div className="flex items-center gap-2">
         <span className="font-medium">Version {document.version}</span>
         {document.capturedByMarkSent && (
@@ -259,45 +260,102 @@ function DocumentRow({
       {document.notes && (
         <p className="text-xs whitespace-pre-wrap">{document.notes}</p>
       )}
-      <div className="flex flex-wrap gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          nativeButton={false}
-          render={
-            <a
-              href={`${document.downloadUrl}?inline=1`}
-              target="_blank"
-              rel="noreferrer"
-            />
-          }
-        >
-          <ExternalLinkIcon data-icon="inline-start" />
-          Open
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          nativeButton={false}
-          render={
-            <a href={document.downloadUrl} download={document.fileName} />
-          }
-        >
-          <DownloadIcon data-icon="inline-start" />
-          Download
-        </Button>
-        {document.canDelete && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            aria-label={`Delete version ${document.version}`}
-            onClick={onDelete}
-          >
-            <Trash2Icon />
-          </Button>
-        )}
-      </div>
-    </li>
+    </div>
   )
 }
+
+function DocumentButtonsCell({ row }: DocumentCell) {
+  const { onDelete } = useContext(DocumentActionsContext)!
+  const document = row.original
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button
+        variant="outline"
+        size="sm"
+        nativeButton={false}
+        render={
+          <a
+            href={`${document.downloadUrl}?inline=1`}
+            target="_blank"
+            rel="noreferrer"
+          />
+        }
+      >
+        <ExternalLinkIcon data-icon="inline-start" />
+        Open
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        nativeButton={false}
+        render={<a href={document.downloadUrl} download={document.fileName} />}
+      >
+        <DownloadIcon data-icon="inline-start" />
+        Download
+      </Button>
+      {document.canDelete && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete version ${document.version}`}
+          onClick={() => onDelete(document)}
+        >
+          <Trash2Icon />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** A Quote Document's right-click menu: open, download, delete. */
+function DocumentRowMenu() {
+  const { onDelete } = useContext(DocumentActionsContext)!
+  const document = useDataTableRow<QuoteDocumentItem>()
+  return (
+    <>
+      <RowMenuItem
+        render={
+          <a
+            href={`${document.downloadUrl}?inline=1`}
+            target="_blank"
+            rel="noreferrer"
+          />
+        }
+      >
+        <ExternalLinkIcon />
+        Open
+      </RowMenuItem>
+      <RowMenuItem
+        render={<a href={document.downloadUrl} download={document.fileName} />}
+      >
+        <DownloadIcon />
+        Download
+      </RowMenuItem>
+      {document.canDelete && (
+        <>
+          <RowMenuSeparator />
+          <RowMenuItem variant="destructive" onClick={() => onDelete(document)}>
+            <Trash2Icon />
+            Delete
+          </RowMenuItem>
+        </>
+      )}
+    </>
+  )
+}
+
+/** Newest first, as `quoteDocument.list` returns them. */
+const documentColumns: DataTableColumns<QuoteDocumentItem> = [
+  {
+    id: "version",
+    accessorKey: "version",
+    header: ColumnTitle,
+    meta: { label: "Version" },
+    cell: VersionCell,
+  },
+  {
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    cell: DocumentButtonsCell,
+  },
+]

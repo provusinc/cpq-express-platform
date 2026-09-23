@@ -27,15 +27,13 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
+import {
+  ColumnTitle,
+  ListTable,
+  LocalTableRoot,
+} from "@/components/shell/data-table"
 import { parseCsvRecords } from "@/lib/csv"
 import { useLabels } from "@/components/shell/labels"
 import { trimMoney } from "@/lib/money"
@@ -59,6 +57,46 @@ interface PreviewRow {
   summary: string
   errors: { column: string; message: string }[]
 }
+
+/** The preview's columns: row number, name, and its errors or summary. */
+const previewColumns: DataTableColumns<PreviewRow> = [
+  {
+    id: "row",
+    accessorKey: "row",
+    size: 56,
+    header: ColumnTitle,
+    meta: { label: "Row" },
+    cell: ({ row }) => <span className="tabular-nums">{row.original.row}</span>,
+  },
+  {
+    id: "name",
+    accessorKey: "name",
+    header: ColumnTitle,
+    meta: { label: "Name" },
+    cell: ({ row }) =>
+      row.original.name ? (
+        <span className="font-medium">{row.original.name}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
+    id: "details",
+    header: ColumnTitle,
+    meta: { label: "Details" },
+    cell: ({ row }) =>
+      row.original.errors.length > 0 ? (
+        <ul className="whitespace-normal text-destructive">
+          {row.original.errors.map((e, i) => (
+            <li key={i}>{e.message}</li>
+          ))}
+        </ul>
+      ) : (
+        <span className="text-muted-foreground">{row.original.summary}</span>
+      ),
+  },
+]
+const previewRowId = (row: PreviewRow) => String(row.row)
 
 /**
  * CSV import: download the template, pick a file, preview every row with
@@ -255,42 +293,16 @@ function CsvImportDialog({
                   : `All ${preview.length} rows are valid.`}
               </AlertDescription>
             </Alert>
-            <div className="max-h-80 overflow-y-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-14">Row</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.map((r) => (
-                    <TableRow key={r.row}>
-                      <TableCell className="tabular-nums">{r.row}</TableCell>
-                      <TableCell className="font-medium">
-                        {r.name || (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {r.errors.length > 0 ? (
-                          <ul className="text-destructive">
-                            {r.errors.map((e, i) => (
-                              <li key={i}>{e.message}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {r.summary}
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <LocalTableRoot
+              columns={previewColumns}
+              data={preview}
+              getRowId={previewRowId}
+            >
+              <ListTable
+                maxHeight={320}
+                empty={{ icon: <UploadIcon />, title: "No rows" }}
+              />
+            </LocalTableRoot>
           </>
         )}
 

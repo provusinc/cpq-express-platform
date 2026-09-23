@@ -37,7 +37,7 @@ export function PriceRangeFilter({
         aria-invalid={!valid(min)}
         placeholder={`Min ${label}`}
         inputMode="decimal"
-        className="w-28"
+        className="h-8 w-28"
         value={min}
         onChange={(e) => update(e.target.value, max)}
       />
@@ -47,7 +47,7 @@ export function PriceRangeFilter({
         aria-invalid={!valid(max)}
         placeholder={`Max ${label}`}
         inputMode="decimal"
-        className="w-28"
+        className="h-8 w-28"
         value={max}
         onChange={(e) => update(min, e.target.value)}
       />

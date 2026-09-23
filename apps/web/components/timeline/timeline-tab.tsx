@@ -1,32 +1,28 @@
 "use client"
 
 import { FlagIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 
 import { MILESTONE_TYPE_LABELS } from "@workspace/domain/enums"
 import { phaseRollups } from "@workspace/domain/phases"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+  RowMenuItem,
+  RowMenuSeparator,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { useQuoteEditor } from "@/components/quotes/autosave"
 import type { EditorMilestone } from "@/components/quotes/autosave"
 import { useQuote } from "@/components/quotes/quote-header"
+import {
+  ColumnTitle,
+  ListTable,
+  LocalTableRoot,
+} from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
 import { formatDate } from "@/lib/format"
 import { visibleTreeRows } from "@/lib/phase-tree"
@@ -40,6 +36,142 @@ import type { MilestoneFormValues } from "./milestone-dialog"
 
 /** Today in UTC, `yyyy-MM-dd` (the dates the Quote uses). */
 const utcToday = () => new Date().toISOString().slice(0, 10)
+
+interface MilestoneActions {
+  readOnly: boolean
+  onToggle: (milestone: EditorMilestone, completed: boolean) => void
+  onEdit: (milestone: EditorMilestone) => void
+  onDelete: (milestone: EditorMilestone) => void
+}
+const MilestoneActionsContext = createContext<MilestoneActions | null>(null)
+const useMilestoneActions = () => useContext(MilestoneActionsContext)!
+
+type MilestoneCell = { row: { original: EditorMilestone } }
+
+function DoneCell({ row }: MilestoneCell) {
+  const { readOnly, onToggle } = useMilestoneActions()
+  const m = row.original
+  return (
+    <Checkbox
+      aria-label={`${m.name} completed`}
+      checked={m.completed}
+      disabled={readOnly}
+      onCheckedChange={(checked) => onToggle(m, checked === true)}
+    />
+  )
+}
+
+function MilestoneNameCell({ row }: MilestoneCell) {
+  const m = row.original
+  return (
+    <span className="flex items-center gap-2 font-medium">
+      <span
+        aria-hidden
+        className="size-2.5 shrink-0 rotate-45 rounded-[2px]"
+        style={{ backgroundColor: m.colour }}
+      />
+      <span className={cn(m.completed && "text-muted-foreground line-through")}>
+        {m.name}
+      </span>
+    </span>
+  )
+}
+
+function MilestoneButtonsCell({ row }: MilestoneCell) {
+  const { onEdit, onDelete } = useMilestoneActions()
+  const m = row.original
+  return (
+    <div className="flex justify-end">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Edit ${m.name}`}
+        onClick={() => onEdit(m)}
+      >
+        <PencilIcon />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Delete ${m.name}`}
+        onClick={() => onDelete(m)}
+      >
+        <Trash2Icon />
+      </Button>
+    </div>
+  )
+}
+
+/** Edit or delete a Milestone (its right-click menu). */
+function MilestoneRowMenu() {
+  const { onEdit, onDelete } = useMilestoneActions()
+  const m = useDataTableRow<EditorMilestone>()
+  return (
+    <>
+      <RowMenuItem onClick={() => onEdit(m)}>
+        <PencilIcon />
+        Edit
+      </RowMenuItem>
+      <RowMenuSeparator />
+      <RowMenuItem variant="destructive" onClick={() => onDelete(m)}>
+        <Trash2Icon />
+        Delete
+      </RowMenuItem>
+    </>
+  )
+}
+
+const readColumns: DataTableColumns<EditorMilestone> = [
+  {
+    id: "completed",
+    size: 56,
+    header: ColumnTitle,
+    meta: { label: "Done" },
+    cell: DoneCell,
+  },
+  {
+    id: "name",
+    accessorKey: "name",
+    header: ColumnTitle,
+    meta: { label: "Name" },
+    cell: MilestoneNameCell,
+  },
+  {
+    id: "date",
+    accessorKey: "date",
+    header: ColumnTitle,
+    meta: { label: "Date" },
+    cell: ({ row }) => (
+      <span className="tabular-nums">{formatDate(row.original.date)}</span>
+    ),
+  },
+  {
+    id: "type",
+    accessorKey: "type",
+    header: ColumnTitle,
+    meta: { label: "Type" },
+    cell: ({ row }) => MILESTONE_TYPE_LABELS[row.original.type],
+  },
+  {
+    id: "description",
+    accessorKey: "description",
+    header: ColumnTitle,
+    meta: { label: "Description" },
+    cell: ({ row }) => (
+      <span className="block max-w-80 truncate text-muted-foreground">
+        {row.original.description}
+      </span>
+    ),
+  },
+]
+const editColumns: DataTableColumns<EditorMilestone> = [
+  ...readColumns,
+  {
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    cell: MilestoneButtonsCell,
+  },
+]
 
 /**
  * The Quote editor's Timeline tab: the Gantt of Line Items grouped by
@@ -161,105 +293,31 @@ export function TimelineTab({ quoteId }: { quoteId: string }) {
             </Button>
           )}
         </div>
-        {milestones.length === 0 ? (
-          <Empty className="border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <FlagIcon />
-              </EmptyMedia>
-              <EmptyTitle>No Milestones yet</EmptyTitle>
-              <EmptyDescription>
-                {readOnly
+        <MilestoneActionsContext
+          value={{
+            readOnly,
+            onToggle: (m, completed) =>
+              commands.update.mutate({ quoteId, id: m.id, completed }),
+            onEdit: setEditing,
+            onDelete: (m) => commands.remove.mutate({ quoteId, id: m.id }),
+          }}
+        >
+          <LocalTableRoot
+            columns={readOnly ? readColumns : editColumns}
+            data={milestones}
+          >
+            <ListTable
+              rowMenu={readOnly ? undefined : MilestoneRowMenu}
+              empty={{
+                icon: <FlagIcon />,
+                title: "No Milestones yet",
+                description: readOnly
                   ? "This Quote has no Milestones."
-                  : "Mark key dates — deadlines, reviews, payments due — to show them on the Timeline."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">Done</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Description</TableHead>
-                  {!readOnly && (
-                    <TableHead>
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {milestones.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>
-                      <Checkbox
-                        aria-label={`${m.name} completed`}
-                        checked={m.completed}
-                        disabled={readOnly}
-                        onCheckedChange={(checked) =>
-                          commands.update.mutate({
-                            quoteId,
-                            id: m.id,
-                            completed: checked === true,
-                          })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-2 font-medium">
-                        <span
-                          aria-hidden
-                          className="size-2.5 shrink-0 rotate-45 rounded-[2px]"
-                          style={{ backgroundColor: m.colour }}
-                        />
-                        <span
-                          className={cn(
-                            m.completed && "text-muted-foreground line-through"
-                          )}
-                        >
-                          {m.name}
-                        </span>
-                      </span>
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatDate(m.date)}
-                    </TableCell>
-                    <TableCell>{MILESTONE_TYPE_LABELS[m.type]}</TableCell>
-                    <TableCell className="max-w-80 truncate text-muted-foreground">
-                      {m.description}
-                    </TableCell>
-                    {!readOnly && (
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Edit ${m.name}`}
-                          onClick={() => setEditing(m)}
-                        >
-                          <PencilIcon />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Delete ${m.name}`}
-                          onClick={() =>
-                            commands.remove.mutate({ quoteId, id: m.id })
-                          }
-                        >
-                          <Trash2Icon />
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                  : "Mark key dates — deadlines, reviews, payments due — to show them on the Timeline.",
+              }}
+            />
+          </LocalTableRoot>
+        </MilestoneActionsContext>
       </section>
 
       {!readOnly && editing !== null && (

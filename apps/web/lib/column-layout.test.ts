@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { moveColumn, resolveColumnLayout, toSavedLayout } from "./column-layout"
+import { resolveColumnLayout, toSavedLayout } from "./column-layout"
 
 const COLUMNS = ["select", "name", "account", "owner", "status", "total"]
 const opts = { fixed: ["select", "name"], defaultHidden: ["total"] }
@@ -61,7 +61,7 @@ describe("resolveColumnLayout", () => {
   })
 })
 
-describe("toSavedLayout / moveColumn", () => {
+describe("toSavedLayout", () => {
   it("round-trips a layout", () => {
     const layout = resolveColumnLayout(COLUMNS, null, opts)
     const saved = toSavedLayout(layout, opts.fixed)
@@ -72,24 +72,15 @@ describe("toSavedLayout / moveColumn", () => {
     expect(resolveColumnLayout(COLUMNS, saved, opts)).toEqual(layout)
   })
 
-  it("moves a column within the movable ones", () => {
-    expect(moveColumn(COLUMNS, "owner", -1, opts.fixed)).toEqual([
-      "select",
-      "name",
-      "owner",
-      "account",
-      "status",
-      "total",
-    ])
-    expect(moveColumn(COLUMNS, "account", -5, opts.fixed)).toEqual(COLUMNS)
-    expect(moveColumn(COLUMNS, "status", 9, opts.fixed)).toEqual([
-      "select",
-      "name",
-      "account",
-      "owner",
-      "total",
-      "status",
-    ])
-    expect(moveColumn(COLUMNS, "name", 1, opts.fixed)).toEqual(COLUMNS)
+  it("puts fixed columns back first after a reorder moved them", () => {
+    const layout = resolveColumnLayout(COLUMNS, null, opts)
+    const reordered = {
+      ...layout,
+      order: ["account", "owner", "name", "select", "total", "status"],
+    }
+    expect(
+      resolveColumnLayout(COLUMNS, toSavedLayout(reordered, opts.fixed), opts)
+        .order
+    ).toEqual(["select", "name", "account", "owner", "total", "status"])
   })
 })

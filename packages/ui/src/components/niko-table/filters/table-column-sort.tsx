@@ -20,6 +20,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -125,33 +126,35 @@ export function TableColumnSortOptions<TData extends RowData, TValue>({
   return (
     <>
       {withSeparator && <DropdownMenuSeparator />}
-      <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span>Column Sort</span>
-          {showSortBadge && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="flex size-4 cursor-help items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground" />
-                }
-              >
-                {sortIndex + 1}
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                Sort priority (order in which columns are sorted)
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-        <Tooltip>
-          <TooltipTrigger
-            render={<CircleHelp className="size-3.5 cursor-help" />}
-          ></TooltipTrigger>
-          <TooltipContent side="right">
-            TIP: Hold &apos;shift&apos; key to enable multi sort
-          </TooltipContent>
-        </Tooltip>
-      </DropdownMenuLabel>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>Column Sort</span>
+            {showSortBadge && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="flex size-4 cursor-help items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground" />
+                  }
+                >
+                  {sortIndex + 1}
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  Sort priority (order in which columns are sorted)
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          <Tooltip>
+            <TooltipTrigger
+              render={<CircleHelp className="size-3.5 cursor-help" />}
+            ></TooltipTrigger>
+            <TooltipContent side="right">
+              TIP: Hold &apos;shift&apos; key to enable multi sort
+            </TooltipContent>
+          </Tooltip>
+        </DropdownMenuLabel>
+      </DropdownMenuGroup>
       <DropdownMenuItem
         onClick={(e) => handleSort("asc", e)}
         className={cn(

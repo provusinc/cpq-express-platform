@@ -9,7 +9,6 @@ import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   ArrowLeftIcon,
-  MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
   StarIcon,
@@ -18,7 +17,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
@@ -34,29 +33,19 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+  RowMenuItem,
+  RowMenuSeparator,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
+import {
+  actionsColumn,
+  ColumnTitle,
+  ListTable,
+  LocalTableRoot,
+} from "@/components/shell/data-table"
 import { PageHeader } from "@/components/shell/page-header"
 import { errorMessage, inUseOf } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -252,6 +241,87 @@ function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+interface ContactActions {
+  onEdit: (contact: Contact) => void
+  onMakePrimary: (contact: Contact) => void
+  onDelete: (contact: Contact) => void
+}
+const ContactActionsContext = createContext<ContactActions | null>(null)
+
+/** Edit, Make primary, Delete: the "…" menu and right-click menu. */
+function ContactRowMenu() {
+  const actions = useContext(ContactActionsContext)!
+  const contact = useDataTableRow<Contact>()
+  return (
+    <>
+      <RowMenuItem onClick={() => actions.onEdit(contact)}>
+        <PencilIcon />
+        Edit
+      </RowMenuItem>
+      {!contact.isPrimary && (
+        <RowMenuItem onClick={() => actions.onMakePrimary(contact)}>
+          <StarIcon />
+          Make primary
+        </RowMenuItem>
+      )}
+      <RowMenuSeparator />
+      <RowMenuItem
+        variant="destructive"
+        onClick={() => actions.onDelete(contact)}
+      >
+        <Trash2Icon />
+        Delete
+      </RowMenuItem>
+    </>
+  )
+}
+
+const contactColumns: DataTableColumns<Contact> = [
+  {
+    id: "name",
+    accessorKey: "name",
+    header: ColumnTitle,
+    meta: { label: "Name" },
+    cell: ({ row }) => (
+      <span className="font-medium">
+        {row.original.name}
+        {row.original.isPrimary && <Badge className="ml-2">Primary</Badge>}
+      </span>
+    ),
+  },
+  {
+    id: "title",
+    accessorKey: "title",
+    header: ColumnTitle,
+    meta: { label: "Title" },
+  },
+  {
+    id: "email",
+    accessorKey: "email",
+    header: ColumnTitle,
+    meta: { label: "Email" },
+    cell: ({ row }) =>
+      row.original.email && (
+        <a
+          href={`mailto:${row.original.email}`}
+          className="underline-offset-4 hover:underline"
+        >
+          {row.original.email}
+        </a>
+      ),
+  },
+  {
+    id: "phone",
+    accessorKey: "phone",
+    header: ColumnTitle,
+    meta: { label: "Phone" },
+  },
+  actionsColumn<Contact>({
+    label: (contact) => `Actions for ${contact.name}`,
+    Menu: ContactRowMenu,
+  }),
+]
+
 function ContactsCard({ account }: { account: Account }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
@@ -296,96 +366,25 @@ function ContactsCard({ account }: { account: Account }) {
         </CardAction>
       </CardHeader>
       <CardContent>
-        {account.contacts.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <UsersIcon />
-              </EmptyMedia>
-              <EmptyTitle>No Contacts yet</EmptyTitle>
-              <EmptyDescription>
-                The first Contact you add becomes the primary Contact.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {account.contacts.map((contact) => (
-                <TableRow key={contact.id}>
-                  <TableCell className="font-medium">
-                    {contact.name}
-                    {contact.isPrimary && (
-                      <Badge className="ml-2">Primary</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{contact.title}</TableCell>
-                  <TableCell>
-                    {contact.email && (
-                      <a
-                        href={`mailto:${contact.email}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {contact.email}
-                      </a>
-                    )}
-                  </TableCell>
-                  <TableCell>{contact.phone}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Actions for ${contact.name}`}
-                          />
-                        }
-                      >
-                        <MoreHorizontalIcon />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setDialog({ contact })}
-                        >
-                          <PencilIcon />
-                          Edit
-                        </DropdownMenuItem>
-                        {!contact.isPrimary && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setPrimary.mutate({ id: contact.id })
-                            }
-                          >
-                            <StarIcon />
-                            Make primary
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() => setDeleting(contact)}
-                        >
-                          <Trash2Icon />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <ContactActionsContext
+          value={{
+            onEdit: (contact) => setDialog({ contact }),
+            onMakePrimary: (contact) => setPrimary.mutate({ id: contact.id }),
+            onDelete: setDeleting,
+          }}
+        >
+          <LocalTableRoot columns={contactColumns} data={account.contacts}>
+            <ListTable
+              rowMenu={ContactRowMenu}
+              empty={{
+                icon: <UsersIcon />,
+                title: "No Contacts yet",
+                description:
+                  "The first Contact you add becomes the primary Contact.",
+              }}
+            />
+          </LocalTableRoot>
+        </ContactActionsContext>
       </CardContent>
       <ContactDialog
         open={dialog !== null}

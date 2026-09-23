@@ -7,64 +7,39 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query"
-import { useTable } from "@tanstack/react-table"
 import type {
-  ColumnOrderState,
-  ColumnVisibilityState,
+  ColumnFiltersState,
   RowSelectionState,
   SortingState,
-  Updater,
 } from "@tanstack/react-table"
-import {
-  ChevronDownIcon,
-  Columns3Icon,
-  FileTextIcon,
-  PlusIcon,
-  SearchIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react"
+import { FileTextIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useDeferredValue, useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import { Input } from "@workspace/ui/components/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@workspace/ui/components/input-group"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+import { DataTableDateFilter } from "@workspace/ui/components/niko-table/components/data-table-date-filter"
+import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
+import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
+import { DataTableSelectionBar } from "@workspace/ui/components/niko-table/components/data-table-selection-bar"
+import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
+import { DataTableViewDndMenu } from "@workspace/ui/components/niko-table/components/data-table-view-dnd-menu"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
-import { FilterSelect } from "@/components/shell/filter-select"
-import { ListPagination } from "@/components/shell/list-pagination"
+import {
+  ColumnsButton,
+  facetValues,
+  ListTable,
+  ServerPagination,
+  ServerTableRoot,
+  toColumnFilters,
+} from "@/components/shell/data-table"
 import { PageHeader } from "@/components/shell/page-header"
 import { resolveColumnLayout, toSavedLayout } from "@/lib/column-layout"
 import type { ColumnLayout } from "@/lib/column-layout"
+import { fromLocalDay, toLocalDay } from "@/lib/format"
 import { insightFocusKey } from "@/lib/key-insights"
 import type { InsightFocus } from "@/lib/key-insights"
 import { trimMoney } from "@/lib/money"
@@ -72,7 +47,6 @@ import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 import { CloneQuoteDialog } from "./clone-quote-dialog"
-import { ColumnsDialog } from "./columns-dialog"
 import { CreateQuoteDialog } from "./create-quote-dialog"
 import { INITIAL_QUOTE_LIST_INPUT } from "./list-input"
 import type { QuoteListInput } from "./list-input"
@@ -82,16 +56,18 @@ import {
   FIXED_QUOTE_COLUMNS,
   QUOTE_ACTIONS_COLUMN,
   QUOTE_COLUMN_IDS,
-  QUOTE_COLUMN_LABELS,
   QUOTE_SELECT_COLUMN,
   quoteColumns,
   QuoteRowActionsContext,
-  quoteTableFeatures,
+  QuoteRowMenu,
 } from "./quote-columns"
 import type { QuoteListRow, QuoteRowActions } from "./quote-columns"
 
-const EMPTY_ROWS: QuoteListRow[] = []
-const OWNER_OPTIONS = [{ value: "mine", label: "My Quotes" }] as const
+const STATUS_OPTIONS = QUOTE_STATUSES.map((status) => ({
+  value: status,
+  label: QUOTE_STATUS_LABELS[status],
+}))
+const OWNER_OPTIONS = [{ value: "mine", label: "My Quotes" }]
 
 type Sort = NonNullable<QuoteListInput["sort"]>
 
@@ -101,17 +77,15 @@ const layoutFor = (saved: { order: string[]; hidden: string[] } | null) =>
     defaultHidden: DEFAULT_HIDDEN_QUOTE_COLUMNS,
   })
 
-const resolve = <T,>(updater: Updater<T>, current: T): T =>
-  typeof updater === "function" ? (updater as (old: T) => T)(current) : updater
-
 /**
- * The Quote list: search, filters (status, Account, created date range,
- * mine/all), server-side sorting and paging, and columns the user shows,
- * hides and reorders (saved to their preferences). Valid Until dates in the
- * past are highlighted. Each row's menu opens, clones or deletes it; the
- * select column feeds bulk delete, which reports the Quotes it skipped.
- * `insights` renders above the filters (the Key Insight cards). `focus` is
- * the card chosen in the URL (`?insight=…` / `?status=…`) and
+ * The Quote list (niko-table, server-side): search, faceted filters
+ * (status, Account, owner), created date range, sorting and paging all run
+ * on the server (`quote.list`); columns the user shows, hides and reorders
+ * are saved to their preferences. Valid Until dates in the past are
+ * highlighted. Each row's menu (and right-click) opens, clones or deletes
+ * it; the select column feeds bulk delete, which reports the Quotes it
+ * skipped. `insights` renders above the filters (the Key Insight cards).
+ * `focus` is the card chosen in the URL (`?insight=…` / `?status=…`) and
  * `initialFilters` the list input it resolves to (the page prefetches
  * exactly that); choosing another card resets the filters to its input.
  */
@@ -141,7 +115,6 @@ export function QuotesList({
   })
   const options = useQuery(trpc.quote.filterOptions.queryOptions())
   const [creating, setCreating] = useState(false)
-  const [editingColumns, setEditingColumns] = useState(false)
 
   // Selection is per page: any filter, sort or page change clears it.
   const [selection, setSelection] = useState<RowSelectionState>({})
@@ -180,65 +153,73 @@ export function QuotesList({
     })
   )
   const changeLayout = (next: ColumnLayout) => {
-    setLayout(next)
-    saveLayout.mutate(toSavedLayout(next, FIXED_QUOTE_COLUMNS))
+    // Re-resolve so fixed columns stay first whatever the menu did.
+    const resolved = layoutFor(toSavedLayout(next, FIXED_QUOTE_COLUMNS))
+    setLayout(resolved)
+    saveLayout.mutate(toSavedLayout(resolved, FIXED_QUOTE_COLUMNS))
   }
+  const movableOrder = layout.order.filter(
+    (id) => !FIXED_QUOTE_COLUMNS.includes(id as never)
+  )
 
   const sort: Sort = filters.sort ?? INITIAL_QUOTE_LIST_INPUT.sort
-  const sorting: SortingState = [
-    { id: sort.by, desc: sort.direction === "desc" },
-  ]
-
-  const table = useTable({
-    features: quoteTableFeatures,
-    columns: quoteColumns,
-    data: list.data?.rows ?? EMPTY_ROWS,
-    getRowId: (row) => row.id,
-    manualSorting: true,
-    enableSortingRemoval: false,
-    enableMultiSort: false,
-    state: {
-      sorting,
-      rowSelection: selection,
-      columnVisibility: {
-        ...layout.visibility,
-        [QUOTE_SELECT_COLUMN]: true,
-        [QUOTE_ACTIONS_COLUMN]: true,
-      },
-      columnOrder: [QUOTE_SELECT_COLUMN, ...layout.order, QUOTE_ACTIONS_COLUMN],
-    },
-    onRowSelectionChange: (updater) =>
-      setSelection((current) => resolve(updater, current)),
-    onSortingChange: (updater) => {
-      const [next] = resolve(updater, sorting)
-      if (next) {
-        setFilter({
-          sort: {
-            by: next.id as Sort["by"],
-            direction: next.desc ? "desc" : "asc",
-          },
-        })
-      }
-    },
-    onColumnVisibilityChange: (updater) =>
-      changeLayout({
-        ...layout,
-        visibility: resolve<ColumnVisibilityState>(updater, layout.visibility),
-      }),
-    onColumnOrderChange: (updater) =>
-      changeLayout({
-        ...layout,
-        order: resolve<ColumnOrderState>(updater, layout.order),
-      }),
-  })
-
-  const statuses = filters.statuses ?? []
-  const toggleStatus = (status: QuoteStatus, checked: boolean) =>
+  const sorting: SortingState = useMemo(
+    () => [{ id: sort.by, desc: sort.direction === "desc" }],
+    [sort.by, sort.direction]
+  )
+  const onSortingChange = (next: SortingState) => {
+    const [first] = next
+    // Clearing the sort goes back to the default order (newest first).
     setFilter({
-      statuses: checked
-        ? [...statuses, status]
-        : statuses.filter((s) => s !== status),
+      sort: first
+        ? { by: first.id as Sort["by"], direction: first.desc ? "desc" : "asc" }
+        : INITIAL_QUOTE_LIST_INPUT.sort,
     })
+  }
+
+  // The faceted and date filters are column filters on the table; they
+  // round-trip through the query input, which stays the source of truth.
+  const statuses = filters.statuses ?? []
+  const columnFilters: ColumnFiltersState = useMemo(
+    () => [
+      ...toColumnFilters({
+        status: filters.statuses,
+        account: filters.accountId,
+        owner: filters.owner === "mine" ? "mine" : undefined,
+      }),
+      ...(filters.createdFrom || filters.createdTo
+        ? [
+            {
+              id: "createdAt",
+              value: [
+                fromLocalDay(filters.createdFrom),
+                fromLocalDay(filters.createdTo),
+              ],
+            },
+          ]
+        : []),
+    ],
+    [
+      filters.statuses,
+      filters.accountId,
+      filters.owner,
+      filters.createdFrom,
+      filters.createdTo,
+    ]
+  )
+  const onColumnFiltersChange = (next: ColumnFiltersState) => {
+    const nextStatuses = facetValues(next, "status") as QuoteStatus[]
+    const created = next.find((f) => f.id === "createdAt")?.value as
+      | [number | undefined, number | undefined]
+      | undefined
+    setFilter({
+      statuses: nextStatuses.length > 0 ? nextStatuses : undefined,
+      accountId: facetValues(next, "account")[0],
+      owner: facetValues(next, "owner")[0] === "mine" ? "mine" : "all",
+      createdFrom: toLocalDay(created?.[0]),
+      createdTo: toLocalDay(created?.[1]),
+    })
+  }
 
   const filtered =
     Boolean(deferredSearch) ||
@@ -255,8 +236,7 @@ export function QuotesList({
     if (focus) router.push("/quotes", { scroll: false })
   }
 
-  const rows = table.getRowModel().rows
-  const visibleColumns = table.getVisibleLeafColumns().length
+  const rows = list.data?.rows ?? []
   const selectedRows = rows.filter((row) => selection[row.id])
 
   const deleteMany = useMutation(
@@ -314,209 +294,132 @@ export function QuotesList({
 
       {insights}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="w-full sm:w-64">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            aria-label="Search Quotes"
-            placeholder="Search name, description, Account"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setFilter({})
+      <QuoteRowActionsContext value={rowActions}>
+        <ServerTableRoot
+          columns={quoteColumns}
+          data={list.data?.rows}
+          isLoading={list.isPending}
+          page={filters.page ?? 1}
+          pageSize={filters.pageSize ?? INITIAL_QUOTE_LIST_INPUT.pageSize}
+          total={list.data?.total ?? 0}
+          onPageChange={({ page, pageSize }) => setFilter({ page, pageSize })}
+          sorting={sorting}
+          onSortingChange={onSortingChange}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={onColumnFiltersChange}
+          globalFilter={search}
+          onGlobalFilterChange={(value) => {
+            setSearch(value)
+            setFilter({})
+          }}
+          rowSelection={selection}
+          onRowSelectionChange={setSelection}
+          columnVisibility={{
+            ...layout.visibility,
+            [QUOTE_SELECT_COLUMN]: true,
+            [QUOTE_ACTIONS_COLUMN]: true,
+          }}
+          onColumnVisibilityChange={(visibility) =>
+            changeLayout({ ...layout, visibility })
+          }
+          columnOrder={[
+            QUOTE_SELECT_COLUMN,
+            ...layout.order,
+            QUOTE_ACTIONS_COLUMN,
+          ]}
+        >
+          <DataTableToolbarSection className="px-0">
+            <DataTableSearchFilter
+              aria-label="Search Quotes"
+              placeholder="Search name, description, Account"
+              className="w-full flex-none sm:w-64"
+            />
+            <DataTableFacetedFilter
+              accessorKey="status"
+              options={STATUS_OPTIONS}
+              multiple
+              showCounts={false}
+              limitToFilteredRows={false}
+            />
+            <DataTableFacetedFilter
+              accessorKey="account"
+              options={(options.data?.accounts ?? []).map((a) => ({
+                value: a.id,
+                label: a.name,
+              }))}
+              showCounts={false}
+              limitToFilteredRows={false}
+            />
+            <DataTableFacetedFilter
+              accessorKey="owner"
+              options={OWNER_OPTIONS}
+              showCounts={false}
+              limitToFilteredRows={false}
+            />
+            <DataTableDateFilter accessorKey="createdAt" multiple />
+            {filters.marginBelow !== undefined && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setFilter({ marginBelow: undefined })}
+              >
+                Margin below {trimMoney(String(filters.marginBelow))} %
+                <XIcon data-icon="inline-end" />
+              </Button>
+            )}
+            {filtered && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <XIcon data-icon="inline-start" />
+                Clear
+              </Button>
+            )}
+            <div className="ml-auto">
+              <DataTableViewDndMenu
+                columnOrder={movableOrder}
+                onColumnOrderChange={(order) =>
+                  changeLayout({
+                    ...layout,
+                    order: [...FIXED_QUOTE_COLUMNS, ...order],
+                  })
+                }
+                onReset={() => changeLayout(layoutFor(null))}
+                trigger={<ColumnsButton />}
+              />
+            </div>
+          </DataTableToolbarSection>
+
+          <DataTableSelectionBar
+            selectedCount={selectedRows.length}
+            onClear={() => setSelection({})}
+          >
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleting(true)}
+            >
+              <Trash2Icon data-icon="inline-start" />
+              Delete
+            </Button>
+          </DataTableSelectionBar>
+
+          <ListTable
+            filtered={filtered}
+            rowMenu={QuoteRowMenu}
+            skeletonRows={8}
+            empty={{
+              icon: <FileTextIcon />,
+              title: "No Quotes yet",
+              description: "Create a Quote for one of your Accounts.",
+              filteredTitle: "No Quotes match",
+              filteredDescription: "Try another search or clear the filters.",
             }}
           />
-        </InputGroup>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" className="w-44 justify-between" />
-            }
-          >
-            {statuses.length === 0
-              ? "All statuses"
-              : statuses.length === 1
-                ? QUOTE_STATUS_LABELS[statuses[0]!]
-                : `${statuses.length} statuses`}
-            <ChevronDownIcon data-icon="inline-end" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-60">
-            {QUOTE_STATUSES.map((status) => (
-              <DropdownMenuCheckboxItem
-                key={status}
-                checked={statuses.includes(status)}
-                onCheckedChange={(checked) => toggleStatus(status, checked)}
-              >
-                {QUOTE_STATUS_LABELS[status]}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <FilterSelect
-          label="Account"
-          allLabel="All Accounts"
-          className="w-48"
-          value={filters.accountId}
-          options={(options.data?.accounts ?? []).map((a) => ({
-            value: a.id,
-            label: a.name,
-          }))}
-          onChange={(accountId) => setFilter({ accountId })}
-        />
-        <FilterSelect
-          label="Owner"
-          allLabel="All Quotes"
-          value={filters.owner === "mine" ? "mine" : undefined}
-          options={OWNER_OPTIONS}
-          onChange={(owner) => setFilter({ owner: owner ? "mine" : "all" })}
-        />
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <span>Created</span>
-          <Input
-            type="date"
-            aria-label="Created from"
-            className="w-36"
-            value={filters.createdFrom ?? ""}
-            max={filters.createdTo}
-            onChange={(e) =>
-              setFilter({ createdFrom: e.target.value || undefined })
-            }
+          <ServerPagination
+            total={list.data?.total ?? 0}
+            isFetching={list.isFetching}
           />
-          <span>–</span>
-          <Input
-            type="date"
-            aria-label="Created to"
-            className="w-36"
-            value={filters.createdTo ?? ""}
-            min={filters.createdFrom}
-            onChange={(e) =>
-              setFilter({ createdTo: e.target.value || undefined })
-            }
-          />
-        </div>
-        {filters.marginBelow !== undefined && (
-          <Button
-            variant="secondary"
-            onClick={() => setFilter({ marginBelow: undefined })}
-          >
-            Margin below {trimMoney(String(filters.marginBelow))} %
-            <XIcon data-icon="inline-end" />
-          </Button>
-        )}
-        {filtered && (
-          <Button variant="ghost" onClick={clearFilters}>
-            <XIcon data-icon="inline-start" />
-            Clear
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          className="ml-auto"
-          onClick={() => setEditingColumns(true)}
-        >
-          <Columns3Icon data-icon="inline-start" />
-          Columns
-        </Button>
-      </div>
-
-      {selectedRows.length > 0 && (
-        <div
-          role="region"
-          aria-label="Selected Quotes"
-          className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm"
-        >
-          <span className="font-medium">
-            {selectedRows.length === 1
-              ? "1 Quote selected"
-              : `${selectedRows.length} Quotes selected`}
-          </span>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="ml-auto"
-            onClick={() => setBulkDeleting(true)}
-          >
-            <Trash2Icon data-icon="inline-start" />
-            Delete
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setSelection({})}>
-            Clear selection
-          </Button>
-        </div>
-      )}
-
-      {list.isSuccess && list.data.total === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileTextIcon />
-            </EmptyMedia>
-            <EmptyTitle>
-              {filtered ? "No Quotes match" : "No Quotes yet"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {filtered
-                ? "Try another search or clear the filters."
-                : "Create a Quote for one of your Accounts."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((group) => (
-                <TableRow key={group.id}>
-                  {group.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder ? null : (
-                        <table.FlexRender header={header} />
-                      )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              <QuoteRowActionsContext value={rowActions}>
-                {rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        <table.FlexRender cell={cell} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </QuoteRowActionsContext>
-              {list.isPending && (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleColumns}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    Loading Quotes…
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {list.data && list.data.total > 0 && (
-        <ListPagination
-          page={list.data.page}
-          pageSize={list.data.pageSize}
-          total={list.data.total}
-          onPageChange={(page) => setFilter({ page })}
-        />
-      )}
+        </ServerTableRoot>
+      </QuoteRowActionsContext>
 
       <CreateQuoteDialog open={creating} onOpenChange={setCreating} />
       {cloning && (
@@ -548,15 +451,6 @@ export function QuotesList({
         onConfirm={() =>
           deleteMany.mutate({ ids: selectedRows.map((row) => row.id) })
         }
-      />
-      <ColumnsDialog
-        open={editingColumns}
-        onOpenChange={setEditingColumns}
-        layout={layout}
-        labels={QUOTE_COLUMN_LABELS}
-        fixed={FIXED_QUOTE_COLUMNS}
-        onChange={changeLayout}
-        onReset={() => changeLayout(layoutFor(null))}
       />
     </>
   )

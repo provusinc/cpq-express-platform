@@ -9,6 +9,7 @@ import {
   getQueryClient,
   HydrateClient,
   prefetch,
+  prefetchNow,
   trpc,
 } from "@/trpc/server"
 
@@ -31,7 +32,8 @@ export default async function QuotesPage({
     ...INITIAL_QUOTE_LIST_INPUT,
     ...insightListFilters(focus, thisMonthFrom),
   }
-  prefetch(trpc.quote.list.queryOptions(initialFilters))
+  // The list reads it with `useQuery`: settle it before rendering.
+  await prefetchNow(trpc.quote.list.queryOptions(initialFilters))
   return (
     <HydrateClient>
       <QuotesList

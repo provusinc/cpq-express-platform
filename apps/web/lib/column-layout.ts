@@ -67,20 +67,3 @@ export function toSavedLayout(
     hidden: layout.order.filter((id) => layout.visibility[id] === false),
   }
 }
-
-/** `order` with `id` moved `delta` places (clamped); `fixed` ids never move. */
-export function moveColumn(
-  order: readonly string[],
-  id: string,
-  delta: number,
-  fixed: readonly string[] = []
-): string[] {
-  const from = order.indexOf(id)
-  if (from < 0 || fixed.includes(id)) return [...order]
-  const firstMovable = order.findIndex((c) => !fixed.includes(c))
-  const to = Math.min(order.length - 1, Math.max(firstMovable, from + delta))
-  const next = [...order]
-  next.splice(from, 1)
-  next.splice(to, 0, id)
-  return next
-}

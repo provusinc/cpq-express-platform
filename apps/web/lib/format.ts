@@ -37,3 +37,20 @@ export function todayIsoDate(now = new Date()) {
   const d = String(now.getDate()).padStart(2, "0")
   return `${y}-${m}-${d}`
 }
+
+/**
+ * A `yyyy-MM-dd` day as the timestamp of that day's local midnight — what a
+ * date picker (niko's date filter, react-day-picker) shows as that day.
+ */
+export function fromLocalDay(day: string | undefined): number | undefined {
+  if (!day) return undefined
+  const [y, m, d] = day.split("-").map(Number)
+  return new Date(y!, m! - 1, d!).getTime()
+}
+
+/** The local calendar day of a date picker's timestamp, as `yyyy-MM-dd`. */
+export function toLocalDay(timestamp: number | undefined): string | undefined {
+  return timestamp === undefined || timestamp === null
+    ? undefined
+    : todayIsoDate(new Date(timestamp))
+}

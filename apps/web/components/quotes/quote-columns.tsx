@@ -1,21 +1,8 @@
 "use client"
 
 import {
-  columnOrderingFeature,
-  columnVisibilityFeature,
-  createColumnHelper,
-  rowSelectionFeature,
-  rowSortingFeature,
-  tableFeatures,
-} from "@tanstack/react-table"
-import type { CellContext, Column } from "@tanstack/react-table"
-import {
-  ArrowDownIcon,
-  ArrowUpDownIcon,
-  ArrowUpIcon,
   CalendarX2Icon,
   CopyIcon,
-  EllipsisIcon,
   ExternalLinkIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -24,16 +11,20 @@ import { createContext, useContext } from "react"
 
 import type { RouterOutputs } from "@workspace/api"
 import { TIME_PERIOD_LABELS } from "@workspace/domain/enums"
-import { Button } from "@workspace/ui/components/button"
-import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
+  RowMenuItem,
+  RowMenuSeparator,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import { createDataTableColumnHelper } from "@workspace/ui/components/niko-table/lib/data-table-features"
+import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
+import {
+  actionsColumn,
+  ColumnTitle,
+  selectColumn,
+  SortableColumnTitle,
+} from "@/components/shell/data-table"
 import { formatDate } from "@/lib/format"
 import { formatMoney } from "@/lib/money"
 
@@ -41,19 +32,7 @@ import { QuoteStatusBadge } from "./quote-status-badge"
 
 export type QuoteListRow = RouterOutputs["quote"]["list"]["rows"][number]
 
-/**
- * The Quote list's TanStack Table features: server-side sorting (the API
- * sorts; `manualSorting`), column show/hide and reorder (saved per User),
- * and row selection for bulk delete (the `select` column).
- */
-export const quoteTableFeatures = tableFeatures({
-  rowSortingFeature,
-  columnVisibilityFeature,
-  columnOrderingFeature,
-  rowSelectionFeature,
-})
-
-const helper = createColumnHelper<typeof quoteTableFeatures, QuoteListRow>()
+const helper = createDataTableColumnHelper<QuoteListRow>()
 
 /**
  * The row menu's actions, provided by the list (columns are defined at
@@ -68,66 +47,45 @@ export const QuoteRowActionsContext = createContext<QuoteRowActions | null>(
   null
 )
 
-type QuoteCell = CellContext<typeof quoteTableFeatures, QuoteListRow, unknown>
-
-function SelectCell({ row }: QuoteCell) {
-  return (
-    <Checkbox
-      aria-label={`Select ${row.original.name}`}
-      checked={row.getIsSelected()}
-      onCheckedChange={(checked) => row.toggleSelected(checked === true)}
-    />
-  )
-}
-
-function RowActionsCell({ row }: QuoteCell) {
+/**
+ * A Quote's actions: Open, Clone, and Delete when the row's `canDelete`.
+ * The same component is the "…" menu and the right-click menu.
+ */
+export function QuoteRowMenu() {
   const actions = useContext(QuoteRowActionsContext)!
-  const quote = row.original
+  const quote = useDataTableRow<QuoteListRow>()
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Actions for ${quote.name}`}
-          />
-        }
-      >
-        <EllipsisIcon />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem render={<Link href={`/quotes/${quote.id}`} />}>
-          <ExternalLinkIcon />
-          Open
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => actions.onClone(quote)}>
-          <CopyIcon />
-          Clone
-        </DropdownMenuItem>
-        {quote.canDelete && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => actions.onDelete(quote)}
-            >
-              <Trash2Icon />
-              Delete
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <RowMenuItem render={<Link href={`/quotes/${quote.id}`} />}>
+        <ExternalLinkIcon />
+        Open
+      </RowMenuItem>
+      <RowMenuItem onClick={() => actions.onClone(quote)}>
+        <CopyIcon />
+        Clone
+      </RowMenuItem>
+      {quote.canDelete && (
+        <>
+          <RowMenuSeparator />
+          <RowMenuItem
+            variant="destructive"
+            onClick={() => actions.onDelete(quote)}
+          >
+            <Trash2Icon />
+            Delete
+          </RowMenuItem>
+        </>
+      )}
+    </>
   )
 }
 
-/** The bulk-select column: always first, never in the Columns dialog. */
+/** The bulk-select column: always first, never in the Columns menu. */
 export const QUOTE_SELECT_COLUMN = "select"
-/** The row menu column: always last, never in the Columns dialog. */
+/** The row menu column: always last, never in the Columns menu. */
 export const QUOTE_ACTIONS_COLUMN = "actions"
 
-/** Column id → its name in the header and the Columns dialog. */
+/** Column id → its name in the header and the Columns menu. */
 export const QUOTE_COLUMN_LABELS = {
   name: "Name",
   account: "Account",
@@ -144,7 +102,7 @@ export const QUOTE_COLUMN_LABELS = {
 } as const
 export type QuoteColumnId = keyof typeof QUOTE_COLUMN_LABELS
 
-/** Always shown and first. */
+/** Always shown and first (after the select column). */
 export const FIXED_QUOTE_COLUMNS: readonly QuoteColumnId[] = ["name"]
 /** Hidden until the user shows them. */
 export const DEFAULT_HIDDEN_QUOTE_COLUMNS: readonly QuoteColumnId[] = [
@@ -153,57 +111,7 @@ export const DEFAULT_HIDDEN_QUOTE_COLUMNS: readonly QuoteColumnId[] = [
   "updatedAt",
 ]
 
-/** The part of a sortable column a header needs. */
-type SortableColumn = Pick<
-  Column<typeof quoteTableFeatures, QuoteListRow, unknown>,
-  "getIsSorted" | "getToggleSortingHandler"
->
-
-function SortHeader({
-  column,
-  label,
-  align = "start",
-}: {
-  column: SortableColumn
-  label: string
-  align?: "start" | "end"
-}) {
-  const sorted = column.getIsSorted()
-  const Icon =
-    sorted === "asc"
-      ? ArrowUpIcon
-      : sorted === "desc"
-        ? ArrowDownIcon
-        : ArrowUpDownIcon
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className={align === "end" ? "-mr-2 ml-auto flex" : "-ml-2"}
-      onClick={column.getToggleSortingHandler()}
-      aria-label={`Sort by ${label}`}
-    >
-      {label}
-      <Icon
-        data-icon="inline-end"
-        className={sorted ? undefined : "text-muted-foreground/60"}
-      />
-    </Button>
-  )
-}
-
-function header(id: QuoteColumnId, align?: "start" | "end") {
-  function QuoteColumnHeader({ column }: { column: SortableColumn }) {
-    return (
-      <SortHeader
-        column={column}
-        label={QUOTE_COLUMN_LABELS[id]}
-        align={align}
-      />
-    )
-  }
-  return QuoteColumnHeader
-}
+const label = (id: QuoteColumnId) => ({ label: QUOTE_COLUMN_LABELS[id] })
 
 const dateCell = (value: string | Date | null) =>
   value ? formatDate(value) : <span className="text-muted-foreground">—</span>
@@ -211,33 +119,22 @@ const dateCell = (value: string | Date | null) =>
 /**
  * Every Quote list column, in default order: the select column first and
  * the row menu last (both outside the saved layout), the data columns in
- * between.
+ * between. Sortable headers sort on the server (`quote.list`'s `sort`).
  */
-export const quoteColumns = helper.columns([
-  helper.display({
-    id: QUOTE_SELECT_COLUMN,
-    enableHiding: false,
-    header: ({ table }) => (
-      <Checkbox
-        aria-label="Select all Quotes on this page"
-        checked={table.getIsAllRowsSelected()}
-        indeterminate={
-          table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-        }
-        onCheckedChange={(checked) =>
-          table.toggleAllRowsSelected(checked === true)
-        }
-      />
-    ),
-    cell: SelectCell,
+export const quoteColumns: DataTableColumns<QuoteListRow> = [
+  selectColumn<QuoteListRow>({
+    allLabel: "Select all Quotes on this page",
+    rowLabel: (quote) => `Select ${quote.name}`,
   }),
   helper.accessor("name", {
     id: "name",
-    header: header("name"),
+    header: SortableColumnTitle,
     enableHiding: false,
+    meta: label("name"),
     cell: ({ row }) => (
       <Link
         href={`/quotes/${row.original.id}`}
+        title={row.original.description ?? undefined}
         className="font-medium hover:underline"
       >
         {row.original.name}
@@ -246,30 +143,36 @@ export const quoteColumns = helper.columns([
   }),
   helper.accessor((r) => r.account.name, {
     id: "account",
-    header: header("account"),
+    header: SortableColumnTitle,
+    meta: label("account"),
   }),
   helper.accessor("status", {
     id: "status",
-    header: header("status"),
+    header: SortableColumnTitle,
+    meta: label("status"),
     cell: ({ row }) => <QuoteStatusBadge status={row.original.status} />,
   }),
   helper.accessor((r) => r.owner.name ?? r.owner.email, {
     id: "owner",
-    header: header("owner"),
+    header: SortableColumnTitle,
+    meta: label("owner"),
   }),
   helper.accessor("startDate", {
     id: "startDate",
-    header: header("startDate"),
+    header: SortableColumnTitle,
+    meta: label("startDate"),
     cell: ({ row }) => dateCell(row.original.startDate),
   }),
   helper.accessor("endDate", {
     id: "endDate",
-    header: header("endDate"),
+    header: SortableColumnTitle,
+    meta: label("endDate"),
     cell: ({ row }) => dateCell(row.original.endDate),
   }),
   helper.accessor("validUntil", {
     id: "validUntil",
-    header: header("validUntil"),
+    header: SortableColumnTitle,
+    meta: label("validUntil"),
     cell: ({ row }) =>
       row.original.validUntilPassed ? (
         <span
@@ -286,12 +189,14 @@ export const quoteColumns = helper.columns([
   }),
   helper.accessor("timePeriod", {
     id: "timePeriod",
-    header: header("timePeriod"),
+    header: SortableColumnTitle,
+    meta: label("timePeriod"),
     cell: ({ row }) => TIME_PERIOD_LABELS[row.original.timePeriod],
   }),
   helper.accessor("total", {
     id: "total",
-    header: header("total", "end"),
+    header: SortableColumnTitle,
+    meta: { ...label("total"), align: "end" },
     cell: ({ row }) => (
       <div className="text-right tabular-nums">
         {formatMoney(row.original.total, row.original.currencyCode)}
@@ -300,31 +205,33 @@ export const quoteColumns = helper.columns([
   }),
   helper.accessor("description", {
     id: "description",
-    header: QUOTE_COLUMN_LABELS.description,
+    header: ColumnTitle,
     enableSorting: false,
+    meta: label("description"),
     cell: ({ row }) => (
-      <span className="line-clamp-1 max-w-64 text-muted-foreground">
+      <span className="block max-w-64 truncate text-muted-foreground">
         {row.original.description}
       </span>
     ),
   }),
   helper.accessor("createdAt", {
     id: "createdAt",
-    header: header("createdAt"),
+    header: SortableColumnTitle,
+    meta: label("createdAt"),
     cell: ({ row }) => dateCell(row.original.createdAt),
   }),
   helper.accessor("updatedAt", {
     id: "updatedAt",
-    header: header("updatedAt"),
+    header: SortableColumnTitle,
+    meta: label("updatedAt"),
     cell: ({ row }) => dateCell(row.original.updatedAt),
   }),
-  helper.display({
-    id: QUOTE_ACTIONS_COLUMN,
-    enableHiding: false,
-    header: () => <span className="sr-only">Actions</span>,
-    cell: RowActionsCell,
+  actionsColumn<QuoteListRow>({
+    label: (quote) => `Actions for ${quote.name}`,
+    Menu: QuoteRowMenu,
+    menuClassName: "w-44",
   }),
-])
+]
 
 export const QUOTE_COLUMN_IDS = Object.keys(
   QUOTE_COLUMN_LABELS

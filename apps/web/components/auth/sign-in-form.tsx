@@ -63,7 +63,7 @@ export function SignInForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl font-semibold tracking-[-0.015em]">
+        <CardTitle className="text-xl font-semibold tracking-[-0.01em]">
           Sign in
         </CardTitle>
         <CardDescription>

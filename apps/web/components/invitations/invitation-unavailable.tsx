@@ -26,7 +26,7 @@ export function InvitationUnavailable({
         <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-accent">
           <MailXIcon className="size-5 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-semibold tracking-[-0.015em]">
+        <CardTitle className="text-xl font-semibold tracking-[-0.01em]">
           {title}
         </CardTitle>
         <CardDescription>{message}</CardDescription>

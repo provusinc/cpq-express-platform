@@ -4,21 +4,35 @@ import {
   columnOrderingFeature,
   columnVisibilityFeature,
   createColumnHelper,
+  rowSelectionFeature,
   rowSortingFeature,
   tableFeatures,
 } from "@tanstack/react-table"
-import type { Column } from "@tanstack/react-table"
+import type { CellContext, Column } from "@tanstack/react-table"
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
   CalendarX2Icon,
+  CopyIcon,
+  EllipsisIcon,
+  ExternalLinkIcon,
+  Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
+import { createContext, useContext } from "react"
 
 import type { RouterOutputs } from "@workspace/api"
 import { TIME_PERIOD_LABELS } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 
 import { formatDate } from "@/lib/format"
 import { formatMoney } from "@/lib/money"
@@ -29,17 +43,89 @@ export type QuoteListRow = RouterOutputs["quote"]["list"]["rows"][number]
 
 /**
  * The Quote list's TanStack Table features: server-side sorting (the API
- * sorts; `manualSorting`), and column show/hide and reorder (saved per
- * User). A bulk-select column (#23) adds `rowSelectionFeature` here and a
- * fixed `select` column first.
+ * sorts; `manualSorting`), column show/hide and reorder (saved per User),
+ * and row selection for bulk delete (the `select` column).
  */
 export const quoteTableFeatures = tableFeatures({
   rowSortingFeature,
   columnVisibilityFeature,
   columnOrderingFeature,
+  rowSelectionFeature,
 })
 
 const helper = createColumnHelper<typeof quoteTableFeatures, QuoteListRow>()
+
+/**
+ * The row menu's actions, provided by the list (columns are defined at
+ * module level so cells keep a stable identity).
+ */
+export interface QuoteRowActions {
+  onClone: (row: QuoteListRow) => void
+  onDelete: (row: QuoteListRow) => void
+}
+
+export const QuoteRowActionsContext = createContext<QuoteRowActions | null>(
+  null
+)
+
+type QuoteCell = CellContext<typeof quoteTableFeatures, QuoteListRow, unknown>
+
+function SelectCell({ row }: QuoteCell) {
+  return (
+    <Checkbox
+      aria-label={`Select ${row.original.name}`}
+      checked={row.getIsSelected()}
+      onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+    />
+  )
+}
+
+function RowActionsCell({ row }: QuoteCell) {
+  const actions = useContext(QuoteRowActionsContext)!
+  const quote = row.original
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Actions for ${quote.name}`}
+          />
+        }
+      >
+        <EllipsisIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem render={<Link href={`/quotes/${quote.id}`} />}>
+          <ExternalLinkIcon />
+          Open
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => actions.onClone(quote)}>
+          <CopyIcon />
+          Clone
+        </DropdownMenuItem>
+        {quote.canDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => actions.onDelete(quote)}
+            >
+              <Trash2Icon />
+              Delete
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The bulk-select column: always first, never in the Columns dialog. */
+export const QUOTE_SELECT_COLUMN = "select"
+/** The row menu column: always last, never in the Columns dialog. */
+export const QUOTE_ACTIONS_COLUMN = "actions"
 
 /** Column id → its name in the header and the Columns dialog. */
 export const QUOTE_COLUMN_LABELS = {
@@ -122,8 +208,29 @@ function header(id: QuoteColumnId, align?: "start" | "end") {
 const dateCell = (value: string | Date | null) =>
   value ? formatDate(value) : <span className="text-muted-foreground">—</span>
 
-/** Every Quote list column, in default order. */
+/**
+ * Every Quote list column, in default order: the select column first and
+ * the row menu last (both outside the saved layout), the data columns in
+ * between.
+ */
 export const quoteColumns = helper.columns([
+  helper.display({
+    id: QUOTE_SELECT_COLUMN,
+    enableHiding: false,
+    header: ({ table }) => (
+      <Checkbox
+        aria-label="Select all Quotes on this page"
+        checked={table.getIsAllRowsSelected()}
+        indeterminate={
+          table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+        }
+        onCheckedChange={(checked) =>
+          table.toggleAllRowsSelected(checked === true)
+        }
+      />
+    ),
+    cell: SelectCell,
+  }),
   helper.accessor("name", {
     id: "name",
     header: header("name"),
@@ -210,6 +317,12 @@ export const quoteColumns = helper.columns([
     id: "updatedAt",
     header: header("updatedAt"),
     cell: ({ row }) => dateCell(row.original.updatedAt),
+  }),
+  helper.display({
+    id: QUOTE_ACTIONS_COLUMN,
+    enableHiding: false,
+    header: () => <span className="sr-only">Actions</span>,
+    cell: RowActionsCell,
   }),
 ])
 

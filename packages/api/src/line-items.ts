@@ -373,13 +373,28 @@ export async function restoreSnapshotLines(
 }
 
 /**
+ * What `copyLines` sets on each copy: its Phase and sequence, and
+ * optionally another Quote (Quote clone) and re-snapshotted rates.
+ */
+export type LineCopyPlacement = {
+  phaseId: string | null
+  sequence: number
+} & Partial<
+  Pick<
+    typeof lineItems.$inferInsert,
+    "quoteId" | "basePrice" | "baseCost" | "unitPrice" | "unitCost"
+  >
+>
+
+/**
  * Copies `lines` with their Allocations under new ids; `place(line)` gives
- * each copy's Phase and sequence. Returns the copies in the same order.
+ * each copy's Phase and sequence (and optionally its Quote and rates, see
+ * `LineCopyPlacement`). Returns the copies in the same order.
  */
 export async function copyLines(
   scope: OrganizationScope,
   lines: readonly LineItemRow[],
-  place: (line: LineItemRow) => { phaseId: string | null; sequence: number }
+  place: (line: LineItemRow) => LineCopyPlacement
 ): Promise<LineItemRow[]> {
   if (lines.length === 0) return []
   const newIds = new Map(lines.map((l) => [l.id, uuidv7()]))

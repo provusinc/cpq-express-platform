@@ -19,6 +19,7 @@ import { useTRPC } from "@/trpc/react"
 
 import { QUOTE_POLL_MS, QuoteSaveIndicator, useQuoteCommand } from "./autosave"
 import { InlineText } from "./inline-text"
+import { QuoteHeaderActions } from "./quote-actions"
 import { QuoteDatesEditor, TimePeriodControl } from "./quote-schedule"
 import { QuoteStatusBadge } from "./quote-status-badge"
 
@@ -92,7 +93,8 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
  * saved as its own command), status, Account, Owner, the Quote dates
  * (`QuoteDatesEditor`: shift/clamp with an impact preview) and Time Period
  * (`TimePeriodControl`: warns, then discards all Allocations), and a read-only notice when the viewer can't edit. `actions`
- * renders at the top right (approval actions, #19).
+ * renders at the top right (approval actions, #19), before Clone and the
+ * menu with Delete (`QuoteHeaderActions`).
  */
 export function QuoteHeader({
   quoteId,
@@ -146,6 +148,10 @@ export function QuoteHeader({
         <div className="flex items-center gap-3">
           <QuoteSaveIndicator quoteId={quoteId} />
           {actions}
+          <QuoteHeaderActions
+            quote={quote}
+            canDelete={quote.permissions.canDelete}
+          />
         </div>
       </div>
       <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">

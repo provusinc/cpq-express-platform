@@ -19,7 +19,7 @@ import {
 import type { OrganizationScope, SQLWrapper } from "@workspace/db"
 import { addDays, compareDates } from "@workspace/domain/dates"
 import { QUOTE_STATUSES, TIME_PERIODS } from "@workspace/domain/enums"
-import { quotePermissions } from "@workspace/domain/policy"
+import { can, quotePermissions } from "@workspace/domain/policy"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import { isLocked } from "@workspace/domain/status"
 
@@ -44,6 +44,8 @@ import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 import { quoteApprovalProcedures } from "./quote-approval"
 import { quoteCostChangeLogProcedures } from "./quote-cost-change-log"
+import { quoteCloneProcedures } from "./quote-clone"
+import { quoteDeleteProcedures } from "./quote-delete"
 import { quoteScheduleProcedures } from "./quote-schedule"
 import { quoteSummaryProcedures } from "./quote-summary"
 
@@ -177,7 +179,8 @@ export const quoteRouter = createTRPCRouter({
    * Every member sees every Quote; `owner: "mine"` narrows to the caller's.
    * Sorted by `sort` (newest first by default), ties broken by id.
    * `validUntilPassed` is true when Valid Until is before today (UTC),
-   * which the list highlights; it never changes the status.
+   * which the list highlights; it never changes the status. `canDelete`
+   * is whether the caller may delete the row (its menu and bulk delete).
    */
   list: organizationProcedure.input(listInput).query(async ({ ctx, input }) => {
     const search = input.search ? containsPattern(input.search) : undefined
@@ -210,7 +213,7 @@ export const quoteRouter = createTRPCRouter({
       eq(accounts.organizationId, quotes.organizationId),
       eq(accounts.id, quotes.accountId)
     )
-    const [rows, [total]] = await Promise.all([
+    const [rows, [total], settings] = await Promise.all([
       ctx.scope.db
         .select({
           id: quotes.id,
@@ -227,7 +230,11 @@ export const quoteRouter = createTRPCRouter({
           marginPct: quotes.marginPct,
           createdAt: quotes.createdAt,
           updatedAt: quotes.updatedAt,
-          account: { id: accounts.id, name: accounts.name },
+          account: {
+            id: accounts.id,
+            name: accounts.name,
+            archived: accounts.archived,
+          },
           owner: { id: users.id, name: users.name, email: users.email },
         })
         .from(quotes)
@@ -247,12 +254,20 @@ export const quoteRouter = createTRPCRouter({
         .from(quotes)
         .innerJoin(accounts, accountJoin)
         .where(where),
+      getOrganizationSettings(ctx.scope),
     ])
     const today = utcToday()
     return {
       rows: rows.map((row) => ({
         ...row,
         validUntilPassed: validUntilPassed(row.validUntil, today),
+        // Delete reads only the owner and status (never the owner's Role).
+        canDelete: can(
+          ctx.actor,
+          "quote.delete",
+          { ownerId: row.owner.id, ownerRole: null, status: row.status },
+          { deletableStatuses: settings.deletableStatuses }
+        ).allowed,
       })),
       total: total?.n ?? 0,
       page: input.page,
@@ -478,6 +493,12 @@ export const quoteRouter = createTRPCRouter({
 
   /** `setDates` and `setTimePeriod` (see ./quote-schedule.ts). */
   ...quoteScheduleProcedures,
+
+  /** `clone` (see ./quote-clone.ts). */
+  ...quoteCloneProcedures,
+
+  /** `delete` and `deleteMany` (see ./quote-delete.ts). */
+  ...quoteDeleteProcedures,
 
   /** Renames the Quote (Name only). Needs edit permission and an unlocked Quote. */
   rename: organizationProcedure

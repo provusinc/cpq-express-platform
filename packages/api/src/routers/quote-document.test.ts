@@ -217,6 +217,73 @@ describe("quoteDocument.generate", () => {
       )
     }))
 
+  it("includes the Quote's Milestones by date then name", () =>
+    withTestDb(async (db) => {
+      const { caller, quote, organization, members } = await setup(db)
+      // Another Quote's Milestone stays out of this Quote's Document.
+      const otherQuote = await createQuote(db, organization, {
+        owner: members.member.user,
+      })
+      await caller("member").milestone.create({
+        quoteId: otherQuote.id,
+        name: "Elsewhere",
+        date: "2026-10-01",
+      })
+      for (const input of [
+        { name: "Sign-off", date: "2026-12-01", type: "review" as const },
+        {
+          name: "Deposit",
+          date: "2026-10-15",
+          type: "payment_due" as const,
+          description: "30% up front",
+        },
+        { name: "Budget", date: "2026-10-15", completed: true },
+      ]) {
+        await caller("member").milestone.create({ quoteId: quote.id, ...input })
+      }
+
+      const document = await caller("member").quoteDocument.generate({
+        quoteId: quote.id,
+      })
+      const [row] = await db
+        .select()
+        .from(quoteDocuments)
+        .where(eq(quoteDocuments.id, document.id))
+      const snapshot = row!.quoteSnapshot as QuoteDocumentSnapshot
+      expect(snapshot.milestones).toEqual([
+        {
+          name: "Budget",
+          date: "2026-10-15",
+          type: "milestone",
+          description: null,
+          completed: true,
+        },
+        {
+          name: "Deposit",
+          date: "2026-10-15",
+          type: "payment_due",
+          description: "30% up front",
+          completed: false,
+        },
+        {
+          name: "Sign-off",
+          date: "2026-12-01",
+          type: "review",
+          description: null,
+          completed: false,
+        },
+      ])
+
+      const preview = await caller("otherMember").quoteDocument.previewSnapshot(
+        { quoteId: quote.id }
+      )
+      expect(preview.snapshot.milestones.map((m) => m.name)).toEqual([
+        "Budget",
+        "Deposit",
+        "Sign-off",
+      ])
+    }))
+
   it("is open to every member and allowed on locked Quotes", () =>
     withTestDb(async (db) => {
       const { caller, organization, members } = await setup(db)

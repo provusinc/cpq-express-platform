@@ -40,6 +40,7 @@ const {
   accounts,
   contacts,
   lineItems,
+  milestones,
   organizations,
   phases,
   quoteDocuments,
@@ -55,20 +56,27 @@ export const QUOTE_DOCUMENT_NOTES_MAX = 1000
 /** Logo types the PDF renderer can embed. */
 const EMBEDDABLE_LOGO_TYPES = new Set(["image/png", "image/jpeg"])
 
-/**
- * The Quote's Milestones for the document, by date.
- *
- * TODO(#17): read the `milestones` table once it lands (name, date, type,
- * description, completed; ordered by date then name). Until then Quotes have
- * no Milestones, so the section is skipped.
- */
-async function loadMilestones(
+/** The Quote's Milestones for the document, by date then name. */
+function loadMilestones(
   scope: OrganizationScope,
   quoteId: string
 ): Promise<QuoteDocumentSnapshot["milestones"]> {
-  void scope
-  void quoteId
-  return []
+  return scope.db
+    .select({
+      name: milestones.name,
+      date: milestones.date,
+      type: milestones.type,
+      description: milestones.description,
+      completed: milestones.completed,
+    })
+    .from(milestones)
+    .where(
+      and(
+        eq(milestones.organizationId, scope.organizationId),
+        eq(milestones.quoteId, quoteId)
+      )
+    )
+    .orderBy(asc(milestones.date), asc(milestones.name), asc(milestones.id))
 }
 
 /** The render snapshot of `quote` as it stands now (see the module comment). */

@@ -21,6 +21,7 @@
  * - documents: Quote Document settings (validation, defaults) and deletion
  * - financials: revenue / cost / headcount buckets, item-type breakdown
  * - insights: Key Insight definitions and severity thresholds
+ * - dashboard: Dashboard rules (open statuses, win rate, monthly activity)
  */
 export * from "./enums"
 export * from "./money"
@@ -40,3 +41,4 @@ export * from "./quotes"
 export * from "./documents"
 export * from "./financials"
 export * from "./insights"
+export * from "./dashboard"

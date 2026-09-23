@@ -4,7 +4,11 @@ import { QUOTE_STATUSES } from "../enums"
 import type { QuoteStatus } from "../enums"
 import {
   ageInDays,
+  daysUntil,
   DECIDED_STATUSES,
+  expiringWindow,
+  isExpiringSoon,
+  utcDay,
   type InsightKey,
   type InsightSeverity,
   insightSeverity,
@@ -45,6 +49,8 @@ describe("insightSeverity: the other cards", () => {
     ["rejected", 10, "warning"],
     ["low_margin", 0, "info"],
     ["low_margin", 1, "warning"],
+    ["expiring_soon", 0, "info"],
+    ["expiring_soon", 1, "warning"],
     ["high_value_pipeline", 0, "info"],
     ["high_value_pipeline", 100, "info"],
     ["this_month", 0, "info"],
@@ -111,5 +117,44 @@ describe("startOfUtcMonth", () => {
     ["2026-12-31T23:59:59.000Z", "2026-12-01"],
   ])("%s → %s", (now, expected) => {
     expect(startOfUtcMonth(now)).toBe(expected)
+  })
+})
+
+describe("expiring soon", () => {
+  const today = "2026-09-23"
+
+  it("spans today to 14 days ahead", () => {
+    expect(expiringWindow(today)).toEqual({ from: today, to: "2026-10-07" })
+    expect(expiringWindow("2026-12-25")).toEqual({
+      from: "2026-12-25",
+      to: "2027-01-08",
+    })
+  })
+
+  const cases: Array<[string | null, QuoteStatus, boolean]> = [
+    ["2026-09-23", "draft", true],
+    ["2026-10-07", "approved", true],
+    ["2026-10-08", "approved", false],
+    ["2026-09-22", "pending_customer_approval", false],
+    ["2026-09-30", "pending_approval", true],
+    ["2026-09-30", "rejected", false],
+    ["2026-09-30", "customer_approved", false],
+    ["2026-09-30", "customer_rejected", false],
+    [null, "draft", false],
+  ]
+  it.each(cases)("Valid Until %s, %s → %s", (validUntil, status, expected) => {
+    expect(isExpiringSoon({ validUntil, status }, today)).toBe(expected)
+  })
+
+  it("counts days until a date", () => {
+    expect(daysUntil("2026-09-23", today)).toBe(0)
+    expect(daysUntil("2026-09-24", today)).toBe(1)
+    expect(daysUntil("2026-10-07", today)).toBe(14)
+    expect(daysUntil("2026-09-20", today)).toBe(-3)
+  })
+
+  it("reads today as the UTC day", () => {
+    expect(utcDay("2026-09-23T23:59:59.000Z")).toBe("2026-09-23")
+    expect(utcDay(Date.parse("2026-09-24T00:00:00.000Z"))).toBe("2026-09-24")
   })
 })

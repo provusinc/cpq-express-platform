@@ -10,6 +10,8 @@ type Params = Promise<{ slug: string; quoteId: string }>
 export default async function QuotePlannerPage({ params }: { params: Params }) {
   const { quoteId } = await params
   prefetch(trpc.quote.editor.queryOptions({ id: quoteId }))
+  prefetch(trpc.quote.overview.queryOptions({ id: quoteId }))
+  prefetch(trpc.settings.quoting.queryOptions())
   return (
     <HydrateClient>
       <PlannerTab quoteId={quoteId} />

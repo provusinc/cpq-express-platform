@@ -13,6 +13,7 @@ import {
   dragFillRange,
   fillRange,
   formatAmount,
+  heatLevel,
   inRange,
   movePos,
   rangeOf,
@@ -23,6 +24,7 @@ import type {
   CellEdit,
   CellPos,
   CellRange,
+  PhaseBand,
   PlannerPeriod,
   PlannerRow,
 } from "@/lib/planner"
@@ -34,6 +36,8 @@ const AMOUNT_INPUT = /^\d{0,15}(\.\d{0,3})?$/
 export interface PlannerLineRow {
   id: string
   name: string
+  /** Location and bill rate, e.g. "Chicago, Illinois · $185/h". */
+  detail: string
   /** Allocations as shown (stored, or the default layout while not planner-managed). */
   values: AmountByPeriod
   /** Not planner-managed yet: the values are the default layout. */
@@ -69,9 +73,12 @@ interface Editing {
 
 /**
  * The Resource Planner's spreadsheet: one row per hourly Resource Role
- * Line Item (under Phase header rows that expand and collapse), one column
- * per period, with row totals, Phase subtotals, period totals and the
- * grand total.
+ * Line Item (its name, and its location and bill rate beneath), under
+ * Phase group rows that expand and collapse (tint dot, count, subtotals),
+ * one centred column per period (label and first day, today's period
+ * highlighted; the top-level Phase bands above them), a sticky Total
+ * column and the period totals in the footer. Cells take a heat tint for
+ * their share of the period's capacity.
  *
  * Gestures, each sent as one `onEdit(cells)` batch:
  * - type into a cell (or Enter / F2 / double-click to edit); Enter saves
@@ -93,7 +100,11 @@ export function PlannerGrid({
   onSelectionChange,
   onEdit,
   onToggle,
-  hint,
+  bands,
+  capacity,
+  currentCol,
+  phaseTints,
+  roleTerm,
 }: {
   rows: PlannerRow[]
   /** The visible line rows, in display order (the selection indexes these). */
@@ -109,7 +120,16 @@ export function PlannerGrid({
   ) => void
   onEdit: (cells: CellEdit[]) => void
   onToggle: (phaseId: string) => void
-  hint?: React.ReactNode
+  /** The top-level Phase band over the periods (none: no band row). */
+  bands: readonly PhaseBand[]
+  /** Each period's capacity in hours (working days × Hours Per Day). */
+  capacity: readonly number[]
+  /** The period holding today, or -1. */
+  currentCol: number
+  /** Tint (1 … 5) of each top-level Phase by id. */
+  phaseTints: ReadonlyMap<string, number>
+  /** The Resource Role term (Label Override), singular and plural. */
+  roleTerm: { singular: string; plural: string }
 }) {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [drag, setDrag] = useState<"select" | "fill" | null>(null)
@@ -264,215 +284,341 @@ export function PlannerGrid({
   const lineTotal = (id: string) =>
     sumAmounts(lineValues.get(id)?.values() ?? [])
 
+  const hasBands = bands.length > 0
+  const bandCells: React.ReactNode[] = []
+  for (let col = 0; col < periods.length; ) {
+    const band = bands.find((b) => b.start === col)
+    if (band) {
+      bandCells.push(
+        <th
+          key={band.phaseId + col}
+          colSpan={band.span}
+          scope="colgroup"
+          className="border-b px-0.5 pt-1.5 pb-1 font-normal"
+        >
+          <div
+            className={cn(
+              "truncate rounded-sm px-2 py-0.5 text-left text-xs font-medium",
+              TINT[band.tint]
+            )}
+            title={band.name}
+          >
+            {band.name}
+          </div>
+        </th>
+      )
+      col += band.span
+    } else {
+      bandCells.push(<th key={`gap-${col}`} className="border-b" />)
+      col++
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        ref={gridRef}
-        role="grid"
-        aria-label="Resource Planner"
-        aria-readonly={readOnly}
-        aria-rowcount={lineRows.length}
-        aria-colcount={periods.length}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        onFocus={() => {
-          if (!selection && lineRows.length > 0) select({ row: 0, col: 0 })
-        }}
-        className="overflow-auto rounded-lg border bg-background outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20 bg-muted text-xs text-muted-foreground">
+    <div
+      ref={gridRef}
+      role="grid"
+      aria-label="Resource Planner"
+      aria-readonly={readOnly}
+      aria-rowcount={lineRows.length}
+      aria-colcount={periods.length}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onFocus={() => {
+        if (!selection && lineRows.length > 0) select({ row: 0, col: 0 })
+      }}
+      className="max-h-[calc(100svh-12rem)] overflow-auto rounded-lg border bg-background outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+        <thead className="sticky top-0 z-20 bg-muted text-xs text-muted-foreground">
+          {hasBands && (
             <tr>
-              <th className="sticky left-0 z-30 h-10 min-w-56 border-r border-b bg-muted px-2 text-left font-medium">
-                Line Item
+              <th
+                rowSpan={2}
+                className="sticky left-0 z-30 min-w-52 border-r border-b bg-muted px-3 text-left align-bottom font-medium"
+              >
+                <span className="block pb-2">{roleTerm.singular}</span>
               </th>
-              {periods.map((p) => (
-                <th
-                  key={p.start}
-                  scope="col"
-                  className="min-w-16 border-b px-2 py-1 text-right font-medium text-foreground tabular-nums"
-                >
-                  <div>{p.label}</div>
-                  <div className="text-[10px] font-normal text-muted-foreground">
-                    {p.sublabel}
-                  </div>
-                </th>
-              ))}
-              <th className="sticky right-0 z-30 h-10 min-w-20 border-b border-l bg-muted px-2 text-right font-medium">
+              {bandCells}
+              <th
+                rowSpan={2}
+                className="sticky right-0 z-30 min-w-20 border-b border-l bg-muted px-3 pb-2 text-right align-bottom font-medium"
+              >
                 Total
               </th>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              if (row.kind === "phase") {
-                return (
-                  <tr key={`phase-${row.id}`} className="bg-muted/40">
-                    <th
-                      scope="row"
-                      className="sticky left-0 z-10 border-r border-b bg-muted px-2 py-1 text-left font-medium"
-                      style={{ paddingLeft: 8 + row.depth * 16 }}
-                    >
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 rounded hover:underline"
-                        aria-expanded={!row.collapsed}
-                        onClick={() => onToggle(row.id)}
-                      >
-                        {row.collapsed ? (
-                          <ChevronRightIcon className="size-4" />
-                        ) : (
-                          <ChevronDownIcon className="size-4" />
-                        )}
-                        {row.name}
-                      </button>
-                    </th>
-                    {periods.map((p) => (
-                      <td
-                        key={p.start}
-                        className="border-b px-2 py-1 text-right font-medium text-muted-foreground tabular-nums"
-                      >
-                        {formatAmount(periodTotal(p.start, row.lineIds))}
-                      </td>
-                    ))}
-                    <td className="sticky right-0 z-10 border-b border-l bg-muted px-3 py-1 text-right font-medium tabular-nums">
-                      {formatAmount(sumAmounts(row.lineIds.map(lineTotal))) ||
-                        "0"}
-                    </td>
-                  </tr>
-                )
-              }
-              const index = rowIndex.get(row.id)!
-              const line = lineRows[index]!
+          )}
+          <tr>
+            {!hasBands && (
+              <th className="sticky left-0 z-30 h-11 min-w-52 border-r border-b bg-muted px-3 text-left font-medium">
+                {roleTerm.singular}
+              </th>
+            )}
+            {periods.map((p, col) => (
+              <th
+                key={p.start}
+                scope="col"
+                title={p.title}
+                aria-current={col === currentCol ? "date" : undefined}
+                className={cn(
+                  "h-11 min-w-11 border-b px-1 text-center font-medium text-foreground tabular-nums",
+                  col === currentCol &&
+                    "bg-accent text-accent-foreground shadow-[inset_0_-2px_0_0_var(--color-primary)]"
+                )}
+              >
+                <div className="leading-4">{p.label}</div>
+                <div className="text-[11px] leading-4 font-normal text-muted-foreground">
+                  {p.sublabel}
+                </div>
+              </th>
+            ))}
+            {!hasBands && (
+              <th className="sticky right-0 z-30 h-11 min-w-20 border-b border-l bg-muted px-3 text-right font-medium">
+                Total
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            if (row.kind === "phase") {
+              const tint = phaseTints.get(row.id)
+              const count = row.lineIds.length
               return (
-                <tr key={row.id}>
+                <tr key={`phase-${row.id}`} className="bg-muted/50">
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 max-w-72 truncate border-r border-b bg-background px-3 py-1 text-left font-normal"
-                    style={{ paddingLeft: 12 + row.depth * 16 }}
-                    title={line.name}
-                    onMouseDown={(e) => {
-                      // Selects the whole row (Shift extends over rows).
-                      if (e.button !== 0 || periods.length === 0) return
-                      e.preventDefault()
-                      gridRef.current?.focus({ preventScroll: true })
-                      const last = periods.length - 1
-                      if (e.shiftKey && selection) {
-                        select(
-                          { row: selection.anchor.row, col: 0 },
-                          { row: index, col: last }
-                        )
-                      } else {
-                        select(
-                          { row: index, col: 0 },
-                          { row: index, col: last }
-                        )
-                      }
-                    }}
+                    className="sticky left-0 z-10 h-9 border-r border-b bg-muted px-2 text-left font-medium"
+                    style={{ paddingLeft: 6 + row.depth * 16 }}
                   >
-                    {line.name}
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-1.5 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      aria-expanded={!row.collapsed}
+                      onClick={() => onToggle(row.id)}
+                    >
+                      {row.collapsed ? (
+                        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      {tint && (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "size-2.5 shrink-0 rounded-full",
+                            DOT[tint]
+                          )}
+                        />
+                      )}
+                      <span className="truncate">{row.name}</span>
+                      <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">
+                        {count}{" "}
+                        {count === 1 ? roleTerm.singular : roleTerm.plural}
+                      </span>
+                    </button>
                   </th>
-                  {periods.map((p, col) => {
-                    const active =
-                      selection?.focus.row === index &&
-                      selection.focus.col === col
-                    const isEditing =
-                      editing?.pos.row === index && editing.pos.col === col
-                    const showHandle =
-                      !readOnly &&
-                      !editing &&
-                      range !== null &&
-                      range.bottom === index &&
-                      range.right === col
-                    return (
-                      <PlannerCell
-                        key={p.start}
-                        row={index}
-                        col={col}
-                        value={line.values.get(p.start)}
-                        implied={line.implied}
-                        selected={inRange(range, index, col)}
-                        active={active}
-                        fillPreview={
-                          fillRangePreview !== null &&
-                          inRange(fillRangePreview, index, col) &&
-                          !inRange(range, index, col)
-                        }
-                        showHandle={showHandle}
-                        editing={isEditing ? editing : null}
-                        onMouseDown={onCellMouseDown}
-                        onMouseEnter={onCellMouseEnter}
-                        onDoubleClick={startEditing}
-                        onFillHandleDown={onFillHandleDown}
-                        onDraftChange={(text) =>
-                          setEditing((e) => (e ? { ...e, text } : e))
-                        }
-                        onCommit={(fill, move) => {
-                          if (!editing) return
-                          commit(editing, { fill })
-                          gridRef.current?.focus({ preventScroll: true })
-                          if (move) {
-                            select(
-                              movePos(
-                                editing.pos,
-                                move[0],
-                                move[1],
-                                lineRows.length,
-                                periods.length
-                              )
-                            )
-                          }
-                        }}
-                        onCancel={() => {
-                          editDone.current = true
-                          setEditing(null)
-                          gridRef.current?.focus({ preventScroll: true })
-                        }}
-                      />
-                    )
-                  })}
-                  <td className="sticky right-0 z-10 border-b border-l bg-background px-3 py-1 text-right font-medium tabular-nums">
-                    {formatAmount(sumAmounts(line.values.values())) || "0"}
+                  {periods.map((p) => (
+                    <td
+                      key={p.start}
+                      className="border-b px-1 text-center text-xs text-muted-foreground tabular-nums"
+                    >
+                      {formatAmount(periodTotal(p.start, row.lineIds))}
+                    </td>
+                  ))}
+                  <td className="sticky right-0 z-10 border-b border-l bg-muted px-3 text-right font-semibold tabular-nums">
+                    {formatAmount(sumAmounts(row.lineIds.map(lineTotal))) ||
+                      "0"}
                   </td>
                 </tr>
               )
-            })}
-          </tbody>
-          <tfoot className="sticky bottom-0 z-20 bg-background">
-            <tr>
-              <th
-                scope="row"
-                className="sticky left-0 z-30 border-t border-r bg-background px-3 py-2 text-left font-medium"
-              >
-                Total hours
-              </th>
-              {periods.map((p) => (
-                <td
-                  key={p.start}
-                  className="border-t px-2 py-2 text-right font-medium tabular-nums"
+            }
+            const index = rowIndex.get(row.id)!
+            const line = lineRows[index]!
+            return (
+              <tr key={row.id}>
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 max-w-72 border-r border-b bg-background px-3 py-1 text-left font-normal"
+                  style={{ paddingLeft: 12 + row.depth * 16 }}
+                  title={`${line.name}${line.detail ? ` · ${line.detail}` : ""}`}
+                  onMouseDown={(e) => {
+                    // Selects the whole row (Shift extends over rows).
+                    if (e.button !== 0 || periods.length === 0) return
+                    e.preventDefault()
+                    gridRef.current?.focus({ preventScroll: true })
+                    const last = periods.length - 1
+                    if (e.shiftKey && selection) {
+                      select(
+                        { row: selection.anchor.row, col: 0 },
+                        { row: index, col: last }
+                      )
+                    } else {
+                      select({ row: index, col: 0 }, { row: index, col: last })
+                    }
+                  }}
                 >
-                  {formatAmount(periodTotal(p.start))}
+                  <div className="truncate font-medium">{line.name}</div>
+                  {line.detail && (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {line.detail}
+                    </div>
+                  )}
+                </th>
+                {periods.map((p, col) => {
+                  const active =
+                    selection?.focus.row === index &&
+                    selection.focus.col === col
+                  const isEditing =
+                    editing?.pos.row === index && editing.pos.col === col
+                  const showHandle =
+                    !readOnly &&
+                    !editing &&
+                    range !== null &&
+                    range.bottom === index &&
+                    range.right === col
+                  const value = line.values.get(p.start)
+                  const selected = inRange(range, index, col)
+                  return (
+                    <PlannerCell
+                      key={p.start}
+                      row={index}
+                      col={col}
+                      value={value}
+                      heat={heatLevel(value, capacity[col] ?? 0)}
+                      implied={line.implied}
+                      selected={selected}
+                      edges={
+                        selected && range
+                          ? (range.top === index ? 1 : 0) |
+                            (range.right === col ? 2 : 0) |
+                            (range.bottom === index ? 4 : 0) |
+                            (range.left === col ? 8 : 0)
+                          : 0
+                      }
+                      active={active}
+                      current={col === currentCol}
+                      fillPreview={
+                        fillRangePreview !== null &&
+                        inRange(fillRangePreview, index, col) &&
+                        !inRange(range, index, col)
+                      }
+                      showHandle={showHandle}
+                      editing={isEditing ? editing : null}
+                      onMouseDown={onCellMouseDown}
+                      onMouseEnter={onCellMouseEnter}
+                      onDoubleClick={startEditing}
+                      onFillHandleDown={onFillHandleDown}
+                      onDraftChange={(text) =>
+                        setEditing((e) => (e ? { ...e, text } : e))
+                      }
+                      onCommit={(fill, move) => {
+                        if (!editing) return
+                        commit(editing, { fill })
+                        gridRef.current?.focus({ preventScroll: true })
+                        if (move) {
+                          select(
+                            movePos(
+                              editing.pos,
+                              move[0],
+                              move[1],
+                              lineRows.length,
+                              periods.length
+                            )
+                          )
+                        }
+                      }}
+                      onCancel={() => {
+                        editDone.current = true
+                        setEditing(null)
+                        gridRef.current?.focus({ preventScroll: true })
+                      }}
+                    />
+                  )
+                })}
+                <td className="sticky right-0 z-10 border-b border-l bg-background px-3 text-right font-medium tabular-nums">
+                  {formatAmount(sumAmounts(line.values.values())) || "0"}
                 </td>
-              ))}
-              <td className="sticky right-0 z-30 border-t border-l bg-background px-3 py-2 text-right font-semibold tabular-nums">
-                {formatAmount(sumAmounts(allIds.map(lineTotal))) || "0"}
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot className="sticky bottom-0 z-20 bg-muted">
+          <tr>
+            <th
+              scope="row"
+              className="sticky left-0 z-30 h-10 border-t border-r bg-muted px-3 text-left font-medium"
+            >
+              Total hours
+            </th>
+            {periods.map((p) => (
+              <td
+                key={p.start}
+                className="border-t px-1 text-center text-xs font-medium tabular-nums"
+              >
+                {formatAmount(periodTotal(p.start))}
               </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      {hint}
+            ))}
+            <td className="sticky right-0 z-30 border-t border-l bg-muted px-3 text-right font-semibold tabular-nums">
+              {formatAmount(sumAmounts(allIds.map(lineTotal))) || "0"}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   )
+}
+
+/** Phase band fills and dots, by tint (as on the Overview's Phase bar). */
+const TINT: Record<number, string> = {
+  1: "bg-phase-1 text-phase-1-ink",
+  2: "bg-phase-2 text-phase-2-ink",
+  3: "bg-phase-3 text-phase-3-ink",
+  4: "bg-phase-4 text-phase-4-ink",
+  5: "bg-phase-5 text-phase-5-ink",
+}
+const DOT: Record<number, string> = {
+  1: "bg-phase-1-ink",
+  2: "bg-phase-2-ink",
+  3: "bg-phase-3-ink",
+  4: "bg-phase-4-ink",
+  5: "bg-phase-5-ink",
+}
+
+/**
+ * A cell's heat fill by level (`heatLevel`): petrol in opacity steps up to
+ * the period's capacity, warning above it. Text stays `foreground`.
+ */
+const HEAT: Record<number, string> = {
+  0: "",
+  1: "bg-primary/6",
+  2: "bg-primary/12",
+  3: "bg-primary/20",
+  4: "bg-primary/30",
+  5: "bg-warning/35",
+}
+
+/** The selection's outline on the range's outer edges (top, right, bottom, left bits). */
+function edgeShadow(edges: number) {
+  const parts = [
+    edges & 1 && "inset 0 2px 0 0 var(--color-primary)",
+    edges & 2 && "inset -2px 0 0 0 var(--color-primary)",
+    edges & 4 && "inset 0 -2px 0 0 var(--color-primary)",
+    edges & 8 && "inset 2px 0 0 0 var(--color-primary)",
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(", ") : undefined
 }
 
 const PlannerCell = memo(function PlannerCell({
   row,
   col,
   value,
+  heat,
   implied,
   selected,
+  edges,
   active,
+  current,
   fillPreview,
   showHandle,
   editing,
@@ -487,9 +633,15 @@ const PlannerCell = memo(function PlannerCell({
   row: number
   col: number
   value: string | undefined
+  /** 0 … HEAT_LEVELS, see `heatLevel`. */
+  heat: number
   implied: boolean
   selected: boolean
+  /** Which outer edges of the selection this cell is on (bits: top, right, bottom, left). */
+  edges: number
   active: boolean
+  /** In the period holding today. */
+  current: boolean
   fillPreview: boolean
   showHandle: boolean
   editing: Editing | null
@@ -508,12 +660,17 @@ const PlannerCell = memo(function PlannerCell({
       aria-selected={selected}
       data-row={row}
       data-col={col}
+      style={{ boxShadow: edgeShadow(edges) }}
       className={cn(
-        "relative h-8 min-w-16 cursor-cell border-b px-2 text-right tabular-nums",
+        "relative h-11 min-w-11 cursor-cell border-b px-1 text-center tabular-nums",
+        HEAT[heat],
+        current && heat === 0 && "bg-accent/60",
         implied && "text-muted-foreground italic",
-        selected && "bg-primary/10",
+        selected &&
+          !active &&
+          "after:pointer-events-none after:absolute after:inset-0 after:bg-primary/12",
         fillPreview &&
-          "bg-primary/5 outline-1 -outline-offset-1 outline-primary/40 outline-dashed",
+          "outline-1 -outline-offset-2 outline-primary/60 outline-dashed after:pointer-events-none after:absolute after:inset-0 after:bg-primary/6",
         active && "outline-2 -outline-offset-2 outline-primary"
       )}
       onMouseDown={(e) => onMouseDown(e, { row, col })}
@@ -543,7 +700,7 @@ const PlannerCell = memo(function PlannerCell({
               onCancel()
             }
           }}
-          className="absolute inset-0 w-full bg-background px-2 text-right tabular-nums outline-2 -outline-offset-2 outline-primary"
+          className="absolute inset-0 z-10 w-full bg-background px-1 text-center tabular-nums outline-2 -outline-offset-2 outline-primary"
         />
       ) : (
         formatAmount(value)
@@ -553,7 +710,7 @@ const PlannerCell = memo(function PlannerCell({
           aria-hidden
           data-fill-handle
           onMouseDown={onFillHandleDown}
-          className="absolute -right-1 -bottom-1 z-10 size-2.5 cursor-crosshair border border-background bg-primary"
+          className="absolute -right-[5px] -bottom-[5px] z-20 size-2.5 cursor-crosshair rounded-[2px] border-2 border-background bg-primary"
         />
       )}
     </td>

@@ -75,6 +75,7 @@ export function AddItemsSheet({
   onPhaseIdChange,
   pending,
   onAdd,
+  initialTab,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -87,12 +88,18 @@ export function AddItemsSheet({
     input: { phaseId: string | null; items: Picked[] },
     done: () => void
   ) => void
+  /** The tab it opens on (default: the first). */
+  initialTab?: SourceKind
 }) {
   const labels = useLabels()
   const tabs = (["product", "add_on", "resource_role"] as const).filter(
     (term) => labels[term].enabled
   )
-  const [tab, setTab] = useState<SourceKind>(tabs[0] ?? "resource_role")
+  const [tab, setTab] = useState<SourceKind>(
+    initialTab && tabs.includes(initialTab)
+      ? initialTab
+      : (tabs[0] ?? "resource_role")
+  )
   const [selection, setSelection] = useState<Selection>(new Map())
 
   const toggle = (item: Picked, on: boolean) =>

@@ -1,7 +1,8 @@
 /**
- * Pure helpers behind the Resource Planner grid: its period columns, the
- * Allocations a row shows, Phase grouping, and the spreadsheet maths for
- * range selection, fill and drag-fill. No React here, so it is unit-tested
+ * Pure helpers behind the Resource Planner grid: its period columns (labels,
+ * capacity, the current one, the Phase band row), the Allocations a row
+ * shows, Phase grouping, the heat level and presets of a cell, and the
+ * spreadsheet maths for range selection, fill and drag-fill. No React here, so it is unit-tested
  * (`planner.test.ts`).
  */
 import {
@@ -10,6 +11,9 @@ import {
 } from "@workspace/domain/allocations"
 import type { Allocation } from "@workspace/domain/allocations"
 import {
+  countWorkingDays,
+  daysBetween,
+  endOfPeriod,
   periodStartsInRange,
   periodTypeForTimePeriod,
 } from "@workspace/domain/dates"
@@ -20,35 +24,61 @@ import type {
   TimePeriod,
 } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
+import { phaseRollups } from "@workspace/domain/phases"
+import type { RollupLine } from "@workspace/domain/phases"
 
 // ─── Columns ────────────────────────────────────────────────────────────────
 
 export interface PlannerPeriod {
   /** First day of the bucket. */
   start: IsoDate
-  /** Short header text, e.g. "Oct 5", "Oct 2026", "Q4 2026". */
+  /** Last day of the bucket. */
+  end: IsoDate
+  /** Short header text: "W41" (ISO week), "Oct", "Q4". */
   label: string
-  /** Second header line (the year for weeks), or "". */
+  /** Second header line: a week's first day ("10/5"), else the year. */
   sublabel: string
+  /** The period named in full: "W41 · Oct 5", "Oct 2026", "Q4 2026". */
+  title: string
+  /** Monday–Friday days of the bucket inside the Quote dates. */
+  workingDays: number
 }
 
 const MONTH = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" })
 
+/** The ISO 8601 week number of a day (weeks start on Monday). */
+export function isoWeek(day: IsoDate): number {
+  const date = new Date(`${day}T00:00:00Z`)
+  // The Thursday of this week decides the week's year.
+  date.setUTCDate(date.getUTCDate() + 3 - ((date.getUTCDay() + 6) % 7))
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4))
+  return (
+    1 +
+    Math.round(
+      ((date.getTime() - firstThursday.getTime()) / 86_400_000 -
+        3 +
+        ((firstThursday.getUTCDay() + 6) % 7)) /
+        7
+    )
+  )
+}
+
 function periodLabel(type: PeriodType, start: IsoDate) {
   const date = new Date(`${start}T00:00:00Z`)
   const year = date.getUTCFullYear()
+  const month = MONTH.format(date)
   if (type === "week") {
+    const label = `W${isoWeek(start)}`
     return {
-      label: `${MONTH.format(date)} ${date.getUTCDate()}`,
-      sublabel: `${year}`,
+      label,
+      sublabel: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`,
+      title: `${label} · ${month} ${date.getUTCDate()}`,
     }
   }
   if (type === "month")
-    return { label: MONTH.format(date), sublabel: `${year}` }
-  return {
-    label: `Q${Math.floor(date.getUTCMonth() / 3) + 1}`,
-    sublabel: `${year}`,
-  }
+    return { label: month, sublabel: `${year}`, title: `${month} ${year}` }
+  const label = `Q${Math.floor(date.getUTCMonth() / 3) + 1}`
+  return { label, sublabel: `${year}`, title: `${label} ${year}` }
 }
 
 /** The Planner's columns: every bucket of the Time Period that the Quote dates touch. */
@@ -58,10 +88,137 @@ export function plannerPeriods(
   endDate: IsoDate
 ): PlannerPeriod[] {
   const type = periodTypeForTimePeriod(timePeriod)
-  return periodStartsInRange(type, startDate, endDate).map((start) => ({
-    start,
-    ...periodLabel(type, start),
-  }))
+  return periodStartsInRange(type, startDate, endDate).map((start) => {
+    const end = endOfPeriod(type, start)
+    return {
+      start,
+      end,
+      ...periodLabel(type, start),
+      workingDays: countWorkingDays(
+        start < startDate ? startDate : start,
+        end > endDate ? endDate : end
+      ),
+    }
+  })
+}
+
+/** The period containing `today`, or -1 when the Quote dates don't. */
+export function currentPeriodIndex(
+  periods: readonly PlannerPeriod[],
+  today: IsoDate
+): number {
+  return periods.findIndex((p) => p.start <= today && today <= p.end)
+}
+
+/** How a bucket's hours read: "hrs/wk", "hrs/mo", "hrs/qtr". */
+export const PER_PERIOD: Record<PeriodType, string> = {
+  week: "hrs/wk",
+  month: "hrs/mo",
+  quarter: "hrs/qtr",
+}
+
+/** The one-click amounts for a bucket: a full week down to none, scaled. */
+export function bucketPresets(type: PeriodType): number[] {
+  const scale = { week: 1, month: 4, quarter: 12 }[type]
+  return [40, 20, 12, 8, 4, 0].map((hours) => hours * scale)
+}
+
+/** Heat steps of a cell (0 = empty; `HEAT_LEVELS` = over capacity). */
+export const HEAT_LEVELS = 5
+
+/**
+ * How heavy a cell is against its period's capacity (working days × Hours
+ * Per Day): 0 empty, 1–4 by quarters of the capacity, 5 above it (or any
+ * hours in a period without working days).
+ */
+export function heatLevel(
+  amount: string | undefined,
+  capacityHours: number
+): number {
+  const hours = amount ? Number(amount) : 0
+  if (!(hours > 0)) return 0
+  if (!(capacityHours > 0)) return HEAT_LEVELS
+  const ratio = hours / capacityHours
+  if (ratio > 1) return HEAT_LEVELS
+  return Math.max(1, Math.ceil(ratio * 4))
+}
+
+/** A top-level Phase across a run of period columns (the band row). */
+export interface PhaseBand {
+  phaseId: string
+  name: string
+  /** 1 … `PHASE_TINTS`, by top-level order (as on the Overview). */
+  tint: number
+  /** First column (index into the periods). */
+  start: number
+  /** Columns spanned. */
+  span: number
+}
+
+const PHASE_TINT_COUNT = 5
+
+/**
+ * The band row over the period columns: each period goes to the top-level
+ * Phase whose date span (its lines', from `phaseRollups`) overlaps it by
+ * the most days (the earlier Phase on a tie), and neighbouring periods of
+ * one Phase merge into one band. Periods no Phase touches have no band.
+ */
+export function phaseBands(
+  periods: readonly PlannerPeriod[],
+  phases: readonly PlannerPhase[],
+  lines: readonly RollupLine[]
+): PhaseBand[] {
+  const rollups = phaseRollups(phases, lines)
+  const top = phases
+    .filter((p) => p.parentId === null)
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((phase, index) => ({
+      phase,
+      tint: (index % PHASE_TINT_COUNT) + 1,
+      startDate: rollups[phase.id]?.startDate ?? null,
+      endDate: rollups[phase.id]?.endDate ?? null,
+    }))
+    .filter((p) => p.startDate && p.endDate)
+  const bands: PhaseBand[] = []
+  periods.forEach((period, col) => {
+    let best: (typeof top)[number] | undefined
+    let bestDays = 0
+    for (const candidate of top) {
+      const from =
+        candidate.startDate! > period.start
+          ? candidate.startDate!
+          : period.start
+      const to =
+        candidate.endDate! < period.end ? candidate.endDate! : period.end
+      const days = to < from ? 0 : daysBetween(from, to) + 1
+      if (days > bestDays) {
+        best = candidate
+        bestDays = days
+      }
+    }
+    if (!best) return
+    const last = bands.at(-1)
+    if (
+      last &&
+      last.phaseId === best.phase.id &&
+      last.start + last.span === col
+    )
+      last.span++
+    else
+      bands.push({
+        phaseId: best.phase.id,
+        name: best.phase.name,
+        tint: best.tint,
+        start: col,
+        span: 1,
+      })
+  })
+  return bands
+}
+
+/** The band over column `col`, if any. */
+export function bandAt(bands: readonly PhaseBand[], col: number) {
+  return bands.find((b) => col >= b.start && col < b.start + b.span)
 }
 
 // ─── Rows ───────────────────────────────────────────────────────────────────

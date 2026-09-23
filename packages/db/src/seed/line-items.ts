@@ -1,9 +1,16 @@
 import { and, eq } from "drizzle-orm"
 
+import { applyAllocationEdits } from "@workspace/domain/allocations"
+import {
+  addPeriods,
+  periodTypeForTimePeriod,
+  startOfPeriod,
+} from "@workspace/domain/dates"
 import type {
   DiscountKind,
   MilestoneType,
   SourceKind,
+  TimePeriod,
 } from "@workspace/domain/enums"
 import { DEFAULT_MILESTONE_COLOURS } from "@workspace/domain/milestones"
 import { defaultLineItemQuantity } from "@workspace/domain/pricing"
@@ -12,6 +19,7 @@ import type { Db } from "../index"
 import { organizationScope } from "../organization-scope"
 import { recomputeQuoteTotals } from "../quote-totals"
 import {
+  allocations,
   catalogItems,
   lineItems,
   milestones,
@@ -38,6 +46,13 @@ interface SeedLine {
   /** Omitted: the Quote dates. */
   startDate?: string
   endDate?: string
+  /**
+   * A Resource Role line's hours per week, from the week of `startDate` on
+   * (0 leaves a week empty): stored as Allocations, and the quantity and
+   * dates follow from them, as after a Resource Planner edit. The Quote's
+   * Time Period must plan by week.
+   */
+  weekly?: number[]
 }
 
 interface SeedPlan {
@@ -58,7 +73,8 @@ interface SeedPlan {
  * Line Items (and a Quote Discount) for the demo Quotes, by Quote Name, so
  * the editor, the list's totals and the lock have content. Sources come
  * from `seed/catalog.ts`. "Acme Corp – Platform rollout" also has Phases
- * (its lines dated inside them) and Milestones, so the Overview, Timeline
+ * (its lines dated inside them, its Resource Role lines planned week by
+ * week as Allocations) and Milestones, so the Overview, Timeline, Planner
  * and grid have a plan to show.
  */
 export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
@@ -68,18 +84,34 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
       {
         kind: "resource_role",
         source: "Solutions Architect",
-        quantity: "160",
         phase: "Discovery",
         startDate: "2026-10-01",
         endDate: "2026-10-30",
+        weekly: [16, 32, 32, 24, 16],
+      },
+      {
+        kind: "resource_role",
+        source: "Project Manager",
+        phase: "Discovery",
+        startDate: "2026-10-01",
+        endDate: "2026-10-30",
+        weekly: [8, 16, 16, 12, 8],
       },
       {
         kind: "resource_role",
         source: "Solutions Architect",
-        quantity: "160",
         phase: "Design",
         startDate: "2026-11-02",
         endDate: "2026-12-11",
+        weekly: [24, 32, 32, 32, 24, 16],
+      },
+      {
+        kind: "resource_role",
+        source: "UX Designer",
+        phase: "Design",
+        startDate: "2026-11-02",
+        endDate: "2026-12-11",
+        weekly: [20, 32, 36, 36, 24, 12],
       },
       {
         kind: "add_on",
@@ -92,10 +124,26 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
       {
         kind: "resource_role",
         source: "Software Engineer",
-        quantity: "640",
         phase: "Build",
         startDate: "2026-12-14",
         endDate: "2027-02-26",
+        weekly: [40, 32, 16, 40, 40, 40, 40, 40, 40, 36, 24],
+      },
+      {
+        kind: "resource_role",
+        source: "Junior Developer",
+        phase: "Build",
+        startDate: "2026-12-14",
+        endDate: "2027-02-26",
+        weekly: [24, 24, 8, 32, 32, 32, 32, 32, 24, 16, 8],
+      },
+      {
+        kind: "resource_role",
+        source: "Project Manager",
+        phase: "Build",
+        startDate: "2026-12-14",
+        endDate: "2027-02-26",
+        weekly: [8, 8, 4, 8, 8, 8, 8, 8, 8, 8, 12],
       },
       {
         kind: "product",
@@ -105,6 +153,22 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
         phase: "Build",
         startDate: "2026-12-14",
         endDate: "2027-02-26",
+      },
+      {
+        kind: "resource_role",
+        source: "QA Engineer",
+        phase: "Launch",
+        startDate: "2027-03-01",
+        endDate: "2027-03-31",
+        weekly: [24, 32, 32, 24, 8],
+      },
+      {
+        kind: "resource_role",
+        source: "Project Manager",
+        phase: "Launch",
+        startDate: "2027-03-01",
+        endDate: "2027-03-31",
+        weekly: [12, 16, 16, 16, 8],
       },
       {
         kind: "add_on",
@@ -394,13 +458,59 @@ export async function seedLineItems(db: Db, organization: Organization) {
         sequence,
       })
     }
-    await scope.insertMany(lineItems, values)
+    const inserted = await scope.insertMany(lineItems, values)
+    for (const [index, line] of plan.lines.entries()) {
+      if (line.weekly)
+        await seedAllocations(scope, quote, inserted[index]!, line.weekly)
+    }
     await scope.update(quotes, quote.id, {
       discountKind: plan.discount?.kind ?? null,
       discountValue: plan.discount?.value ?? null,
     })
     await recomputeQuoteTotals(scope, quote.id, { updatedById: owner!.id })
   }
+}
+
+/**
+ * Lays `weekly` out as a line's Allocations with the domain's
+ * `applyAllocationEdits` (what `allocation.setRange` runs), then stores
+ * them with the quantity and dates they imply.
+ */
+async function seedAllocations(
+  scope: ReturnType<typeof organizationScope>,
+  quote: { startDate: string; endDate: string; timePeriod: TimePeriod },
+  line: { id: string; startDate: string; endDate: string },
+  weekly: number[]
+) {
+  if (periodTypeForTimePeriod(quote.timePeriod) !== "week") {
+    throw new Error("Seed Allocations: weekly hours need a weekly Quote.")
+  }
+  const first = startOfPeriod("week", line.startDate)
+  const result = applyAllocationEdits({
+    timePeriod: quote.timePeriod,
+    billingUnit: "hour",
+    line: { ...line, allocations: [] },
+    quote,
+    edits: weekly.map((amount, i) => ({
+      periodStart: addPeriods("week", first, i),
+      amount,
+    })),
+  })
+  if (!result.ok) throw new Error(result.errors[0]!.message)
+  await scope.insertMany(
+    allocations,
+    result.allocations.map((a) => ({
+      lineItemId: line.id,
+      periodType: "week" as const,
+      periodStart: a.periodStart,
+      amount: a.amount,
+    }))
+  )
+  await scope.update(lineItems, line.id, {
+    quantity: result.quantity,
+    startDate: result.startDate,
+    endDate: result.endDate,
+  })
 }
 
 async function findSource(db: Db, organizationId: string, line: SeedLine) {

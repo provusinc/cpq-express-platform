@@ -51,7 +51,7 @@ export const SEED_QUOTES: readonly {
     startDate: "2026-10-01",
     endDate: "2027-03-31",
     validUntil: "2026-11-30",
-    timePeriod: "months",
+    timePeriod: "weeks",
   },
   {
     name: "TechStart – Support retainer",

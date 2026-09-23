@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest"
 
 import {
   applyEditsLocally,
+  bandAt,
+  bucketPresets,
+  currentPeriodIndex,
+  heatLevel,
+  isoWeek,
+  phaseBands,
   dragFillEdits,
   dragFillRange,
   fillRange,
@@ -33,17 +39,181 @@ const line = (overrides: Partial<PlannerLine> = {}): PlannerLine => ({
 describe("plannerPeriods", () => {
   it("lists the buckets the Quote dates touch", () => {
     expect(plannerPeriods("months", "2026-10-15", "2026-12-02")).toEqual([
-      { start: "2026-10-01", label: "Oct", sublabel: "2026" },
-      { start: "2026-11-01", label: "Nov", sublabel: "2026" },
-      { start: "2026-12-01", label: "Dec", sublabel: "2026" },
+      {
+        start: "2026-10-01",
+        end: "2026-10-31",
+        label: "Oct",
+        sublabel: "2026",
+        title: "Oct 2026",
+        workingDays: 12,
+      },
+      {
+        start: "2026-11-01",
+        end: "2026-11-30",
+        label: "Nov",
+        sublabel: "2026",
+        title: "Nov 2026",
+        workingDays: 21,
+      },
+      {
+        start: "2026-12-01",
+        end: "2026-12-31",
+        label: "Dec",
+        sublabel: "2026",
+        title: "Dec 2026",
+        workingDays: 2,
+      },
     ])
     expect(
       plannerPeriods("days", "2026-10-01", "2026-10-12").map((p) => p.start)
     ).toEqual(["2026-09-28", "2026-10-05", "2026-10-12"])
-    expect(plannerPeriods("quarters", "2026-11-01", "2027-02-01")).toEqual([
-      { start: "2026-10-01", label: "Q4", sublabel: "2026" },
-      { start: "2027-01-01", label: "Q1", sublabel: "2027" },
+    expect(
+      plannerPeriods("quarters", "2026-11-01", "2027-02-01").map((p) => [
+        p.label,
+        p.sublabel,
+        p.title,
+      ])
+    ).toEqual([
+      ["Q4", "2026", "Q4 2026"],
+      ["Q1", "2027", "Q1 2027"],
     ])
+  })
+
+  it("labels weeks by ISO week with their first day, capacity inside the Quote", () => {
+    expect(plannerPeriods("weeks", "2026-10-01", "2026-10-12")).toEqual([
+      {
+        start: "2026-09-28",
+        end: "2026-10-04",
+        label: "W40",
+        sublabel: "9/28",
+        title: "W40 · Sep 28",
+        workingDays: 2,
+      },
+      {
+        start: "2026-10-05",
+        end: "2026-10-11",
+        label: "W41",
+        sublabel: "10/5",
+        title: "W41 · Oct 5",
+        workingDays: 5,
+      },
+      {
+        start: "2026-10-12",
+        end: "2026-10-18",
+        label: "W42",
+        sublabel: "10/12",
+        title: "W42 · Oct 12",
+        workingDays: 1,
+      },
+    ])
+  })
+})
+
+describe("isoWeek", () => {
+  it.each([
+    ["2026-01-01", 1],
+    ["2026-12-28", 53],
+    ["2027-01-04", 1],
+    ["2021-01-03", 53],
+    ["2024-12-30", 1],
+  ])("%s is week %i", (day, week) => {
+    expect(isoWeek(day)).toBe(week)
+  })
+})
+
+describe("currentPeriodIndex", () => {
+  const periods = plannerPeriods("weeks", "2026-10-01", "2026-10-20")
+  it("finds the period holding today, or -1", () => {
+    expect(currentPeriodIndex(periods, "2026-10-07")).toBe(1)
+    expect(currentPeriodIndex(periods, "2026-10-25")).toBe(3)
+    expect(currentPeriodIndex(periods, "2026-11-02")).toBe(-1)
+  })
+})
+
+describe("bucketPresets", () => {
+  it("scales a week's presets to the bucket", () => {
+    expect(bucketPresets("week")).toEqual([40, 20, 12, 8, 4, 0])
+    expect(bucketPresets("month")).toEqual([160, 80, 48, 32, 16, 0])
+    expect(bucketPresets("quarter")).toEqual([480, 240, 144, 96, 48, 0])
+  })
+})
+
+describe("heatLevel", () => {
+  it.each([
+    [undefined, 40, 0],
+    ["0", 40, 0],
+    ["1", 40, 1],
+    ["10", 40, 1],
+    ["10.5", 40, 2],
+    ["20", 40, 2],
+    ["30", 40, 3],
+    ["32", 40, 4],
+    ["40", 40, 4],
+    ["40.5", 40, 5],
+    ["8", 0, 5],
+  ])("%s of %i hours is level %i", (amount, capacity, level) => {
+    expect(heatLevel(amount, capacity)).toBe(level)
+  })
+})
+
+describe("phaseBands", () => {
+  const periods = plannerPeriods("weeks", "2026-10-05", "2026-11-15")
+  const phase = (
+    id: string,
+    sequence: number,
+    parentId: string | null = null
+  ) => ({
+    id,
+    parentId,
+    name: id,
+    sequence,
+  })
+  const dated = (
+    id: string,
+    phaseId: string,
+    startDate: string,
+    endDate: string
+  ) => ({
+    id,
+    phaseId,
+    startDate,
+    endDate,
+    lineTotal: "0",
+    unitCost: "0",
+    quantity: "0",
+  })
+
+  it("spans each top-level Phase over the periods it covers most", () => {
+    const bands = phaseBands(
+      periods,
+      [phase("Design", 1), phase("Discovery", 0), phase("Sub", 0, "Design")],
+      [
+        dated("a", "Discovery", "2026-10-05", "2026-10-23"),
+        // A sub-Phase's lines count for its top-level Phase.
+        dated("b", "Sub", "2026-10-24", "2026-11-06"),
+      ]
+    )
+    expect(bands).toEqual([
+      { phaseId: "Discovery", name: "Discovery", tint: 1, start: 0, span: 3 },
+      { phaseId: "Design", name: "Design", tint: 2, start: 3, span: 2 },
+    ])
+  })
+
+  it("leaves periods without a Phase out, and skips undated Phases", () => {
+    const bands = phaseBands(
+      periods,
+      [phase("A", 0), phase("B", 1), phase("C", 2)],
+      [
+        dated("a", "A", "2026-10-05", "2026-10-09"),
+        dated("c", "C", "2026-11-09", "2026-11-13"),
+      ]
+    )
+    expect(bands).toEqual([
+      { phaseId: "A", name: "A", tint: 1, start: 0, span: 1 },
+      { phaseId: "C", name: "C", tint: 3, start: 5, span: 1 },
+    ])
+    expect(bandAt(bands, 5)?.phaseId).toBe("C")
+    expect(bandAt(bands, 2)).toBeUndefined()
   })
 })
 

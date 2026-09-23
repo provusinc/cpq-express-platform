@@ -384,8 +384,14 @@ function Inspector({
           </div>
         )}
         <div className="flex items-baseline justify-between border-t pt-3 text-sm">
-          <span className="text-muted-foreground">Quote Total</span>
-          <span className="font-semibold tabular-nums">
+          <span id="planner-quote-total" className="text-muted-foreground">
+            Quote Total
+          </span>
+          <span
+            role="status"
+            aria-labelledby="planner-quote-total"
+            className="font-semibold tabular-nums"
+          >
             {formatMoney(quoteTotal, currency)}
           </span>
         </div>

@@ -181,6 +181,7 @@ Import from `@workspace/domain/<area>`; the root `@workspace/domain` re-exports 
 - Object storage: every test caller gets a fresh `createMemoryStorage()`; pass your own `storage` to `createTestCaller`/`organizationCaller` to inspect `storage.objects`, and simulate a browser's presigned upload with `storage.put(key, bytes, { contentType })`.
 - Email: every test caller gets an in-memory mailer. To read what was sent, pass `mailer: createMemoryMailer()` to `createTestCaller`/`organizationCaller` and inspect `mailer.outbox`; `tokenFromEmail(message)` extracts the Invitation token from the accept link. `createInvitation(db, { organization, email?, role?, expiresAt?, acceptedAt?, revokedAt? })` inserts one directly and returns `{ invitation, token }`.
 - Domain tests are table-driven Vitest in `packages/domain/src/**/*.test.ts`.
+- **E2E smoke** (`e2e/`, `pnpm test:e2e`, not in `pnpm test`): three Playwright flows (sign-in, Quote + Planner autosave, approval → Mark as Sent → Document download) asserting wiring only, never business rules. No baseURL: use `acmeUrl()`/`appUrl()` from `e2e/support/urls.ts`; sign in with `signIn(page, email, callbackUrl?)` from `support/auth.ts` (real magic link read from Mailpit's API); `globalSetup` runs `pnpm db:seed`. Locate by role and accessible name; if a control has none, add an aria label to the app rather than a test id.
 
 ## Before committing
 

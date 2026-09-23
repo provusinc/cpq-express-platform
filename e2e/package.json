@@ -1,0 +1,22 @@
+{
+  "name": "e2e",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "with-env": "dotenv -e ../.env --",
+    "test:e2e": "pnpm with-env playwright test",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^20.19.41",
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^9.39.4",
+    "typescript": "^5.9.3"
+  }
+}

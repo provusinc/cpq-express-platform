@@ -16,7 +16,8 @@
     "db:migrate:test": "pnpm --filter @workspace/db db:migrate:test",
     "db:seed": "pnpm --filter @workspace/db db:seed",
     "db:push": "pnpm --filter @workspace/db db:push",
-    "db:studio": "pnpm --filter @workspace/db db:studio"
+    "db:studio": "pnpm --filter @workspace/db db:studio",
+    "test:e2e": "pnpm --filter e2e test:e2e"
   },
   "devDependencies": {
     "@workspace/eslint-config": "workspace:*",

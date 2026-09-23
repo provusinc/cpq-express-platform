@@ -205,12 +205,22 @@ A Quote Status in which an Approver or the customer has ruled on the Quote: Appr
 Rejected, Customer Approved, or Customer Rejected. Its margin is no longer actionable.
 
 **Key Insight**:
-A card above the Quote list counting the Organization's Quotes that need attention —
+A card at the top of the Dashboard counting the Organization's Quotes that need attention —
 pending approval (with value and oldest wait since the latest Submission), the high-value
 pipeline (Draft + Pending Approval), low margin (under 15 % with a positive Total, not
-Decided), this month's activity, and rejected — coloured info, warning, or critical by its
-severity. Choosing one filters the list to those Quotes.
-_Avoid_: dashboard, KPI, alert
+Decided), expiring soon (Valid Until within 14 days on a Draft, Pending Approval, Approved
+or Pending Customer Approval Quote), this month's activity, and rejected — coloured info,
+warning, or critical by its severity. Choosing one opens the Quote list filtered to those
+Quotes.
+_Avoid_: KPI, alert
+
+**Dashboard**:
+An Organization's landing page: the Key Insights, then the pipeline by status, Quotes
+created per month, the win rate (Customer Approved out of every customer outcome), the
+approval queue, low-margin and expiring Quotes, the top Accounts by open value (Quotes
+without a customer outcome yet) and the viewer's recent Quotes. Read-only; every tile leads
+into the Quote list or the record.
+_Avoid_: home, overview, analytics
 
 ### Administration
 

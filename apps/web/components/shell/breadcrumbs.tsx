@@ -13,6 +13,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@workspace/ui/components/breadcrumb"
+import { Separator } from "@workspace/ui/components/separator"
 
 import { QUOTE_TABS } from "@/components/quotes/tabs"
 import { SETTINGS_TABS } from "@/components/settings/tabs"
@@ -60,38 +61,46 @@ export function Breadcrumbs() {
     if (tab) crumbs.push({ href: tab.href, label: tab.label })
   }
 
-  if (crumbs.length === 0) return null
+  // A top-level page already names itself in its title; breadcrumbs only
+  // help once there is somewhere to go back to.
+  if (crumbs.length < 2) return null
   return (
-    <Breadcrumb className="min-w-0">
-      <BreadcrumbList className="flex-nowrap">
-        {crumbs.map((crumb, i) => {
-          const last = i === crumbs.length - 1
-          return (
-            <Fragment key={crumb.href}>
-              {i > 0 && (
-                <BreadcrumbSeparator className="text-muted-foreground/50">
-                  /
-                </BreadcrumbSeparator>
-              )}
-              <BreadcrumbItem className={last ? "min-w-0" : "shrink-0"}>
-                {last ? (
-                  <BreadcrumbPage className="truncate font-medium">
-                    {crumb.label}
-                  </BreadcrumbPage>
-                ) : (
-                  <BreadcrumbLink
-                    render={<Link href={crumb.href} />}
-                    className="max-w-56 truncate"
-                  >
-                    {crumb.label}
-                  </BreadcrumbLink>
+    <>
+      <Separator
+        orientation="vertical"
+        className="mr-1 data-vertical:h-4 data-vertical:self-center"
+      />
+      <Breadcrumb className="min-w-0">
+        <BreadcrumbList className="flex-nowrap">
+          {crumbs.map((crumb, i) => {
+            const last = i === crumbs.length - 1
+            return (
+              <Fragment key={crumb.href}>
+                {i > 0 && (
+                  <BreadcrumbSeparator className="text-muted-foreground/50">
+                    /
+                  </BreadcrumbSeparator>
                 )}
-              </BreadcrumbItem>
-            </Fragment>
-          )
-        })}
-      </BreadcrumbList>
-    </Breadcrumb>
+                <BreadcrumbItem className={last ? "min-w-0" : "shrink-0"}>
+                  {last ? (
+                    <BreadcrumbPage className="truncate font-medium">
+                      {crumb.label}
+                    </BreadcrumbPage>
+                  ) : (
+                    <BreadcrumbLink
+                      render={<Link href={crumb.href} />}
+                      className="max-w-56 truncate"
+                    >
+                      {crumb.label}
+                    </BreadcrumbLink>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            )
+          })}
+        </BreadcrumbList>
+      </Breadcrumb>
+    </>
   )
 }
 

@@ -1,11 +1,7 @@
 "use client"
 
-import { PlusIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 
-import { Button } from "@workspace/ui/components/button"
-import { Separator } from "@workspace/ui/components/separator"
 import {
   SidebarInset,
   SidebarProvider,
@@ -28,7 +24,8 @@ import type { ShellOrganization, ShellUser } from "./types"
 /**
  * The Organization app shell: the inset sidebar (Organization switcher,
  * grouped navigation, user menu) and the page panel with its sticky header
- * (breadcrumbs from the route, the ⌘K command menu, New Quote, theme).
+ * (breadcrumbs on nested pages, the ⌘K command menu — which also starts a
+ * New Quote — and the theme toggle).
  * Rendered by the Organization layout once the Membership check has passed.
  */
 export function AppShell({
@@ -49,7 +46,6 @@ export function AppShell({
   pickerUrl: string
   signedOutUrl: string
 }) {
-  const pathname = usePathname()
   const [creating, setCreating] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
   const shell = useMemo(
@@ -62,8 +58,6 @@ export function AppShell({
     }),
     [sidebar.organization, isAdmin, isApprover]
   )
-  // The Quote list has its own New Quote button.
-  const onQuoteList = pathname === "/quotes"
 
   return (
     <LabelsProvider labels={labels}>
@@ -74,23 +68,9 @@ export function AppShell({
             <SidebarInset className="min-w-0 md:peer-data-[variant=inset]:shadow-panel">
               <header className="sticky top-0 z-30 flex h-13 shrink-0 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur-md supports-backdrop-filter:bg-background/70 md:rounded-t-xl md:px-4">
                 <SidebarTrigger className="-ml-1 text-muted-foreground" />
-                <Separator
-                  orientation="vertical"
-                  className="mr-1 data-vertical:h-4 data-vertical:self-center"
-                />
                 <Breadcrumbs />
                 <div className="ml-auto flex shrink-0 items-center gap-1.5">
                   <CommandMenuTrigger className="w-9 justify-center px-0 lg:w-56 lg:justify-start lg:pl-2.5 xl:w-64" />
-                  {!onQuoteList && (
-                    <Button
-                      size="sm"
-                      className="hidden lg:inline-flex"
-                      onClick={() => setCreating(true)}
-                    >
-                      <PlusIcon data-icon="inline-start" />
-                      New Quote
-                    </Button>
-                  )}
                   <ThemeToggle />
                 </div>
               </header>

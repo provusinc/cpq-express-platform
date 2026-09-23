@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@trpc/server": "^11.19.0",
+    "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/domain": "workspace:*",
     "superjson": "^2.2.6",

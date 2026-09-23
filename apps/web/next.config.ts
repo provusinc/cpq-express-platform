@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   ],
   // Organization subdomains ({slug}.localtest.me) must reach the dev server.
   allowedDevOrigins: [env.ROOT_DOMAIN, `*.${env.ROOT_DOMAIN}`],
+  // The root AGENTS.md already carries Next's agent rules; don't let
+  // `next dev` write a second copy into apps/web.
+  agentRules: false,
 }
 
 export default nextConfig

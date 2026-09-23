@@ -9,17 +9,26 @@
  *       expect((await caller.health.check()).status).toBe("ok")
  *     }))
  *
+ * Signed-in callers: `createTestCaller(db, { user: await createUser(db) })`
+ * injects the session directly; `{ headers: { cookie } }` with a cookie from
+ * `createSession` goes through the real cookie lookup instead.
+ *
  * Code under test may call `db.transaction()` freely: inside the harness that
  * becomes a SAVEPOINT, so commit/rollback semantics are preserved.
  *
- * Fixtures (users, Organizations, Memberships) and session-aware callers are
- * added here by the auth/tenancy tickets.
+ * Fixtures live in `./fixtures` (re-exported here): `createUser`,
+ * `createSession`. Organizations and Memberships join in #4.
  */
 import { createDb, TransactionRollbackError } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
+import type { SessionUser } from "@workspace/auth"
+
 import { createCaller } from "../root"
 import { createTRPCContext } from "../trpc"
+import { toSessionUser } from "./fixtures"
+
+export { createSession, createUser, toSessionUser } from "./fixtures"
 
 let testDb: ReturnType<typeof createDb> | undefined
 
@@ -56,13 +65,23 @@ export async function withTestDb<T>(fn: (db: Db) => Promise<T>): Promise<T> {
 }
 
 export interface TestCallerOptions {
-  /** Request headers, e.g. `{ host: "acme.localtest.me" }`. */
+  /**
+   * Call as this signed-in User (a row from `createUser`, or a SessionUser).
+   * Omit for an anonymous caller — unless `headers` carries a session cookie.
+   */
+  user?: SessionUser
+  /** Request headers, e.g. `{ host: "acme.localtest.me", cookie }`. */
   headers?: HeadersInit
 }
 
 /** A server-side caller bound to `db` (normally the one from `withTestDb`). */
 export function createTestCaller(db: Db, opts: TestCallerOptions = {}) {
-  return createCaller(
-    createTRPCContext({ db, headers: new Headers(opts.headers) })
-  )
+  const headers = new Headers(opts.headers)
+  const session = opts.user
+    ? {
+        user: toSessionUser(opts.user),
+        expires: new Date(Date.now() + 60 * 60 * 1000),
+      }
+    : undefined
+  return createCaller(() => createTRPCContext({ db, headers, session }))
 }

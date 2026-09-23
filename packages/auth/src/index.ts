@@ -1,7 +1,20 @@
 /**
- * @workspace/auth — Auth.js configuration, Drizzle adapter and session helpers.
+ * @workspace/auth — framework-free session helpers. Safe to import from any
+ * server package (e.g. the tRPC context); pulls in no Next.js code.
  *
- * Placeholder: lands in #3 (Google, Microsoft Entra ID and email magic-link
- * providers; database sessions; cookie scoped to `.<ROOT_DOMAIN>`).
+ * - `@workspace/auth/next`  — the Auth.js instance (route handlers, `auth()`),
+ *                             providers and cookie config. App only.
+ * - `@workspace/auth/react` — client `signIn` / `signOut`.
+ * - `@workspace/auth/env`   — auth env schema (merged into the app's env).
  */
-export {}
+export {
+  getSessionByToken,
+  getSessionFromHeaders,
+  readSessionToken,
+  SECURE_SESSION_COOKIE,
+  SESSION_COOKIE,
+  sessionCookieName,
+} from "./session"
+export type { Session, SessionUser } from "./session"
+export { isAllowedRedirect, resolveRedirect } from "./redirect"
+export type { RedirectPolicy } from "./redirect"

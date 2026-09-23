@@ -19,6 +19,7 @@
     "@trpc/server": "^11.19.0",
     "@trpc/tanstack-react-query": "^11.19.0",
     "@workspace/api": "workspace:*",
+    "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/ui": "workspace:*",
     "lucide-react": "^1.47.0",
@@ -37,8 +38,8 @@
     "@types/react-dom": "^19",
     "@workspace/eslint-config": "workspace:^",
     "@workspace/typescript-config": "workspace:*",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
-    "typescript": "^5",
-    "dotenv-cli": "^11.0.0"
+    "typescript": "^5"
   }
 }

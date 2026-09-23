@@ -10,6 +10,7 @@ type Params = Promise<{ slug: string; quoteId: string }>
 export default async function QuoteSummaryPage({ params }: { params: Params }) {
   const { quoteId } = await params
   prefetch(trpc.quote.approvalHistory.queryOptions({ id: quoteId }))
+  prefetch(trpc.quote.costChangeLog.queryOptions({ id: quoteId }))
   return (
     <HydrateClient>
       <SummaryTab quoteId={quoteId} />

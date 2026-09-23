@@ -41,6 +41,7 @@ export type {
   MilestoneView,
   PhaseView,
 } from "./line-items"
+export type { CostPropagationResult } from "./cost-propagation"
 export { LINE_ITEM_BATCH_MAX } from "./routers/line-item"
 export { ALLOCATION_BATCH_MAX } from "./routers/allocation"
 export { PHASE_NAME_MAX } from "./routers/phase"

@@ -40,6 +40,7 @@ import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 import { useLabels } from "@/components/shell/labels"
+import { savedMessage } from "./cost-propagation"
 
 type CatalogItem = RouterOutputs["catalogItem"]["byId"]
 
@@ -104,9 +105,9 @@ export function CatalogItemDialog({
 
   const labels = useLabels()
   const label = labels[kind]
-  const onSuccess = async () => {
+  const onSuccess = async (data: object) => {
     toast.success(
-      item ? `${label.singular} saved.` : `${label.singular} created.`
+      item ? savedMessage(label.singular, data) : `${label.singular} created.`
     )
     await queryClient.invalidateQueries(trpc.catalogItem.pathFilter())
     onOpenChange(false)

@@ -13,12 +13,14 @@ import {
   schema,
   sql,
 } from "@workspace/db"
+import { Decimal } from "@workspace/domain/money"
 
 import {
   importRowsInput,
   parseResourceRoleRow,
   summarize,
 } from "../catalog-import"
+import { propagateCost } from "../cost-propagation"
 import { inUseError, notFound } from "../errors"
 import { lineItemSourceUsage } from "../line-items"
 import {
@@ -55,7 +57,6 @@ const roleFields = {
   locationState: optionalText(100),
   locationCity: optionalText(100),
 }
-
 
 export const resourceRoleRouter = createTRPCRouter({
   /**
@@ -154,13 +155,18 @@ export const resourceRoleRouter = createTRPCRouter({
             input.search
               ? or(
                   ilike(resourceRoles.name, containsPattern(input.search)),
-                  ilike(resourceRoles.description, containsPattern(input.search))
+                  ilike(
+                    resourceRoles.description,
+                    containsPattern(input.search)
+                  )
                 )
               : undefined,
             input.country
               ? eq(resourceRoles.locationCountry, input.country)
               : undefined,
-            input.state ? eq(resourceRoles.locationState, input.state) : undefined,
+            input.state
+              ? eq(resourceRoles.locationState, input.state)
+              : undefined,
             input.city ? eq(resourceRoles.locationCity, input.city) : undefined
           )
         )
@@ -217,20 +223,35 @@ export const resourceRoleRouter = createTRPCRouter({
     ),
 
   /**
-   * Edits a Resource Role; omitted fields keep their value. Rate changes
-   * never touch existing Quotes' prices. Admins only.
+   * Edits a Resource Role; omitted fields keep their value. Bill rate
+   * changes never touch existing Quotes. A cost rate change is propagated
+   * to Draft Quotes in the same transaction (Cost Propagation: Base Rate
+   * and unit cost of their lines, repriced, logged); `costPropagation`
+   * counts what it rewrote. Admins only.
    */
   update: manageProcedure
     .input(z.object({ id: z.uuid(), ...z.object(roleFields).partial().shape }))
-    .mutation(async ({ ctx, input: { id, ...changes } }) => {
-      const role = await ctx.scope.update(
-        resourceRoles,
-        id,
-        stripUndefined(changes)
-      )
-      if (!role) throw notFound("Resource Role")
-      return role
-    }),
+    .mutation(({ ctx, input: { id, ...changes } }) =>
+      ctx.scope.transaction(async (scope) => {
+        const before = await scope.findById(resourceRoles, id)
+        if (!before) throw notFound("Resource Role")
+        const role = (await scope.update(
+          resourceRoles,
+          id,
+          stripUndefined(changes)
+        ))!
+        const costPropagation = new Decimal(before.costRate).equals(
+          role.costRate
+        )
+          ? { quotes: 0, lineItems: 0 }
+          : await propagateCost(scope, {
+              source: { kind: "resource_role", id: role.id, name: role.name },
+              cost: role.costRate,
+              actorId: ctx.user.id,
+            })
+        return { ...role, costPropagation }
+      })
+    ),
 
   /** Stops the role being added to Quotes; existing Quotes keep it. Admins only. */
   deactivate: manageProcedure

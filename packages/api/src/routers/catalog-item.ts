@@ -14,12 +14,14 @@ import {
   sql,
 } from "@workspace/db"
 import { BILLING_UNITS, CATALOG_ITEM_KINDS } from "@workspace/domain/enums"
+import { Decimal } from "@workspace/domain/money"
 
 import {
   importRowsInput,
   parseCatalogItemRow,
   summarize,
 } from "../catalog-import"
+import { propagateCost } from "../cost-propagation"
 import { inUseError, notFound } from "../errors"
 import { lineItemSourceUsage } from "../line-items"
 import {
@@ -240,8 +242,10 @@ export const catalogItemRouter = createTRPCRouter({
 
   /**
    * Edits a Catalog Item; omitted fields keep their value. Price changes
-   * never touch existing Quotes. (Cost Propagation to Draft Quotes arrives
-   * with #24.) Admins only.
+   * never touch existing Quotes. A cost change is propagated to Draft
+   * Quotes in the same transaction (Cost Propagation: Base Rate and unit
+   * cost of their lines, repriced, logged); `costPropagation` counts what
+   * it rewrote. Admins only.
    */
   update: manageProcedure
     .input(
@@ -260,7 +264,19 @@ export const catalogItemRouter = createTRPCRouter({
             message: PRODUCT_BILLED_EACH,
           })
         }
-        return (await scope.update(catalogItems, id, stripUndefined(changes)))!
+        const updated = (await scope.update(
+          catalogItems,
+          id,
+          stripUndefined(changes)
+        ))!
+        const costPropagation = new Decimal(item.cost).equals(updated.cost)
+          ? { quotes: 0, lineItems: 0 }
+          : await propagateCost(scope, {
+              source: { kind: item.kind, id: item.id, name: updated.name },
+              cost: updated.cost,
+              actorId: ctx.user.id,
+            })
+        return { ...updated, costPropagation }
       })
     ),
 

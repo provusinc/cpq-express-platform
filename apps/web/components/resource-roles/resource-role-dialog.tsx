@@ -32,6 +32,7 @@ import { useLabels } from "@/components/shell/labels"
 import { isMoneyInput, trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
+import { savedMessage } from "@/components/catalog/cost-propagation"
 
 type ResourceRole = RouterOutputs["resourceRole"]["byId"]
 
@@ -85,9 +86,9 @@ export function ResourceRoleDialog({
     if (open) form.reset(toValues(role))
   }, [open, role, form])
 
-  const onSuccess = async () => {
+  const onSuccess = async (data: object) => {
     toast.success(
-      role ? `${label.singular} saved.` : `${label.singular} created.`
+      role ? savedMessage(label.singular, data) : `${label.singular} created.`
     )
     await queryClient.invalidateQueries(trpc.resourceRole.pathFilter())
     onOpenChange(false)

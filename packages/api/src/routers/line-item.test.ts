@@ -277,7 +277,7 @@ describe("lineItem.add", () => {
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
 
-  it("keeps the Base Rate when the catalog price changes later", () =>
+  it("keeps the Base Rate price when the catalog price changes later (cost follows on a Draft)", () =>
     withTestDb(async (db) => {
       const { caller, quote, product } = await setup(db)
       const line = await addProduct(caller("member"), quote.id, product.id)
@@ -289,7 +289,7 @@ describe("lineItem.add", () => {
       const editor = await caller("member").quote.editor({ id: quote.id })
       expect(editor.lines.find((l) => l.id === line.id)).toMatchObject({
         basePrice: "100.0000",
-        baseCost: "60.0000",
+        baseCost: "1.0000", // Cost Propagation (#24)
         unitPrice: "100.0000",
         lineTotal: "100.0000",
       })

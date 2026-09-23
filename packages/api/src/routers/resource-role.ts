@@ -1,0 +1,220 @@
+import { z } from "zod"
+
+import {
+  asc,
+  count,
+  eq,
+  gte,
+  ilike,
+  isNotNull,
+  lte,
+  or,
+  schema,
+  sql,
+} from "@workspace/db"
+
+import { inUseError, notFound } from "../errors"
+import {
+  activeFilter,
+  containsPattern,
+  money,
+  optionalText,
+  paging,
+  requiredText,
+  stripUndefined,
+} from "../inputs"
+import {
+  createTRPCRouter,
+  organizationProcedure,
+  permittedProcedure,
+} from "../trpc"
+
+const { resourceRoles } = schema
+
+/** Only Admins manage Resource Roles (domain policy "catalog.manage"). */
+const manageProcedure = permittedProcedure("catalog.manage")
+
+const roleFields = {
+  name: requiredText(200),
+  description: optionalText(2000),
+  billRate: money,
+  costRate: money,
+  locationCountry: optionalText(100),
+  locationState: optionalText(100),
+  locationCity: optionalText(100),
+}
+
+/**
+ * What references each Resource Role and would block its deletion. Line
+ * Items don't exist yet; the Line Items ticket counts them here (and
+ * references Resource Roles with ON DELETE RESTRICT).
+ */
+async function resourceRoleUsage(roleId: string) {
+  void roleId // nothing references it yet
+  return { counts: {} as { quotes?: number; lineItems?: number }, examples: [] }
+}
+
+export const resourceRoleRouter = createTRPCRouter({
+  /**
+   * One page of Resource Roles, by name. Filters: `search` (name,
+   * description), `status`, bill-rate range (inclusive) and location
+   * (country, state, city — each an exact match).
+   */
+  list: organizationProcedure
+    .input(
+      z.object({
+        search: z.string().trim().max(200).optional(),
+        status: activeFilter,
+        minRate: money.optional(),
+        maxRate: money.optional(),
+        country: z.string().optional(),
+        state: z.string().optional(),
+        city: z.string().optional(),
+        ...paging,
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const where = ctx.scope.where(
+        resourceRoles,
+        input.search
+          ? or(
+              ilike(resourceRoles.name, containsPattern(input.search)),
+              ilike(resourceRoles.description, containsPattern(input.search))
+            )
+          : undefined,
+        input.status === "all"
+          ? undefined
+          : eq(resourceRoles.active, input.status === "active"),
+        input.minRate ? gte(resourceRoles.billRate, input.minRate) : undefined,
+        input.maxRate ? lte(resourceRoles.billRate, input.maxRate) : undefined,
+        input.country
+          ? eq(resourceRoles.locationCountry, input.country)
+          : undefined,
+        input.state ? eq(resourceRoles.locationState, input.state) : undefined,
+        input.city ? eq(resourceRoles.locationCity, input.city) : undefined
+      )
+      const [rows, [total]] = await Promise.all([
+        ctx.scope.db
+          .select()
+          .from(resourceRoles)
+          .where(where)
+          .orderBy(
+            asc(sql`lower(${resourceRoles.name})`),
+            asc(resourceRoles.id)
+          )
+          .limit(input.pageSize)
+          .offset((input.page - 1) * input.pageSize),
+        ctx.scope.db.select({ n: count() }).from(resourceRoles).where(where),
+      ])
+      return {
+        rows,
+        total: total?.n ?? 0,
+        page: input.page,
+        pageSize: input.pageSize,
+      }
+    }),
+
+  /** The distinct locations in use, for the location filters. */
+  locations: organizationProcedure.query(async ({ ctx }) => {
+    return ctx.scope.db
+      .selectDistinct({
+        country: resourceRoles.locationCountry,
+        state: resourceRoles.locationState,
+        city: resourceRoles.locationCity,
+      })
+      .from(resourceRoles)
+      .where(
+        ctx.scope.where(
+          resourceRoles,
+          or(
+            isNotNull(resourceRoles.locationCountry),
+            isNotNull(resourceRoles.locationState),
+            isNotNull(resourceRoles.locationCity)
+          )
+        )
+      )
+      .orderBy(
+        asc(resourceRoles.locationCountry),
+        asc(resourceRoles.locationState),
+        asc(resourceRoles.locationCity)
+      )
+  }),
+
+  /** One Resource Role. */
+  byId: organizationProcedure
+    .input(z.object({ id: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const role = await ctx.scope.findById(resourceRoles, input.id)
+      if (!role) throw notFound("Resource Role")
+      return role
+    }),
+
+  /** Creates a Resource Role (always billed hourly). Admins only. */
+  create: manageProcedure
+    .input(z.object({ ...roleFields, active: z.boolean().default(true) }))
+    .mutation(({ ctx, input }) =>
+      ctx.scope.insert(resourceRoles, stripUndefined(input))
+    ),
+
+  /**
+   * Edits a Resource Role; omitted fields keep their value. Rate changes
+   * never touch existing Quotes' prices. Admins only.
+   */
+  update: manageProcedure
+    .input(z.object({ id: z.uuid(), ...z.object(roleFields).partial().shape }))
+    .mutation(async ({ ctx, input: { id, ...changes } }) => {
+      const role = await ctx.scope.update(
+        resourceRoles,
+        id,
+        stripUndefined(changes)
+      )
+      if (!role) throw notFound("Resource Role")
+      return role
+    }),
+
+  /** Stops the role being added to Quotes; existing Quotes keep it. Admins only. */
+  deactivate: manageProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const role = await ctx.scope.update(resourceRoles, input.id, {
+        active: false,
+      })
+      if (!role) throw notFound("Resource Role")
+      return role
+    }),
+
+  /** Makes a deactivated role available again. Admins only. */
+  reactivate: manageProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const role = await ctx.scope.update(resourceRoles, input.id, {
+        active: true,
+      })
+      if (!role) throw notFound("Resource Role")
+      return role
+    }),
+
+  /**
+   * Deletes a Resource Role that has never been used. CONFLICT
+   * (`data.inUse`, suggesting deactivation) once Quotes use it. Admins only.
+   */
+  delete: manageProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(({ ctx, input }) =>
+      ctx.scope.transaction(async (scope) => {
+        const role = await scope.findById(resourceRoles, input.id)
+        if (!role) throw notFound("Resource Role")
+        const usage = await resourceRoleUsage(role.id)
+        if (Object.values(usage.counts).some((n) => n > 0)) {
+          throw inUseError({
+            entity: "resource_role",
+            name: role.name,
+            ...usage,
+            suggestion: "deactivate",
+          })
+        }
+        await scope.delete(resourceRoles, role.id)
+        return { id: role.id }
+      })
+    ),
+})

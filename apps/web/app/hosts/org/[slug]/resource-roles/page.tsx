@@ -1,14 +1,24 @@
 import type { Metadata } from "next"
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page"
+import { INITIAL_RESOURCE_ROLE_LIST_INPUT } from "@/components/resource-roles/list-input"
+import { ResourceRolesList } from "@/components/resource-roles/resource-roles-list"
+import { organizationAccess } from "@/lib/organization-access"
+import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
 export const metadata: Metadata = { title: "Resource Roles · CPQ Express" }
 
-export default function ResourceRolesPage() {
+export default async function ResourceRolesPage() {
+  const access = await organizationAccess("catalog.manage")
+  prefetch(
+    trpc.resourceRole.list.queryOptions(INITIAL_RESOURCE_ROLE_LIST_INPUT)
+  )
+  prefetch(trpc.resourceRole.locations.queryOptions())
   return (
-    <PlaceholderPage
-      title="Resource Roles"
-      description="Kinds of labour you sell by the hour."
-    />
+    <HydrateClient>
+      <ResourceRolesList
+        canManage={access.allowed}
+        currencyCode={access.currencyCode}
+      />
+    </HydrateClient>
   )
 }

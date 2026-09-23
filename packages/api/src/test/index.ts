@@ -18,7 +18,8 @@
  *
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
  * `createSession`, `createOrganization`, `createMembership`, `createMember`,
- * and per area `createAccount`, `createContact`, ….
+ * and per area `createAccount`, `createContact`, `createCatalogItem`,
+ * `createResourceRole`.
  *
  * Email: every caller gets an in-memory `mailer` (default: a fresh one per
  * caller). Pass your own to read what was sent, and `tokenFromEmail` to pull
@@ -47,11 +48,13 @@ import { toSessionUser } from "./fixtures"
 export { createMemoryMailer }
 export {
   createAccount,
+  createCatalogItem,
   createContact,
   createInvitation,
   createMember,
   createMembership,
   createOrganization,
+  createResourceRole,
   createSession,
   createUser,
   toSessionUser,

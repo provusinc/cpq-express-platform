@@ -1,11 +1,13 @@
 import { accountRouter } from "./routers/account"
 import { authRouter } from "./routers/auth"
+import { catalogItemRouter } from "./routers/catalog-item"
 import { contactRouter } from "./routers/contact"
 import { healthRouter } from "./routers/health"
 import { invitationRouter } from "./routers/invitation"
 import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
 import { platformRouter } from "./routers/platform"
+import { resourceRoleRouter } from "./routers/resource-role"
 import { userRouter } from "./routers/user"
 import { createCallerFactory, createTRPCRouter } from "./trpc"
 
@@ -16,12 +18,14 @@ import { createCallerFactory, createTRPCRouter } from "./trpc"
 export const appRouter = createTRPCRouter({
   account: accountRouter,
   auth: authRouter,
+  catalogItem: catalogItemRouter,
   contact: contactRouter,
   health: healthRouter,
   invitation: invitationRouter,
   membership: membershipRouter,
   organization: organizationRouter,
   platform: platformRouter,
+  resourceRole: resourceRoleRouter,
   user: userRouter,
 })
 

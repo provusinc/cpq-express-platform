@@ -200,3 +200,52 @@ export async function createContact(
     .returning()
   return contact!
 }
+
+type NewCatalogItem = Omit<
+  typeof schema.catalogItems.$inferInsert,
+  "organizationId"
+>
+
+/** Inserts a Catalog Item (a Product at 100 / 60 unless overridden). */
+export async function createCatalogItem(
+  db: Db,
+  organization: { id: string },
+  overrides: Partial<NewCatalogItem> = {}
+) {
+  const [item] = await db
+    .insert(schema.catalogItems)
+    .values({
+      kind: "product",
+      name: `Item ${uuidv7().slice(-12)}`,
+      price: "100",
+      cost: "60",
+      ...overrides,
+      organizationId: organization.id,
+    })
+    .returning()
+  return item!
+}
+
+type NewResourceRole = Omit<
+  typeof schema.resourceRoles.$inferInsert,
+  "organizationId"
+>
+
+/** Inserts a Resource Role (150 / 100 an hour unless overridden). */
+export async function createResourceRole(
+  db: Db,
+  organization: { id: string },
+  overrides: Partial<NewResourceRole> = {}
+) {
+  const [role] = await db
+    .insert(schema.resourceRoles)
+    .values({
+      name: `Role ${uuidv7().slice(-12)}`,
+      billRate: "150",
+      costRate: "100",
+      ...overrides,
+      organizationId: organization.id,
+    })
+    .returning()
+  return role!
+}

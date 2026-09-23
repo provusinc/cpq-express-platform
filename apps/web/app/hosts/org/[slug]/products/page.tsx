@@ -1,14 +1,25 @@
 import type { Metadata } from "next"
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page"
+import { CatalogItemsList } from "@/components/catalog/catalog-items-list"
+import { initialCatalogItemListInput } from "@/components/catalog/list-input"
+import { organizationAccess } from "@/lib/organization-access"
+import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
 export const metadata: Metadata = { title: "Products · CPQ Express" }
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const access = await organizationAccess("catalog.manage")
+  prefetch(
+    trpc.catalogItem.list.queryOptions(initialCatalogItemListInput("product"))
+  )
+  prefetch(trpc.catalogItem.tags.queryOptions({ kind: "product" }))
   return (
-    <PlaceholderPage
-      title="Products"
-      description="Catalog Items sold per unit."
-    />
+    <HydrateClient>
+      <CatalogItemsList
+        kind="product"
+        canManage={access.allowed}
+        currencyCode={access.currencyCode}
+      />
+    </HydrateClient>
   )
 }

@@ -33,7 +33,7 @@ import {
 } from "@workspace/ui/components/tooltip"
 
 import { useQuoteCommand } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
+import { useQuote } from "@/components/quotes/use-quote"
 import { useTRPC } from "@/trpc/react"
 
 /** The longest comment the API accepts (APPROVAL_COMMENT_MAX). */
@@ -141,73 +141,114 @@ const TRANSITIONS: Record<
 /** Refusals about the Quote itself, which the Owner can fix (shown on a disabled Submit). */
 const FIXABLE_SUBMIT_REASONS = ["total_missing", "total_zero", "total_negative"]
 
+/** Which transition leads when several are open: the next step forward. */
+const PRIMARY_ORDER: Transition[] = [
+  "approve",
+  "submit",
+  "markSent",
+  "customerApproved",
+  "recall",
+]
+
+export interface LifecycleAction {
+  transition: Transition
+  label: string
+  icon: LucideIcon
+  /** A step back or a refusal (Reject, Recall, Customer rejected). */
+  destructive: boolean
+}
+
 /**
- * The approval actions in the Quote header, per the viewer's `permissions`:
- * Submit (the Owner; disabled with the reason when the Total isn't
- * positive), Approve / Reject (Approvers, never on their own Quote) and
- * Recall (the Owner or an Admin while Pending Approval), Mark as Sent (the
- * Owner or an Admin while Approved; captures a Quote Document) and the
- * customer outcome (the Owner or an Admin while Pending Customer
- * Approval). Each opens a dialog with an optional comment and runs its
- * command.
+ * The Quote's lifecycle actions for the viewer, per `quote.permissions`:
+ * Submit (the Owner; blocked with the reason when the Total isn't
+ * positive), Approve / Reject (Approvers, never on their own Quote), Recall
+ * (the Owner or an Admin while Pending Approval), Mark as Sent (the Owner or
+ * an Admin while Approved; captures a Quote Document) and the customer
+ * outcome (the Owner or an Admin while Pending Customer Approval). The next
+ * step forward is `primary` (the header's one primary button), the rest are
+ * `secondary` (its "…" menu). `start(transition)` opens that transition's
+ * dialog (an optional comment, then the command); render `dialog`.
  */
-export function ApprovalActions({ quoteId }: { quoteId: string }) {
+export function useLifecycleActions(quoteId: string) {
   const quote = useQuote(quoteId)
   const [open, setOpen] = useState<Transition | null>(null)
   const { permissions } = quote
   const submitDenial = permissions.submitDenial
 
-  const shown: Transition[] = []
-  if (permissions.canRecall) shown.push("recall")
-  if (permissions.canReject) shown.push("reject")
-  if (permissions.canApprove) shown.push("approve")
-  if (permissions.canSubmit) shown.push("submit")
+  const shown = new Set<Transition>()
+  if (permissions.canApprove) shown.add("approve")
+  if (permissions.canSubmit) shown.add("submit")
+  if (permissions.canMarkSent) shown.add("markSent")
   if (permissions.canRecordCustomerOutcome) {
-    shown.push("customerRejected", "customerApproved")
+    shown.add("customerApproved").add("customerRejected")
   }
-  if (permissions.canMarkSent) shown.push("markSent")
+  if (permissions.canReject) shown.add("reject")
+  if (permissions.canRecall) shown.add("recall")
 
+  const action = (transition: Transition): LifecycleAction => ({
+    transition,
+    label: TRANSITIONS[transition].label,
+    icon: TRANSITIONS[transition].icon,
+    destructive: TRANSITIONS[transition].variant !== "default",
+  })
+  const lead = PRIMARY_ORDER.find((t) => shown.has(t))
   const blockedSubmit =
     !permissions.canSubmit &&
     submitDenial &&
     FIXABLE_SUBMIT_REASONS.includes(submitDenial.reason)
+      ? { ...action("submit"), reason: submitDenial.message }
+      : null
 
-  if (shown.length === 0 && !blockedSubmit) return null
+  return {
+    primary: lead ? action(lead) : null,
+    blockedSubmit: lead ? null : blockedSubmit,
+    secondary: [...shown].filter((t) => t !== lead).map(action),
+    start: setOpen,
+    dialog: open && (
+      <TransitionDialog
+        quoteId={quoteId}
+        transition={open}
+        onOpenChange={(next) => !next && setOpen(null)}
+      />
+    ),
+  }
+}
 
+/**
+ * The header's one primary button: the next lifecycle step (outlined when
+ * it is a step back, like Recall), or Submit disabled with the reason the
+ * Owner can fix. Nothing when neither applies.
+ */
+export function LifecyclePrimaryButton({
+  actions,
+}: {
+  actions: ReturnType<typeof useLifecycleActions>
+}) {
+  const { primary, blockedSubmit } = actions
+  if (primary) {
+    const Icon = primary.icon
+    return (
+      <Button
+        variant={primary.destructive ? "outline" : "default"}
+        onClick={() => actions.start(primary.transition)}
+      >
+        <Icon data-icon="inline-start" />
+        {primary.label}
+      </Button>
+    )
+  }
+  if (!blockedSubmit) return null
+  const Icon = blockedSubmit.icon
   return (
-    <div className="flex items-center gap-2">
-      {shown.map((transition) => {
-        const { label, icon: Icon, variant } = TRANSITIONS[transition]
-        return (
-          <Button
-            key={transition}
-            variant={variant === "destructive" ? "outline" : variant}
-            onClick={() => setOpen(transition)}
-          >
-            <Icon />
-            {label}
-          </Button>
-        )
-      })}
-      {blockedSubmit && (
-        <Tooltip>
-          <TooltipTrigger render={<span tabIndex={0} />}>
-            <Button disabled>
-              <SendIcon />
-              {TRANSITIONS.submit.label}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{submitDenial.message}</TooltipContent>
-        </Tooltip>
-      )}
-      {open && (
-        <TransitionDialog
-          quoteId={quoteId}
-          transition={open}
-          onOpenChange={(next) => !next && setOpen(null)}
-        />
-      )}
-    </div>
+    <Tooltip>
+      <TooltipTrigger render={<span tabIndex={0} />}>
+        <Button disabled>
+          <Icon data-icon="inline-start" />
+          {blockedSubmit.label}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{blockedSubmit.reason}</TooltipContent>
+    </Tooltip>
   )
 }
 

@@ -5,13 +5,6 @@ import type { RouterOutputs } from "@workspace/api"
 import { ArrowRightIcon, HistoryIcon } from "lucide-react"
 import { createContext, useContext } from "react"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
 import { QUOTE_POLL_MS } from "@/components/quotes/autosave"
@@ -24,6 +17,8 @@ import {
 import { useLabels } from "@/components/shell/labels"
 import { formatDateTime } from "@/lib/format"
 import { formatMoney } from "@/lib/money"
+
+import { OverviewCard } from "./overview-card"
 import { useTRPC } from "@/trpc/react"
 
 type CostChange = RouterOutputs["quote"]["costChangeLog"]["entries"][number]
@@ -103,7 +98,7 @@ const columns: DataTableColumns<CostChange> = [
  * The Quote's cost change log (`quote.costChangeLog`): each Line Item whose
  * Base Rate cost Cost Propagation rewrote while the Quote was a Draft, with
  * the source, old → new cost, who and when — why the margins moved. The
- * Summary tab prefetches it.
+ * Overview tab prefetches it.
  */
 export function CostChangeLog({ quoteId }: { quoteId: string }) {
   const trpc = useTRPC()
@@ -112,15 +107,15 @@ export function CostChangeLog({ quoteId }: { quoteId: string }) {
     refetchInterval: QUOTE_POLL_MS,
   }).data
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Cost changes</CardTitle>
-        <CardDescription>
-          Catalog cost changes applied to this Quote while it was a Draft.
-          Prices never change.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <OverviewCard
+      title="Cost changes"
+      description="Catalog cost changes applied while a Draft; prices never change"
+    >
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No costs have changed since the lines were added.
+        </p>
+      ) : (
         <CurrencyContext value={currencyCode}>
           <LocalTableRoot columns={columns} data={entries} sortable>
             <ListTable
@@ -133,7 +128,7 @@ export function CostChangeLog({ quoteId }: { quoteId: string }) {
             />
           </LocalTableRoot>
         </CurrencyContext>
-      </CardContent>
-    </Card>
+      )}
+    </OverviewCard>
   )
 }

@@ -1,43 +1,45 @@
 "use client"
 
-import { useSuspenseQuery } from "@tanstack/react-query"
 import { CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
 
-import type { RouterOutputs } from "@workspace/api"
 import { QUOTE_STATUS_LABELS } from "@workspace/domain/enums"
+import { Decimal } from "@workspace/domain/money"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@workspace/ui/components/alert"
+import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar"
 import { Badge } from "@workspace/ui/components/badge"
 import { cn } from "@workspace/ui/lib/utils"
 
+import {
+  compactHours,
+  initials,
+  marginTone,
+  quoteDuration,
+} from "@/lib/figures"
 import { formatDate } from "@/lib/format"
+import { trimMoney, wholeMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
-import { QUOTE_POLL_MS, QuoteSaveIndicator, useQuoteCommand } from "./autosave"
+import { useQuoteCommand } from "./autosave"
 import { InlineText } from "./inline-text"
 import { QuoteHeaderActions } from "./quote-actions"
+import { WithQuoteFigures } from "./quote-figures"
+import type { QuoteFigures } from "./quote-figures"
 import { QuoteDatesEditor, TimePeriodControl } from "./quote-schedule"
 import { QuoteStatusBadge } from "./quote-status-badge"
-
-type Quote = RouterOutputs["quote"]["byId"]
+import { useQuote } from "./use-quote"
+import type { Quote } from "./use-quote"
 
 /**
- * The open Quote: `quote.byId`, refetched on window focus and every 30 s.
- * Every editor component reads the Quote through this.
+ * The metrics row's id (a stable element: the figures inside re-render once
+ * hydrated): the tab bar shows a compact Total once it scrolls away.
  */
-export function useQuote(quoteId: string) {
-  const trpc = useTRPC()
-  return useSuspenseQuery({
-    ...trpc.quote.byId.queryOptions({ id: quoteId }),
-    refetchOnWindowFocus: true,
-    refetchInterval: QUOTE_POLL_MS,
-  }).data
-}
+export const QUOTE_METRICS_ID = "quote-metrics"
 
 /**
  * The header commands (`quote.rename`, `quote.setDescription`), each saving
@@ -90,33 +92,31 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
 }
 
 /**
- * The Quote editor's header: status and Name (edited in place), the
- * Description, the actions at the top right (`actions`: approval actions,
- * #19, before Clone and the menu with Delete, `QuoteHeaderActions`), and a
- * spec row with Account, Owner, the Quote dates (`QuoteDatesEditor`:
- * shift/clamp with an impact preview), Valid Until and Time Period
- * (`TimePeriodControl`: warns, then discards all Allocations). A read-only
- * notice explains when the viewer can't edit.
+ * The Quote editor's header: the Account's monogram, the Name and
+ * Description (edited in place), a meta line (status, Account, Owner,
+ * Valid Until), then the metrics row — Total, Margin %, Effort (with the
+ * Time Period) and Duration (with the Quote dates editor) — with the
+ * actions at its right (`QuoteHeaderActions`). A read-only notice explains
+ * when the viewer can't edit. Every figure appears once: the tab bar only
+ * repeats Total and Margin once this row has scrolled away.
  */
-export function QuoteHeader({
-  quoteId,
-  actions,
-}: {
-  quoteId: string
-  actions?: React.ReactNode
-}) {
+export function QuoteHeader({ quoteId }: { quoteId: string }) {
   const quote = useQuote(quoteId)
   const { rename, setDescription } = useHeaderCommands(quoteId)
   const canEdit = quote.permissions.canEdit
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="flex min-w-0 flex-1 basis-96 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <QuoteStatusBadge status={quote.status} className="shrink-0" />
-            <QuoteSaveIndicator quoteId={quoteId} />
-          </div>
+    <header className="flex flex-col gap-6 pt-1">
+      <div className="flex items-start gap-4">
+        <Avatar
+          className="mt-0.5 size-14 rounded-xl after:rounded-xl max-sm:hidden"
+          aria-hidden
+        >
+          <AvatarFallback className="rounded-xl bg-accent text-lg font-semibold tracking-wide text-accent-foreground">
+            {initials(quote.account.name)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="-ml-2">
             <InlineText
               label="Name"
@@ -128,7 +128,8 @@ export function QuoteHeader({
               onSave={(name) => name && rename.mutate({ id: quote.id, name })}
             />
           </div>
-          <div className="-mt-0.5 -ml-2 max-w-[80ch]">
+          <MetaLine quote={quote} />
+          <div className="-ml-2 max-w-[80ch]">
             <InlineText
               label="Description"
               value={quote.description}
@@ -143,88 +144,209 @@ export function QuoteHeader({
             />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {actions}
-          <QuoteHeaderActions
-            quote={quote}
-            canDelete={quote.permissions.canDelete}
-          />
+      </div>
+      <div
+        id={QUOTE_METRICS_ID}
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border-t pt-5"
+      >
+        <WithQuoteFigures quoteId={quoteId}>
+          {(figures) => (
+            <QuoteMetrics quote={quote} figures={figures} canEdit={canEdit} />
+          )}
+        </WithQuoteFigures>
+        <div className="ml-auto">
+          <QuoteHeaderActions quote={quote} />
         </div>
       </div>
-      <dl className="grid grid-cols-2 overflow-hidden rounded-lg border bg-muted/40 text-sm sm:grid-cols-3 xl:flex xl:flex-wrap">
-        <Meta label="Account" className="xl:min-w-56">
-          <Link
-            href={`/accounts/${quote.account.id}`}
-            className="truncate font-medium underline-offset-4 hover:underline"
-          >
-            {quote.account.name}
-          </Link>
-          {quote.account.archived && (
-            <Badge variant="secondary" className="ml-2">
-              Archived
-            </Badge>
-          )}
-        </Meta>
-        <Meta label="Owner">
-          <span className="truncate">
-            {quote.owner.name ?? quote.owner.email}
-          </span>
-          {!quote.owner.isMember && (
-            <span className="ml-1 text-muted-foreground">
-              (no longer a member)
-            </span>
-          )}
-        </Meta>
-        <Meta label="Dates" className="xl:min-w-60">
-          <QuoteDatesEditor quote={quote} disabled={!canEdit} />
-        </Meta>
-        <Meta label="Valid Until">
-          {quote.validUntil ? (
-            <span
-              className={
-                quote.validUntilPassed
-                  ? "inline-flex items-center gap-1 font-medium text-danger-ink"
-                  : undefined
-              }
-            >
-              {quote.validUntilPassed && (
-                <CalendarX2Icon className="size-3.5" aria-hidden />
-              )}
-              {formatDate(quote.validUntil)}
-              {quote.validUntilPassed && " (passed)"}
-            </span>
-          ) : (
-            "—"
-          )}
-        </Meta>
-        <Meta label="Time period">
-          <TimePeriodControl quote={quote} disabled={!canEdit} />
-        </Meta>
-      </dl>
       <ReadOnlyNotice quote={quote} />
+    </header>
+  )
+}
+
+/** Status · Account · Owner · Valid Until, one quiet line under the Name. */
+function MetaLine({ quote }: { quote: Quote }) {
+  const owner = quote.owner.name ?? quote.owner.email
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
+      <QuoteStatusBadge status={quote.status} className="shrink-0" />
+      <Dot />
+      <Link
+        href={`/accounts/${quote.account.id}`}
+        className="font-medium text-foreground underline-offset-4 hover:underline"
+      >
+        {quote.account.name}
+      </Link>
+      {quote.account.archived && <Badge variant="secondary">Archived</Badge>}
+      <Dot />
+      <span>
+        Owner <span className="text-foreground">{owner}</span>
+        {!quote.owner.isMember && " (no longer a member)"}
+      </span>
+      <Dot />
+      {quote.validUntil ? (
+        <span
+          className={cn(
+            quote.validUntilPassed &&
+              "inline-flex items-center gap-1 font-medium text-danger-ink"
+          )}
+        >
+          {quote.validUntilPassed && (
+            <CalendarX2Icon className="size-3.5" aria-hidden />
+          )}
+          Valid Until{" "}
+          <span className={cn(!quote.validUntilPassed && "text-foreground")}>
+            {formatDate(quote.validUntil)}
+          </span>
+          {quote.validUntilPassed && " (passed)"}
+        </span>
+      ) : (
+        <span>No Valid Until</span>
+      )}
     </div>
   )
 }
 
-/** One cell of the spec row: a small label over its value. */
-function Meta({
+function Dot() {
+  return (
+    <span aria-hidden className="text-muted-foreground/50">
+      ·
+    </span>
+  )
+}
+
+const TONE_INK = {
+  success: "text-success-ink",
+  warning: "text-warning-ink",
+  danger: "text-danger-ink",
+  neutral: "",
+} as const
+
+/**
+ * The headline figures, divided by hairlines: Total (and the Quote
+ * Discount it is after), Margin % (success at or above the low-margin line,
+ * warning below it, danger negative; the amount under it), Effort in hours
+ * (with the Time Period it is planned in) and Duration in weeks (with the
+ * Quote dates, which open the dates editor).
+ */
+function QuoteMetrics({
+  quote,
+  figures,
+  canEdit,
+}: {
+  quote: Quote
+  figures: QuoteFigures
+  canEdit: boolean
+}) {
+  const currency = figures.currencyCode
+  const tone = marginTone(figures.total, figures.marginPct)
+  const duration = quoteDuration(quote.startDate, quote.endDate)
+  const hasDiscount = !new Decimal(figures.discountAmount).isZero()
+  return (
+    <dl
+      aria-label="Quote figures"
+      className="grid grid-cols-2 gap-y-4 lg:flex lg:flex-wrap"
+    >
+      <Metric
+        label="Total"
+        sub={
+          hasDiscount
+            ? figures.discountKind === "percent" && figures.discountValue
+              ? `−${trimMoney(figures.discountValue)}% Quote Discount`
+              : `−${wholeMoney(figures.discountAmount, currency)} Quote Discount`
+            : "No Quote Discount"
+        }
+      >
+        {wholeMoney(figures.total, currency)}
+      </Metric>
+      <Metric
+        label="Margin"
+        sub={`${wholeMoney(figures.margin, currency)} on ${wholeMoney(figures.cost, currency)} cost`}
+      >
+        <span className={TONE_INK[tone]}>
+          {new Decimal(figures.marginPct).toFixed(1)}
+          <Unit>%</Unit>
+        </span>
+      </Metric>
+      <Metric
+        label="Effort"
+        sub={
+          <span className="inline-flex items-center gap-1">
+            Planned in
+            <TimePeriodControl
+              quote={quote}
+              disabled={!canEdit}
+              className="h-5 text-xs text-foreground"
+            />
+          </span>
+        }
+      >
+        {compactHours(figures.effortHours)}
+        <Unit>h</Unit>
+      </Metric>
+      <Metric
+        label="Duration"
+        sub={
+          <QuoteDatesEditor
+            quote={quote}
+            disabled={!canEdit}
+            className="text-xs text-foreground"
+          />
+        }
+      >
+        {duration.value}
+        <Unit>{duration.unit}</Unit>
+      </Metric>
+    </dl>
+  )
+}
+
+function Metric({
   label,
-  className,
+  sub,
   children,
 }: {
   label: string
-  className?: string
+  sub: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <div
-      className={cn(
-        "-mt-px -ml-px flex min-w-0 flex-col gap-0.5 border-t border-l px-3.5 py-2 xl:flex-1",
-        className
-      )}
-    >
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex min-h-7 min-w-0 items-center">{children}</dd>
+    <div className="flex min-w-0 flex-col gap-1.5 pr-6 even:border-l even:pl-6 lg:border-l lg:pl-6 lg:first:border-l-0 lg:first:pl-0 xl:pr-7 xl:pl-7 xl:first:pl-0">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="figure text-[1.875rem] leading-none font-semibold">
+        {children}
+      </dd>
+      <dd className="flex min-h-5 items-center text-xs whitespace-nowrap text-muted-foreground">
+        {sub}
+      </dd>
     </div>
+  )
+}
+
+function Unit({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="ml-0.5 font-sans text-base font-medium text-muted-foreground">
+      {children}
+    </span>
+  )
+}
+
+/** Total and Margin % in one line: the tab bar's reminder once the metrics scroll away. */
+export function CompactQuoteFigures({ figures }: { figures: QuoteFigures }) {
+  const tone = marginTone(figures.total, figures.marginPct)
+  return (
+    <dl className="flex items-baseline gap-4 text-sm whitespace-nowrap">
+      <div className="flex items-baseline gap-1.5">
+        <dt className="text-xs text-muted-foreground">Margin</dt>
+        <dd className={cn("figure font-medium", TONE_INK[tone])}>
+          {new Decimal(figures.marginPct).toFixed(1)}%
+        </dd>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <dt className="text-xs text-muted-foreground">Total</dt>
+        <dd className="figure text-base font-semibold">
+          {wholeMoney(figures.total, figures.currencyCode)}
+        </dd>
+      </div>
+    </dl>
   )
 }

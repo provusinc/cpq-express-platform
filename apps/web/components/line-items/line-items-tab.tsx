@@ -24,7 +24,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 
 import { useQuoteEditor } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
+import { useQuote } from "@/components/quotes/use-quote"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   Empty,

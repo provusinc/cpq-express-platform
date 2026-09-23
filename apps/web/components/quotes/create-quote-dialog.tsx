@@ -152,7 +152,7 @@ export function CreateQuoteDialog({
         toast.success(`Quote “${quote.name}” created.`)
         await queryClient.invalidateQueries(trpc.quote.pathFilter())
         onOpenChange(false)
-        router.push(`/quotes/${quote.id}`)
+        router.push(`/quotes/${quote.id}/line-items`)
       },
       onError: (error) => {
         const fields = fieldErrors(error)

@@ -17,7 +17,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { useQuoteEditor } from "@/components/quotes/autosave"
 import type { EditorMilestone } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
+import { useQuote } from "@/components/quotes/use-quote"
 import {
   ColumnTitle,
   ListTable,

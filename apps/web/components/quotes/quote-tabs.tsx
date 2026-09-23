@@ -2,21 +2,31 @@
 
 import Link from "next/link"
 import { useSelectedLayoutSegment } from "next/navigation"
+import { useEffect, useState } from "react"
 
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 
-import { QuoteLedger } from "./quote-ledger"
+import { QuoteSaveIndicator } from "./autosave"
+import { CompactQuoteFigures, QUOTE_METRICS_ID } from "./quote-header"
+import { WithQuoteFigures } from "./quote-figures"
 import { QUOTE_TABS } from "./tabs"
+import { useQuote } from "./use-quote"
 
-const INDEX = "line-items"
+const INDEX = "overview"
+/** The shell header's height (`h-13`) plus this bar's (`h-12`). */
+const STUCK_OFFSET_PX = 52 + 48
 
 /**
  * The Quote editor's sticky bar, just under the shell header: the tab bar
- * (one link per tab route, the current one underlined) and the ledger with
- * the Quote's money, so Total and Margin stay in view on every tab.
+ * (one link per tab route, the current one underlined) and, at its right,
+ * the save state. Once the header's metrics row has scrolled under it,
+ * Total and Margin % join it, so they stay in view on every tab without
+ * ever showing twice.
  */
 export function QuoteTabs({ quoteId }: { quoteId: string }) {
   const segment = useSelectedLayoutSegment() ?? INDEX
+  const metricsHidden = useMetricsHidden()
+  const canEdit = useQuote(quoteId).permissions.canEdit
   return (
     <div className="sticky top-13 z-20 -mx-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b bg-background/90 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/75 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
       <Tabs value={segment} className="-mb-px max-w-full min-w-0">
@@ -38,7 +48,37 @@ export function QuoteTabs({ quoteId }: { quoteId: string }) {
           ))}
         </TabsList>
       </Tabs>
-      <QuoteLedger quoteId={quoteId} className="ml-auto py-1.5" />
+      <div className="ml-auto flex items-center gap-5 self-center">
+        <QuoteSaveIndicator
+          quoteId={quoteId}
+          idle={canEdit ? "Edits save automatically" : undefined}
+        />
+        {metricsHidden && (
+          <WithQuoteFigures quoteId={quoteId}>
+            {(figures) => <CompactQuoteFigures figures={figures} />}
+          </WithQuoteFigures>
+        )}
+      </div>
     </div>
   )
+}
+
+/** Whether the header's metrics row has scrolled up under the sticky bars. */
+function useMetricsHidden() {
+  const [hidden, setHidden] = useState(false)
+  useEffect(() => {
+    const metrics = document.getElementById(QUOTE_METRICS_ID)
+    if (!metrics) return
+    const observer = new IntersectionObserver(
+      ([entry]) =>
+        setHidden(
+          !entry!.isIntersecting &&
+            entry!.boundingClientRect.top < STUCK_OFFSET_PX
+        ),
+      { rootMargin: `-${STUCK_OFFSET_PX}px 0px 0px 0px` }
+    )
+    observer.observe(metrics)
+    return () => observer.disconnect()
+  }, [])
+  return hidden
 }

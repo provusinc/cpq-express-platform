@@ -41,7 +41,7 @@ const columns: DataTableColumns<AwaitingRow> = [
     // One line; the submit comment is the Name's tooltip.
     cell: ({ row }) => (
       <Link
-        href={`/quotes/${row.original.id}/summary`}
+        href={`/quotes/${row.original.id}`}
         title={row.original.submitComment ?? undefined}
         className="block max-w-72 truncate font-medium hover:underline"
       >

@@ -1,20 +1,13 @@
-import { SummaryTab } from "@/components/summary/summary-tab"
-import { HydrateClient, prefetch, trpc } from "@/trpc/server"
+import { permanentRedirect } from "next/navigation"
 
 type Params = Promise<{ slug: string; quoteId: string }>
 
-/**
- * The Quote editor's Summary tab. The layout has already checked the
- * Quote exists.
- */
-export default async function QuoteSummaryPage({ params }: { params: Params }) {
+/** The Summary tab folded into the Overview (the index route). */
+export default async function QuoteSummaryRedirect({
+  params,
+}: {
+  params: Params
+}) {
   const { quoteId } = await params
-  prefetch(trpc.quote.summary.queryOptions({ id: quoteId }))
-  prefetch(trpc.quote.approvalHistory.queryOptions({ id: quoteId }))
-  prefetch(trpc.quote.costChangeLog.queryOptions({ id: quoteId }))
-  return (
-    <HydrateClient>
-      <SummaryTab quoteId={quoteId} />
-    </HydrateClient>
-  )
+  permanentRedirect(`/quotes/${quoteId}`)
 }

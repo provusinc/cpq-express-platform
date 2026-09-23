@@ -17,22 +17,12 @@ import type { RouterOutputs } from "@workspace/api"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog"
-import { Field, FieldLabel } from "@workspace/ui/components/field"
-import {
   RowMenuItem,
   RowMenuSeparator,
   useDataTableRow,
 } from "@workspace/ui/components/niko-table/components/data-table-row-menu"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 import { Skeleton } from "@workspace/ui/components/skeleton"
-import { Textarea } from "@workspace/ui/components/textarea"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
@@ -49,6 +39,8 @@ import {
 import { formatDate } from "@/lib/format"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
+
+import { GenerateDocumentDialog } from "./generate-document-dialog"
 
 type QuoteDocumentItem = RouterOutputs["quoteDocument"]["list"][number]
 
@@ -87,22 +79,8 @@ export function DocumentsTab({ quoteId }: { quoteId: string }) {
   })
   const documents = useQuery(trpc.quoteDocument.list.queryOptions({ quoteId }))
   const [generating, setGenerating] = useState(false)
-  const [notes, setNotes] = useState("")
   const [deleting, setDeleting] = useState<QuoteDocumentItem | null>(null)
 
-  const generate = useMutation(
-    trpc.quoteDocument.generate.mutationOptions({
-      onSuccess: async (document) => {
-        toast.success(`Version ${document.version} generated`)
-        setGenerating(false)
-        setNotes("")
-        await queryClient.invalidateQueries({
-          queryKey: trpc.quoteDocument.list.queryKey({ quoteId }),
-        })
-      },
-      onError: (error) => toast.error(errorMessage(error)),
-    })
-  )
   const remove = useMutation(
     trpc.quoteDocument.delete.mutationOptions({
       onSuccess: async () => {
@@ -177,45 +155,11 @@ export function DocumentsTab({ quoteId }: { quoteId: string }) {
         </DocumentActionsContext>
       </section>
 
-      <Dialog
+      <GenerateDocumentDialog
+        quoteId={quoteId}
         open={generating}
-        onOpenChange={(open) => !generate.isPending && setGenerating(open)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Generate a Quote Document</DialogTitle>
-            <DialogDescription>
-              Renders the Quote as it is now and keeps it as the next version,
-              with the settings it used. It can&apos;t be changed later.
-            </DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor="document-notes">Notes (optional)</FieldLabel>
-            <Textarea
-              id="document-notes"
-              value={notes}
-              maxLength={1000}
-              rows={3}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={generate.isPending}
-              onClick={() => setGenerating(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={generate.isPending}
-              onClick={() => generate.mutate({ quoteId, notes })}
-            >
-              {generate.isPending ? "Generating…" : "Generate"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setGenerating}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

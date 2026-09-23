@@ -26,7 +26,7 @@
  *   Every command on one Quote shares the mutation-key prefix
  *   `quoteCommandKey(quoteId)`, which is what the indicator counts.
  * - `<QuoteSaveIndicator quoteId />` shows "Saving…" while any command on
- *   the Quote is in flight and "Saved" after one succeeded.
+ *   the Quote is in flight and "All edits saved" after one succeeded.
  *
  *   const update = useQuoteCommand(quoteId, trpc.lineItem.update.mutationOptions(), {
  *     optimistic: (editor, input) => patchLine(editor, input.id, input),
@@ -282,8 +282,17 @@ export function useQuoteSaveState(quoteId: string) {
   return { saving, saved }
 }
 
-/** "Saving…" / "Saved" for every command on the Quote (header, grid, Summary). */
-export function QuoteSaveIndicator({ quoteId }: { quoteId: string }) {
+/**
+ * "Saving…" / "All edits saved" for every command on the Quote (header,
+ * grid, Summary), or `idle` before the first save.
+ */
+export function QuoteSaveIndicator({
+  quoteId,
+  idle,
+}: {
+  quoteId: string
+  idle?: string
+}) {
   const { saving, saved } = useQuoteSaveState(quoteId)
   if (saving) {
     return (
@@ -296,14 +305,23 @@ export function QuoteSaveIndicator({ quoteId }: { quoteId: string }) {
       </span>
     )
   }
-  if (!saved) return null
+  if (!saved) {
+    return idle ? (
+      <span
+        className="text-sm text-muted-foreground/80 max-xl:hidden"
+        role="status"
+      >
+        {idle}
+      </span>
+    ) : null
+  }
   return (
     <span
       className="flex items-center gap-1 text-sm text-muted-foreground"
       role="status"
     >
-      <CheckIcon className="size-3.5" aria-hidden />
-      Saved
+      <CheckIcon className="size-3.5 text-success" aria-hidden />
+      All edits saved
     </span>
   )
 }

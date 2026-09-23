@@ -2,7 +2,6 @@ import { TRPCError } from "@trpc/server"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
-import { ApprovalActions } from "@/components/approval/approval-actions"
 import { QuoteHeader } from "@/components/quotes/quote-header"
 import { QuoteTabs } from "@/components/quotes/quote-tabs"
 import { getCaller, HydrateClient, prefetch, trpc } from "@/trpc/server"
@@ -31,7 +30,8 @@ export async function generateMetadata({
 
 /**
  * The Quote editor at `/quotes/<uuid>`: the header (Name, Description,
- * status, Account, Owner) and the tab bar, above the current tab's route
+ * status, Account, Owner, the metrics row and the actions) and the tab
+ * bar, above the current tab's route
  * (`QUOTE_TABS` in components/quotes/tabs.ts). Unknown, malformed and other
  * Organizations' ids are a 404.
  */
@@ -47,10 +47,7 @@ export default async function QuoteLayout({
   prefetch(trpc.quote.byId.queryOptions({ id: quoteId }))
   return (
     <HydrateClient>
-      <QuoteHeader
-        quoteId={quoteId}
-        actions={<ApprovalActions quoteId={quoteId} />}
-      />
+      <QuoteHeader quoteId={quoteId} />
       <QuoteTabs quoteId={quoteId} />
       {children}
     </HydrateClient>

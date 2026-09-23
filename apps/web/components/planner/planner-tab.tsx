@@ -19,7 +19,7 @@ import { Label } from "@workspace/ui/components/label"
 
 import { useQuoteEditor } from "@/components/quotes/autosave"
 import type { EditorLine } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
+import { useQuote } from "@/components/quotes/use-quote"
 import {
   Empty,
   EmptyContent,
@@ -145,7 +145,7 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
           <Button
             variant="outline"
             nativeButton={false}
-            render={<Link href={`/quotes/${quoteId}`} />}
+            render={<Link href={`/quotes/${quoteId}/line-items`} />}
           >
             Go to Line Items
           </Button>

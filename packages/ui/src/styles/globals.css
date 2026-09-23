@@ -69,6 +69,17 @@
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
+  /* Phase tints (the Overview's Phase bar), cycled by top-level order. */
+  --color-phase-1: var(--phase-1);
+  --color-phase-1-ink: var(--phase-1-ink);
+  --color-phase-2: var(--phase-2);
+  --color-phase-2-ink: var(--phase-2-ink);
+  --color-phase-3: var(--phase-3);
+  --color-phase-3-ink: var(--phase-3-ink);
+  --color-phase-4: var(--phase-4);
+  --color-phase-4-ink: var(--phase-4-ink);
+  --color-phase-5: var(--phase-5);
+  --color-phase-5-ink: var(--phase-5-ink);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -128,6 +139,16 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+  --phase-1: oklch(0.925 0.03 224);
+  --phase-1-ink: oklch(0.36 0.07 224);
+  --phase-2: oklch(0.925 0.035 286);
+  --phase-2-ink: oklch(0.38 0.11 286);
+  --phase-3: oklch(0.93 0.035 165);
+  --phase-3-ink: oklch(0.37 0.07 165);
+  --phase-4: oklch(0.935 0.035 75);
+  --phase-4-ink: oklch(0.42 0.08 65);
+  --phase-5: oklch(0.925 0.03 340);
+  --phase-5-ink: oklch(0.4 0.09 340);
 
   --chart-1: oklch(0.47 0.085 224);
   --chart-2: oklch(0.54 0.17 286);
@@ -190,6 +211,16 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
+  --phase-1: oklch(0.33 0.045 224);
+  --phase-1-ink: oklch(0.9 0.04 220);
+  --phase-2: oklch(0.33 0.06 286);
+  --phase-2-ink: oklch(0.9 0.05 288);
+  --phase-3: oklch(0.33 0.045 165);
+  --phase-3-ink: oklch(0.9 0.05 165);
+  --phase-4: oklch(0.34 0.045 75);
+  --phase-4-ink: oklch(0.91 0.06 80);
+  --phase-5: oklch(0.33 0.05 340);
+  --phase-5-ink: oklch(0.9 0.05 340);
 
   --chart-1: oklch(0.76 0.1 212);
   --chart-2: oklch(0.72 0.14 288);

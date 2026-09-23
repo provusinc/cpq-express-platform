@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { Spinner } from "@workspace/ui/components/spinner"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import { formatDate } from "@/lib/format"
@@ -67,23 +68,28 @@ const PREVIEW_DELAY_MS = 300
 export function QuoteDatesEditor({
   quote,
   disabled,
+  className,
 }: {
   quote: Quote
   disabled?: boolean
+  className?: string
 }) {
   const [open, setOpen] = useState(false)
   const label = `${formatDate(quote.startDate)} – ${formatDate(quote.endDate)}`
-  if (disabled) return <>{label}</>
+  if (disabled) return <span className={className}>{label}</span>
   return (
     <>
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded font-medium hover:underline"
+        className={cn(
+          "inline-flex items-center gap-1 rounded font-medium hover:underline",
+          className
+        )}
         onClick={() => setOpen(true)}
         aria-label={`Change the Quote dates, ${label}`}
       >
         {label}
-        <CalendarCogIcon className="size-3.5 text-muted-foreground" />
+        <CalendarCogIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </button>
       {open && (
         <QuoteDatesDialog quote={quote} onClose={() => setOpen(false)} />
@@ -371,9 +377,11 @@ const TIME_PERIOD_ITEMS = TIME_PERIODS.map((value) => ({
 export function TimePeriodControl({
   quote,
   disabled,
+  className,
 }: {
   quote: Quote
   disabled?: boolean
+  className?: string
 }) {
   const trpc = useTRPC()
   const [pending, setPending] = useState<TimePeriod | null>(null)
@@ -407,7 +415,11 @@ export function TimePeriodControl({
     }
   )
 
-  if (disabled) return <>{TIME_PERIOD_LABELS[quote.timePeriod]}</>
+  if (disabled) {
+    return (
+      <span className={className}>{TIME_PERIOD_LABELS[quote.timePeriod]}</span>
+    )
+  }
   return (
     <>
       <Select
@@ -418,7 +430,10 @@ export function TimePeriodControl({
         <SelectTrigger
           size="sm"
           aria-label="Time period"
-          className="-ml-1.5 h-7 border-transparent bg-transparent px-1.5 font-medium shadow-none hover:border-input dark:bg-transparent"
+          className={cn(
+            "-ml-1.5 h-7 border-transparent bg-transparent px-1.5 font-medium shadow-none hover:border-input dark:bg-transparent",
+            className
+          )}
         >
           <SelectValue />
         </SelectTrigger>

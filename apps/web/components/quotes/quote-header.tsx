@@ -1,7 +1,7 @@
 "use client"
 
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { ArrowLeftIcon, CalendarX2Icon, LockIcon } from "lucide-react"
+import { CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
 
 import type { RouterOutputs } from "@workspace/api"
@@ -13,6 +13,7 @@ import {
   AlertTitle,
 } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { formatDate } from "@/lib/format"
 import { useTRPC } from "@/trpc/react"
@@ -89,12 +90,13 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
 }
 
 /**
- * The Quote editor's header: Name and Description (edited in place, each
- * saved as its own command), status, Account, Owner, the Quote dates
- * (`QuoteDatesEditor`: shift/clamp with an impact preview) and Time Period
- * (`TimePeriodControl`: warns, then discards all Allocations), and a read-only notice when the viewer can't edit. `actions`
- * renders at the top right (approval actions, #19), before Clone and the
- * menu with Delete (`QuoteHeaderActions`).
+ * The Quote editor's header: status and Name (edited in place), the
+ * Description, the actions at the top right (`actions`: approval actions,
+ * #19, before Clone and the menu with Delete, `QuoteHeaderActions`), and a
+ * spec row with Account, Owner, the Quote dates (`QuoteDatesEditor`:
+ * shift/clamp with an impact preview), Valid until and Time Period
+ * (`TimePeriodControl`: warns, then discards all Allocations). A read-only
+ * notice explains when the viewer can't edit.
  */
 export function QuoteHeader({
   quoteId,
@@ -108,29 +110,25 @@ export function QuoteHeader({
   const canEdit = quote.permissions.canEdit
 
   return (
-    <div className="flex flex-col gap-3">
-      <Link
-        href="/quotes"
-        className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeftIcon className="size-4" />
-        Quotes
-      </Link>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="-ml-2 flex items-center gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-96 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <QuoteStatusBadge status={quote.status} className="shrink-0" />
+            <QuoteSaveIndicator quoteId={quoteId} />
+          </div>
+          <div className="-ml-2">
             <InlineText
               label="Name"
               value={quote.name}
               required
               maxLength={QUOTE_NAME_MAX}
               disabled={!canEdit}
-              className="text-xl font-semibold tracking-tight"
+              className="text-2xl leading-tight font-semibold tracking-[-0.015em]"
               onSave={(name) => name && rename.mutate({ id: quote.id, name })}
             />
-            <QuoteStatusBadge status={quote.status} className="shrink-0" />
           </div>
-          <div className="-ml-2">
+          <div className="-mt-0.5 -ml-2 max-w-[80ch]">
             <InlineText
               label="Description"
               value={quote.description}
@@ -138,15 +136,14 @@ export function QuoteHeader({
               maxLength={2000}
               disabled={!canEdit}
               placeholder={canEdit ? "Add a description" : "No description"}
-              className="resize-none text-sm text-muted-foreground"
+              className="resize-none py-0.5 text-sm text-muted-foreground"
               onSave={(description) =>
                 setDescription.mutate({ id: quote.id, description })
               }
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <QuoteSaveIndicator quoteId={quoteId} />
+        <div className="flex flex-wrap items-center gap-2">
           {actions}
           <QuoteHeaderActions
             quote={quote}
@@ -154,11 +151,11 @@ export function QuoteHeader({
           />
         </div>
       </div>
-      <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <Meta label="Account">
+      <dl className="grid grid-cols-2 overflow-hidden rounded-lg border bg-muted/40 text-sm sm:grid-cols-3 xl:flex xl:flex-wrap">
+        <Meta label="Account" className="xl:min-w-56">
           <Link
             href={`/accounts/${quote.account.id}`}
-            className="font-medium hover:underline"
+            className="truncate font-medium underline-offset-4 hover:underline"
           >
             {quote.account.name}
           </Link>
@@ -169,14 +166,16 @@ export function QuoteHeader({
           )}
         </Meta>
         <Meta label="Owner">
-          {quote.owner.name ?? quote.owner.email}
+          <span className="truncate">
+            {quote.owner.name ?? quote.owner.email}
+          </span>
           {!quote.owner.isMember && (
             <span className="ml-1 text-muted-foreground">
               (no longer a member)
             </span>
           )}
         </Meta>
-        <Meta label="Dates">
+        <Meta label="Dates" className="xl:min-w-60">
           <QuoteDatesEditor quote={quote} disabled={!canEdit} />
         </Meta>
         <Meta label="Valid until">
@@ -184,7 +183,7 @@ export function QuoteHeader({
             <span
               className={
                 quote.validUntilPassed
-                  ? "inline-flex items-center gap-1 font-medium text-destructive"
+                  ? "inline-flex items-center gap-1 font-medium text-danger-ink"
                   : undefined
               }
             >
@@ -207,17 +206,25 @@ export function QuoteHeader({
   )
 }
 
+/** One cell of the spec row: a small label over its value. */
 function Meta({
   label,
+  className,
   children,
 }: {
   label: string
+  className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-baseline gap-1.5">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="flex items-center">{children}</dd>
+    <div
+      className={cn(
+        "-mt-px -ml-px flex min-w-0 flex-col gap-0.5 border-t border-l px-3.5 py-2 xl:flex-1",
+        className
+      )}
+    >
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex min-h-7 min-w-0 items-center">{children}</dd>
     </div>
   )
 }

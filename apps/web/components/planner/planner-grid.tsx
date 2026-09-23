@@ -281,16 +281,16 @@ export function PlannerGrid({
         className="overflow-auto rounded-lg border bg-background outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20 bg-background">
+          <thead className="sticky top-0 z-20 bg-muted text-xs text-muted-foreground">
             <tr>
-              <th className="sticky left-0 z-30 h-10 min-w-56 border-r border-b bg-background px-2 text-left font-semibold">
+              <th className="sticky left-0 z-30 h-10 min-w-56 border-r border-b bg-muted px-2 text-left font-medium">
                 Line Item
               </th>
               {periods.map((p) => (
                 <th
                   key={p.start}
                   scope="col"
-                  className="min-w-16 border-b px-2 py-1 text-right font-semibold tabular-nums"
+                  className="min-w-16 border-b px-2 py-1 text-right font-medium text-foreground tabular-nums"
                 >
                   <div>{p.label}</div>
                   <div className="text-[10px] font-normal text-muted-foreground">
@@ -298,7 +298,7 @@ export function PlannerGrid({
                   </div>
                 </th>
               ))}
-              <th className="sticky right-0 z-30 h-10 min-w-20 border-b border-l bg-background px-2 text-right font-semibold">
+              <th className="sticky right-0 z-30 h-10 min-w-20 border-b border-l bg-muted px-2 text-right font-medium">
                 Total
               </th>
             </tr>

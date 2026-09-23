@@ -23,7 +23,8 @@ const PERCENT_INPUT = /^\d{1,3}(\.\d{1,4})?$/
 /** Why a typed discount is invalid, or null. */
 function discountProblem(kind: DiscountKind, value: string) {
   if (kind === "percent") {
-    return PERCENT_INPUT.test(value) && new Decimal(value).lessThanOrEqualTo(100)
+    return PERCENT_INPUT.test(value) &&
+      new Decimal(value).lessThanOrEqualTo(100)
       ? null
       : "Enter a percentage from 0 to 100 with up to 4 decimals."
   }
@@ -186,7 +187,7 @@ function Row({
       <dd
         className={cn(
           "tabular-nums",
-          strong && "text-base font-semibold",
+          strong && "figure text-xl leading-6 font-semibold",
           muted && "text-muted-foreground"
         )}
       >

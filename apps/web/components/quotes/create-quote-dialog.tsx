@@ -267,7 +267,7 @@ export function CreateQuoteDialog({
                   {nameTaken.data?.taken && (
                     <p
                       role="status"
-                      className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400"
+                      className="flex items-center gap-1.5 text-sm text-warning-ink"
                     >
                       <TriangleAlertIcon className="size-4 shrink-0" />
                       {accountName ?? "This Account"} already has{" "}

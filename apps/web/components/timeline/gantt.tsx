@@ -27,11 +27,15 @@ export type TimelineRow =
     }
   | { kind: "line"; line: EditorLine; depth: number }
 
-/** Bar colours per source kind (the legend shows them with the labels). */
+/**
+ * Bar colours per source kind (the legend shows them with the labels):
+ * the chart series (`SERIES`), so an item type has one colour on the
+ * Timeline, the Summary and Financials.
+ */
 export const SOURCE_BAR_CLASSES = {
-  resource_role: "bg-sky-500/85 dark:bg-sky-400/80",
-  product: "bg-amber-500/85 dark:bg-amber-400/80",
-  add_on: "bg-emerald-500/85 dark:bg-emerald-400/80",
+  resource_role: "bg-series-1/90",
+  product: "bg-series-2/90",
+  add_on: "bg-series-3/90",
 } as const
 
 const pct = (fraction: number) => `${(fraction * 100).toFixed(4)}%`

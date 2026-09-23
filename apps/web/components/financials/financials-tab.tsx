@@ -82,7 +82,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
+      <span className="figure text-2xl leading-tight font-semibold">
+        {value}
+      </span>
     </div>
   )
 }

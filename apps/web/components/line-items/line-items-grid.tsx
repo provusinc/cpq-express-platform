@@ -78,6 +78,7 @@ import { InlineDate } from "@/components/quotes/inline-date"
 import { InlineText } from "@/components/quotes/inline-text"
 import {
   ColumnTitle,
+  LIST_TABLE_CLASS,
   resolveUpdater,
   RowActionsMenu,
 } from "@/components/shell/data-table"
@@ -385,7 +386,7 @@ function UnitPriceCell({ row }: Cell) {
         }
         className={cn(
           "w-28 text-right tabular-nums",
-          overridden && "font-medium text-amber-700 dark:text-amber-400"
+          overridden && "font-medium text-warning-ink"
         )}
         onSave={(unitPrice) =>
           unitPrice && onUpdate({ id: line.id, unitPrice })
@@ -1097,7 +1098,7 @@ export function LineItemsGrid({
           }
           onExpandedChange={onExpandedChange}
         >
-          <DataTable className="bg-background">
+          <DataTable className={LIST_TABLE_CLASS}>
             <DataTableHeader sticky={false} />
             <LineItemsBody
               columnIds={columnIds}
@@ -1108,7 +1109,7 @@ export function LineItemsGrid({
         </DataTableRoot>
         <DragOverlay dropAnimation={null}>
           {overlayLabel !== null && (
-            <div className="flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-lg">
+            <div className="flex w-fit items-center gap-2 rounded-md border bg-popover px-3 py-1.5 text-sm font-medium shadow-float">
               <GripVerticalIcon className="size-4 text-muted-foreground" />
               {overlayLabel}
             </div>

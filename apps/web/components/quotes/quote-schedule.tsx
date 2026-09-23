@@ -398,7 +398,7 @@ export function TimePeriodControl({
         <SelectTrigger
           size="sm"
           aria-label="Time period"
-          className="h-7 border-transparent px-1.5 font-medium shadow-none hover:border-input"
+          className="-ml-1.5 h-7 border-transparent bg-transparent px-1.5 font-medium shadow-none hover:border-input dark:bg-transparent"
         >
           <SelectValue />
         </SelectTrigger>

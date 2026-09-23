@@ -47,6 +47,11 @@ Import from `@workspace/domain/<area>`; the root `@workspace/domain` re-exports 
 - `pricing`: `priceQuote({ currency, lines, discount })` returns per-line totals and margins, Subtotal, discountAmount, Total, cost, Margin and marginPct. Call it after every command and persist the result. It also has `hoursPerTimePeriod` and `defaultLineItemQuantity`, which use the Organization's Hours Per Day.
 - `status`: `nextStatus(status, action)`, `availableActions`, `isLocked`, `isTerminal`, `LOCKED_STATUSES`, and `canSubmit({ status, total })`, which gives the specific refusal reason.
 - `policy`: `can(actor, action, quote?, settings?)` answers every permission question, for Quote actions and for Admin-only Organization actions. `checkDeletableStatuses` validates the deletable-status setting, and `DELETABLE_STATUS_OPTIONS` lists the statuses that may be in it.
+- `dates`: dates are ISO `yyyy-MM-dd` strings (`IsoDate`) and never `Date`. Validate input with `isIsoDate`. The module also covers bucket maths (`periodTypeForTimePeriod`, `startOfPeriod`, `endOfPeriod`, `addPeriods`, `periodsBetween`, `periodStartsInRange`), `countWorkingDays` (Mon–Fri) and day arithmetic.
+- `effort`: `distributeWholeUnits(total, weights)` splits a total into whole hours by largest remainder, and the parts always add up to the total exactly.
+- `allocations`: planner rules. `checkAllocationAmount` checks the per-cell caps and requires whole numbers for Each. `applyAllocationEdits` applies one gesture's batch of cells atomically. `defaultAllocations` lays out a new Resource Role line; call it when the line is added. `resizeAllocatedEffort` changes the total Effort. `diffAllocations` returns the rows to upsert and delete. Each of these returns the Allocations together with the quantity (Σ Allocations) and the dates they imply, so persist all of them together.
+- `schedule`: `changeQuoteDates` handles a Quote Shift (the default for a start move) or a clamp, and returns every line's new schedule plus an impact summary. Preview mode means the API does not persist that result. `changeLineItemStart` moves one line by lift-and-shift and trims at the Quote End Date.
+- `phases`: `canPlacePhase` checks create and move, `validatePhaseTree` checks a whole tree (depth ≤ 3, no cycles), and `phaseSubtree` returns what a Phase delete removes.
 
 ## tRPC
 

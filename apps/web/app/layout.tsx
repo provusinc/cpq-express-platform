@@ -13,9 +13,10 @@ import { cn } from "@workspace/ui/lib/utils"
 
 // IBM Plex: an engineered grotesque with true tabular figures, so money
 // columns line up; the condensed cut sets the big figures.
+// Variable (no `weight` list): Turbopack's production build can't resolve
+// the static-weight files of this family.
 const fontSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
 })
 

@@ -45,6 +45,7 @@ import { createTRPCRouter, organizationProcedure } from "../trpc"
 import { quoteApprovalProcedures } from "./quote-approval"
 import { quoteCostChangeLogProcedures } from "./quote-cost-change-log"
 import { quoteScheduleProcedures } from "./quote-schedule"
+import { quoteSummaryProcedures } from "./quote-summary"
 
 const { accounts, lineItems, phases, quotes, users } = schema
 
@@ -520,4 +521,7 @@ export const quoteRouter = createTRPCRouter({
 
   /** The cost change log (./quote-cost-change-log.ts). */
   ...quoteCostChangeLogProcedures,
+
+  /** The Summary and Financials reads (./quote-summary.ts). */
+  ...quoteSummaryProcedures,
 })

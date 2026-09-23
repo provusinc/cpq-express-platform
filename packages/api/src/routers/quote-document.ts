@@ -99,7 +99,7 @@ export const quoteDocumentRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.scope.transaction(async (scope) => {
-        const { quoteSnapshot, settingsSnapshot, ...document } =
+        const { quoteSnapshot, settingsSnapshot, storageKey, ...document } =
           await generateQuoteDocument(scope, input.quoteId, {
             actor: ctx.actor,
             storage: ctx.storage,
@@ -107,6 +107,7 @@ export const quoteDocumentRouter = createTRPCRouter({
           })
         void quoteSnapshot
         void settingsSnapshot
+        void storageKey
         const quote = await scope.findById(quotes, input.quoteId)
         return {
           ...document,

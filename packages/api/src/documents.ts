@@ -314,6 +314,8 @@ export async function generateQuoteDocument(
   QuoteDocumentView & {
     quoteSnapshot: QuoteDocumentSnapshot
     settingsSnapshot: DocumentSettings
+    /** Where the PDF was stored (server only; never return it to clients). */
+    storageKey: string
   }
 > {
   return scope.transaction(async (tx) => {
@@ -383,6 +385,7 @@ export async function generateQuoteDocument(
       ...quoteDocumentView(stored, generatedBy!),
       quoteSnapshot: snapshot,
       settingsSnapshot: settings,
+      storageKey,
     }
   })
 }

@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import {
   CheckIcon,
   CircleDotIcon,
+  MailCheckIcon,
   SendIcon,
   Undo2Icon,
   XIcon,
@@ -40,6 +41,7 @@ const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
   approve: CheckIcon,
   reject: XIcon,
   recall: Undo2Icon,
+  mark_sent: MailCheckIcon,
   customer_approved: CheckIcon,
   customer_rejected: XIcon,
 }
@@ -61,7 +63,8 @@ export function ApprovalHistory({ quoteId }: { quoteId: string }) {
       <CardHeader>
         <CardTitle>Approval history</CardTitle>
         <CardDescription>
-          Every submission, decision and recall, with its comment.
+          Every submission, decision, recall, sending and customer answer, with
+          its comment.
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -1,7 +1,16 @@
 "use client"
 
 import { useQueryClient } from "@tanstack/react-query"
-import { CheckIcon, SendIcon, Undo2Icon, XIcon } from "lucide-react"
+import type { UseMutationOptions } from "@tanstack/react-query"
+import {
+  CheckIcon,
+  MailCheckIcon,
+  SendIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+  Undo2Icon,
+  XIcon,
+} from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -29,13 +38,24 @@ import { useTRPC } from "@/trpc/react"
 
 /** The longest comment the API accepts (APPROVAL_COMMENT_MAX). */
 const COMMENT_MAX = 2000
+/** Mark as Sent's notes are also the Document's (QUOTE_DOCUMENT_NOTES_MAX). */
+const NOTES_MAX = 1000
 
-type Transition = "submit" | "approve" | "reject" | "recall"
+type Transition =
+  | "submit"
+  | "approve"
+  | "reject"
+  | "recall"
+  | "markSent"
+  | "customerApproved"
+  | "customerRejected"
 
 const TRANSITIONS: Record<
   Transition,
   {
     label: string
+    /** The dialog's text field (defaults to "Comment"). */
+    field?: string
     icon: LucideIcon
     title: string
     description: string
@@ -83,6 +103,39 @@ const TRANSITIONS: Record<
     done: "Quote recalled to Draft",
     variant: "outline",
   },
+  markSent: {
+    label: "Mark as Sent",
+    icon: MailCheckIcon,
+    field: "Notes",
+    title: "Mark as Sent",
+    description:
+      "Declares that this Quote has gone to the customer. A Quote Document is captured as proof of what was sent and can never be deleted. The Quote then awaits the customer's answer.",
+    placeholder: "How and to whom it was sent (optional)",
+    done: "Marked as sent; Quote Document captured",
+    variant: "default",
+  },
+  customerApproved: {
+    label: "Customer approved",
+    icon: ThumbsUpIcon,
+    field: "Note",
+    title: "Record customer approval",
+    description:
+      "The customer accepted this Quote. Customer Approved is final: the Quote stays locked for good.",
+    placeholder: "Note (optional)",
+    done: "Customer approval recorded",
+    variant: "default",
+  },
+  customerRejected: {
+    label: "Customer rejected",
+    icon: ThumbsDownIcon,
+    field: "Note",
+    title: "Record customer rejection",
+    description:
+      "The customer turned this Quote down. It unlocks for editing and can be submitted for approval again.",
+    placeholder: "Why the customer rejected it (optional)",
+    done: "Customer rejection recorded",
+    variant: "destructive",
+  },
 }
 
 /** Refusals about the Quote itself, which the Owner can fix (shown on a disabled Submit). */
@@ -92,8 +145,11 @@ const FIXABLE_SUBMIT_REASONS = ["total_missing", "total_zero", "total_negative"]
  * The approval actions in the Quote header, per the viewer's `permissions`:
  * Submit (the Owner; disabled with the reason when the Total isn't
  * positive), Approve / Reject (Approvers, never on their own Quote) and
- * Recall (the Owner or an Admin while Pending Approval). Each opens a
- * dialog with an optional comment and runs its command.
+ * Recall (the Owner or an Admin while Pending Approval), Mark as Sent (the
+ * Owner or an Admin while Approved; captures a Quote Document) and the
+ * customer outcome (the Owner or an Admin while Pending Customer
+ * Approval). Each opens a dialog with an optional comment and runs its
+ * command.
  */
 export function ApprovalActions({ quoteId }: { quoteId: string }) {
   const quote = useQuote(quoteId)
@@ -106,6 +162,10 @@ export function ApprovalActions({ quoteId }: { quoteId: string }) {
   if (permissions.canReject) shown.push("reject")
   if (permissions.canApprove) shown.push("approve")
   if (permissions.canSubmit) shown.push("submit")
+  if (permissions.canRecordCustomerOutcome) {
+    shown.push("customerRejected", "customerApproved")
+  }
+  if (permissions.canMarkSent) shown.push("markSent")
 
   const blockedSubmit =
     !permissions.canSubmit &&
@@ -154,12 +214,7 @@ export function ApprovalActions({ quoteId }: { quoteId: string }) {
 function useTransitionCommand(quoteId: string, transition: Transition) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
-  const options = {
-    submit: trpc.quote.submit.mutationOptions(),
-    approve: trpc.quote.approve.mutationOptions(),
-    reject: trpc.quote.reject.mutationOptions(),
-    recall: trpc.quote.recall.mutationOptions(),
-  }[transition]
+  const options = transitionOptions(trpc, transition)
   return useQuoteCommand(quoteId, options, {
     onSuccess: () => {
       toast.success(TRANSITIONS[transition].done)
@@ -169,8 +224,68 @@ function useTransitionCommand(quoteId: string, transition: Transition) {
       void queryClient.invalidateQueries(
         trpc.quote.awaitingMyApproval.pathFilter()
       )
+      if (transition === "markSent") {
+        void queryClient.invalidateQueries(
+          trpc.quoteDocument.list.queryFilter({ quoteId })
+        )
+      }
     },
   })
+}
+
+interface TransitionInput {
+  id: string
+  comment: string | null
+}
+
+/**
+ * The transition's mutation, taking `{ id, comment }` whatever the command:
+ * Mark as Sent's comment is its `notes`, the customer outcome's its `note`.
+ */
+function transitionOptions(
+  trpc: ReturnType<typeof useTRPC>,
+  transition: Transition
+) {
+  switch (transition) {
+    case "submit":
+    case "approve":
+    case "reject":
+    case "recall":
+      return adapt(trpc.quote[transition].mutationOptions(), (input) => input)
+    case "markSent":
+      return adapt(
+        trpc.quote.markSent.mutationOptions(),
+        ({ id, comment }) => ({
+          id,
+          notes: comment,
+        })
+      )
+    case "customerApproved":
+    case "customerRejected":
+      return adapt(
+        trpc.quote.recordCustomerOutcome.mutationOptions(),
+        ({ id, comment }) => ({
+          id,
+          outcome:
+            transition === "customerApproved"
+              ? ("approved" as const)
+              : ("rejected" as const),
+          note: comment,
+        })
+      )
+  }
+}
+
+/** `options` with its variables mapped from a `TransitionInput`. */
+function adapt<TData, TError, TVariables>(
+  options: UseMutationOptions<TData, TError, TVariables>,
+  toVariables: (input: TransitionInput) => TVariables
+): UseMutationOptions<unknown, unknown, TransitionInput> {
+  const { mutationKey, mutationFn } = options
+  return {
+    mutationKey,
+    mutationFn: (input, context) => mutationFn!(toVariables(input), context),
+  }
 }
 
 function TransitionDialog({
@@ -198,11 +313,13 @@ function TransitionDialog({
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
         <Field>
-          <FieldLabel htmlFor="approval-comment">Comment</FieldLabel>
+          <FieldLabel htmlFor="approval-comment">
+            {copy.field ?? "Comment"}
+          </FieldLabel>
           <Textarea
             id="approval-comment"
             value={comment}
-            maxLength={COMMENT_MAX}
+            maxLength={transition === "markSent" ? NOTES_MAX : COMMENT_MAX}
             placeholder={copy.placeholder}
             onChange={(event) => setComment(event.target.value)}
             rows={4}

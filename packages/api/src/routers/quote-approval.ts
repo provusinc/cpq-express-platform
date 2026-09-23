@@ -1,7 +1,8 @@
 /**
  * The Quote's approval procedures, registered on the `quote` router
  * (`quote.submit`, `quote.approve`, `quote.reject`, `quote.recall`,
- * `quote.approvalHistory`, `quote.awaitingMyApproval`). They live in their
+ * `quote.markSent`, `quote.recordCustomerOutcome`, `quote.approvalHistory`,
+ * `quote.awaitingMyApproval`). They live in their
  * own file so the lifecycle stays in one place; see `../approval.ts`.
  */
 import { TRPCError } from "@trpc/server"
@@ -9,9 +10,18 @@ import { z } from "zod"
 
 import { and, asc, count, desc, eq, ne, schema, sql } from "@workspace/db"
 
-import { transitionInput, transitionQuote } from "../approval"
+import {
+  APPROVAL_COMMENT_MAX,
+  transitionInput,
+  transitionQuote,
+} from "../approval"
+import {
+  generateQuoteDocument,
+  QUOTE_DOCUMENT_NOTES_MAX,
+  removeQuoteDocumentObjects,
+} from "../documents"
 import { notFound } from "../errors"
-import { paging } from "../inputs"
+import { optionalText, paging } from "../inputs"
 import { quoteCommand } from "../quotes"
 import { organizationProcedure } from "../trpc"
 
@@ -66,6 +76,86 @@ export const quoteApprovalProcedures = {
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.recall", (cmd) =>
         transitionQuote(cmd, "recall", input.comment)
+      )
+    ),
+
+  /**
+   * Mark as Sent: the Quote Owner or an Admin declares that an Approved
+   * Quote has gone to the customer. It moves to Pending Customer Approval
+   * and a Quote Document is always captured (`captured_by_mark_sent`, never
+   * deletable) as proof of what was sent, in the same transaction: if
+   * rendering or storing fails, nothing changes. `notes` are the Document's
+   * notes and the mark_sent step's comment. Returns the transition plus the
+   * captured `document`.
+   */
+  markSent: organizationProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        notes: optionalText(QUOTE_DOCUMENT_NOTES_MAX),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Set once the PDF is in storage; removed again if the transaction
+      // fails afterwards, so a rolled-back Mark as Sent leaves no object.
+      let storedKey: string | null = null
+      try {
+        return await quoteCommand(
+          ctx,
+          input.id,
+          "quote.markSent",
+          async (cmd) => {
+            const transition = await transitionQuote(
+              cmd,
+              "mark_sent",
+              input.notes
+            )
+            const { quoteSnapshot, settingsSnapshot, storageKey, ...document } =
+              await generateQuoteDocument(cmd.scope, cmd.quote.id, {
+                actor: cmd.actor,
+                storage: ctx.storage,
+                notes: input.notes ?? null,
+                capturedByMarkSent: true,
+              })
+            storedKey = storageKey
+            void quoteSnapshot
+            void settingsSnapshot
+            return {
+              ...transition,
+              document: { ...document, canDelete: false },
+            }
+          }
+        )
+      } catch (error) {
+        if (storedKey)
+          await removeQuoteDocumentObjects(ctx.storage, [storedKey])
+        throw error
+      }
+    }),
+
+  /**
+   * Records the customer's answer to a Pending Customer Approval Quote (the
+   * Quote Owner or an Admin), as a customer_approved / customer_rejected
+   * Approval Step with an optional note. Customer Approved is final;
+   * Customer Rejected unlocks the Quote for editing and resubmission.
+   */
+  recordCustomerOutcome: organizationProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        outcome: z.enum(["approved", "rejected"]),
+        note: optionalText(APPROVAL_COMMENT_MAX),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.id, "quote.recordCustomerOutcome", (cmd) =>
+        transitionQuote(
+          cmd,
+          input.outcome === "approved"
+            ? "customer_approved"
+            : "customer_rejected",
+          input.note
+        )
       )
     ),
 

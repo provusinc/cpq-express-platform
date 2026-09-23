@@ -1,0 +1,75 @@
+# Local services for CPQ Express. Start with `pnpm services:up` (or `docker compose up -d`).
+# Host ports can be overridden via POSTGRES_PORT / MINIO_PORT / MINIO_CONSOLE_PORT /
+# MAILPIT_SMTP_PORT / MAILPIT_UI_PORT in the root .env (compose reads it automatically).
+name: cpq-express
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: cpq
+      POSTGRES_PASSWORD: cpq
+      POSTGRES_DB: cpq
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/10-init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpq -d cpq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # MinIO no longer publishes images to Docker Hub; quay.io tags are pinned.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: cpq-minio
+      MINIO_ROOT_PASSWORD: cpq-minio-secret
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the documents bucket, then exits.
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 cpq-minio cpq-minio-secret &&
+      mc mb --ignore-existing local/cpq-documents
+      "
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.31
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    volumes:
+      - mailpit-data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  minio-data:
+  mailpit-data:

@@ -15,6 +15,7 @@ export {
   organizationTable,
 } from "./organization-table"
 export { organizationScope } from "./organization-scope"
+export { createInvitationToken, hashInvitationToken } from "./invitation-token"
 export type {
   OrganizationOwnedTable,
   OrganizationScope,

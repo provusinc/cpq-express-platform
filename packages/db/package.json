@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@t3-oss/env-core": "^0.13.11",
+    "@workspace/domain": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "postgres": "^3.4.9",
     "uuid": "^14.0.2",

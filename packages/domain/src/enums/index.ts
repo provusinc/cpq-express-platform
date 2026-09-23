@@ -9,6 +9,13 @@
 export const ROLES = ["admin", "manager", "member"] as const
 export type Role = (typeof ROLES)[number]
 
+/** How a Role is written in UI copy and emails. */
+export const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  member: "Member",
+}
+
 /** Where a Quote stands in its lifecycle. */
 export const QUOTE_STATUSES = [
   "draft",

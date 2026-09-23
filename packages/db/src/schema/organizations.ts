@@ -1,32 +1,18 @@
 import { sql } from "drizzle-orm"
 import { char, check, pgTable, text } from "drizzle-orm/pg-core"
 
+import { RESERVED_SLUGS, SLUG_PATTERN } from "@workspace/domain/organizations"
+
 import { id, timestamps } from "../columns"
-
-/**
- * Subdomains that are never an Organization (ADR-0001). Mirrored by the
- * host resolution in `apps/web/lib/hosts.ts`; both move to
- * `@workspace/domain` once it owns the slug rules.
- */
-export const RESERVED_SLUGS = [
-  "app",
-  "admin",
-  "www",
-  "api",
-  "auth",
-  "docs",
-  "status",
-] as const
-
-/** A DNS label: lowercase letters, digits and inner hyphens, 1–63 chars. */
-export const SLUG_PATTERN = "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
 
 /**
  * The unit of tenancy (glossary: Organization), reached at
  * `{slug}.<ROOT_DOMAIN>`. Not itself a business table: business tables
  * reference it through `organizationTable` (see `../organization-table.ts`).
  *
- * `slug` is immutable — a trigger (migration 0003) rejects any change.
+ * `slug` is immutable — a trigger (migration 0003) rejects any change. The
+ * slug check constraints are built from `@workspace/domain/organizations`,
+ * the same rules the API and host resolution use.
  */
 export const organizations = pgTable(
   "organizations",

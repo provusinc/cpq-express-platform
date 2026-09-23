@@ -35,10 +35,13 @@ const DEFAULT_ERROR = "Something went wrong signing you in. Try again."
 export function SignInForm({
   callbackUrl,
   error,
+  defaultEmail,
   oauthProviders,
 }: {
   callbackUrl: string
   error?: string
+  /** Pre-fills the email field (e.g. from an Invitation). */
+  defaultEmail?: string
   oauthProviders: { id: string; name: string }[]
 }) {
   const [pending, setPending] = useState<string | null>(null)
@@ -105,6 +108,7 @@ export function SignInForm({
                   type="email"
                   autoComplete="email"
                   placeholder="you@company.com"
+                  defaultValue={defaultEmail}
                   required
                 />
               </Field>

@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { RESERVED_SLUGS } from "@workspace/db/schema"
+import { RESERVED_SLUGS } from "@workspace/domain/organizations"
 
-import {
-  internalPath,
-  RESERVED_SUBDOMAINS,
-  resolveHost,
-  surfaceOrigin,
-} from "./hosts"
+import { internalPath, resolveHost, surfaceOrigin } from "./hosts"
 
 const ROOT = "localtest.me"
 
@@ -38,13 +33,9 @@ describe("resolveHost", () => {
   })
 
   it("never treats a reserved subdomain as an Organization", () => {
-    for (const sub of RESERVED_SUBDOMAINS) {
+    for (const sub of RESERVED_SLUGS) {
       expect(resolveHost(`${sub}.${ROOT}`, ROOT).kind).not.toBe("organization")
     }
-  })
-
-  it("reserves the same slugs as the database", () => {
-    expect([...RESERVED_SUBDOMAINS].sort()).toEqual([...RESERVED_SLUGS].sort())
   })
 })
 

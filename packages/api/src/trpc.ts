@@ -11,7 +11,11 @@
  *                            from the subdomain): `ctx.organization`,
  *                            `ctx.membership` and `ctx.scope`, the
  *                            Organization-scoped data access. All business
- *                            data goes through `ctx.scope`.
+ *                            data goes through `ctx.scope`. `ctx.actor` is
+ *                            the Membership as the domain policy's `Actor`.
+ * - permittedProcedure(a)  — organization tier where the domain policy allows
+ *                            Organization action `a` (`can(actor, a)`), e.g.
+ *                            `permittedProcedure("members.manage")`.
  * - adminProcedure         — organization tier with Role = Admin.
  * - platformProcedure      — authed, and the User is a Platform Admin. Grants
  *                            no Organization access by itself.
@@ -31,8 +35,13 @@ import { z, ZodError } from "zod"
 
 import { getSessionFromHeaders } from "@workspace/auth"
 import type { Session } from "@workspace/auth"
+import { authEnv } from "@workspace/auth/env"
+import { createSmtpMailer } from "@workspace/auth/mailer"
+import type { Mailer } from "@workspace/auth/mailer"
 import { and, eq, organizationScope, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
+import { can } from "@workspace/domain/policy"
+import type { Actor, OrganizationAction } from "@workspace/domain/policy"
 
 import { ORGANIZATION_SLUG_HEADER } from "./headers"
 
@@ -49,7 +58,18 @@ export interface CreateContextOptions {
    * the request's session cookie; the test harness passes it directly.
    */
   session?: Session | null
+  /** Outgoing email. Defaults to SMTP; the test harness passes an in-memory one. */
+  mailer?: Mailer
+  /**
+   * Public base URL of the `app.` surface, for links in emails (Invitation
+   * accept links). Defaults to APP_URL.
+   */
+  appUrl?: string
 }
+
+// Process-wide defaults, created on first use.
+let smtpMailer: Mailer | undefined
+let defaultAppUrl: string | undefined
 
 /**
  * Builds the per-request context. The Organization is resolved lazily by
@@ -64,6 +84,8 @@ export async function createTRPCContext(opts: CreateContextOptions) {
     db: opts.db,
     headers: opts.headers,
     session,
+    mailer: opts.mailer ?? (smtpMailer ??= createSmtpMailer()),
+    appUrl: opts.appUrl ?? (defaultAppUrl ??= authEnv().APP_URL),
   }
 }
 
@@ -150,15 +172,35 @@ export const organizationProcedure = authedProcedure.use(
         message: "Organization not found.",
       })
     }
+    const actor: Actor = {
+      userId: ctx.user.id,
+      role: found.membership.role,
+      isApprover: found.membership.isApprover,
+    }
     return next({
       ctx: {
         organization: found.organization,
         membership: found.membership,
+        actor,
         scope: organizationScope(ctx.db, found.organization.id),
       },
     })
   }
 )
+
+/**
+ * Member whom the domain policy allows Organization action `action`
+ * (`can(ctx.actor, action)`); FORBIDDEN with the policy's message otherwise.
+ */
+export function permittedProcedure(action: OrganizationAction) {
+  return organizationProcedure.use(({ ctx, next }) => {
+    const decision = can(ctx.actor, action)
+    if (!decision.allowed) {
+      throw new TRPCError({ code: "FORBIDDEN", message: decision.message })
+    }
+    return next()
+  })
+}
 
 /** Admin of the request's Organization (Role = Admin). */
 export const adminProcedure = organizationProcedure.use(({ ctx, next }) => {

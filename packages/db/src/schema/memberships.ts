@@ -1,16 +1,12 @@
 import { boolean, index, pgEnum, unique, uuid } from "drizzle-orm/pg-core"
 
+import { ROLES } from "@workspace/domain/enums"
+
 import { timestamps } from "../columns"
 import { organizationTable } from "../organization-table"
 import { users } from "./auth"
 
-/**
- * Membership Roles (glossary: Role). Literal list for now; it is reconciled
- * with the Role list in `@workspace/domain`'s permission policy later.
- */
-export const ROLES = ["admin", "manager", "member"] as const
-export type Role = (typeof ROLES)[number]
-
+/** Membership Roles (glossary: Role), from `@workspace/domain`. */
 export const roleEnum = pgEnum("membership_role", ROLES)
 
 /**

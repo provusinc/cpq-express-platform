@@ -23,6 +23,7 @@ import { schema } from "@workspace/db"
 import { db } from "@workspace/db/client"
 
 import { authEnv } from "./env"
+import { smtpUrl } from "./mailer"
 import { resolveRedirect } from "./redirect"
 import { sessionCookieName } from "./session"
 
@@ -44,27 +45,13 @@ const secure = new URL(env.APP_URL).protocol === "https:"
 // Local dev may run without AUTH_SECRET; production env validation requires it.
 const secret = env.AUTH_SECRET ?? "cpq-express-insecure-development-secret"
 
-function smtpUrl() {
-  const url = new URL(
-    `${env.SMTP_SECURE ? "smtps" : "smtp"}://${env.SMTP_HOST}`
-  )
-  url.port = String(env.SMTP_PORT)
-  if (env.SMTP_USER) {
-    url.username = env.SMTP_USER
-    url.password = env.SMTP_PASSWORD ?? ""
-  }
-  return url.toString()
-}
-
 /** OAuth providers enabled by env, for the sign-in page's buttons. */
 export const oauthProviders: { id: string; name: string }[] = []
 
 const providers: Provider[] = [
   Nodemailer({
-    // A connection URL rather than an options object: the provider deep-merges
-    // options over a default `auth: { user: "", pass: "" }`, which makes
-    // nodemailer attempt (and fail) AUTH against servers that advertise it.
-    server: smtpUrl(),
+    // The same SMTP settings as every other email (see ./mailer).
+    server: smtpUrl(env),
     from: env.EMAIL_FROM,
   }),
 ]

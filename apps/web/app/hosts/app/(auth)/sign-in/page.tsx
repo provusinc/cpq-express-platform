@@ -28,6 +28,7 @@ export default async function SignInPage({
     <SignInForm
       callbackUrl={callbackUrl}
       error={typeof query.error === "string" ? query.error : undefined}
+      defaultEmail={typeof query.email === "string" ? query.email : undefined}
       oauthProviders={oauthProviders}
     />
   )

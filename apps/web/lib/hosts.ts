@@ -13,6 +13,8 @@
  * host (the bare root domain, `localhost`) is passed through untouched.
  * `/api/*` is shared by every host and never rewritten.
  */
+import { checkSlug } from "@workspace/domain/organizations"
+
 export type HostSurface =
   | { kind: "app" }
   | { kind: "admin" }
@@ -29,24 +31,6 @@ export const REQUEST_PATH_HEADER = "x-request-path"
 /** Internal route prefix of every surface's routes (never addressable directly). */
 export const HOSTS_PREFIX = "/hosts"
 
-/**
- * Subdomains that are never an Organization. Must match `RESERVED_SLUGS` in
- * `@workspace/db` (the database check constraint); both move to
- * `@workspace/domain` with the slug rules.
- */
-export const RESERVED_SUBDOMAINS: readonly string[] = [
-  "app",
-  "admin",
-  "www",
-  "api",
-  "auth",
-  "docs",
-  "status",
-]
-
-/** A DNS label: lowercase letters, digits and inner hyphens, 1–63 chars. */
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
-
 export function resolveHost(
   host: string | null,
   rootDomain: string
@@ -58,7 +42,9 @@ export function resolveHost(
   const subdomain = hostname.slice(0, -(root.length + 1))
   if (subdomain === "app") return { kind: "app" }
   if (subdomain === "admin") return { kind: "admin" }
-  if (RESERVED_SUBDOMAINS.includes(subdomain) || !SLUG.test(subdomain)) {
+  // Reserved subdomains and labels that can't be a slug (the same rules the
+  // API applies when creating an Organization).
+  if (!checkSlug(subdomain).ok) {
     return { kind: "unknown" }
   }
   return { kind: "organization", slug: subdomain }

@@ -29,6 +29,13 @@
       "when": 1790154890706,
       "tag": "0003_organization_slug_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790156031009,
+      "tag": "0004_invitations",
+      "breakpoints": true
     }
   ]
 }

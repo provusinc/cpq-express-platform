@@ -28,9 +28,17 @@ export function organizationUrl(slug: string, path = "/") {
   ).toString()
 }
 
-/** The sign-in page on `app.`, returning to `callbackUrl` afterwards. */
-export function signInUrl(callbackUrl: string) {
-  return appUrl(`/sign-in?${new URLSearchParams({ callbackUrl })}`)
+/**
+ * The sign-in page on `app.`, returning to `callbackUrl` afterwards.
+ * `email` pre-fills the magic-link form (e.g. the invited address).
+ */
+export function signInUrl(
+  callbackUrl: string,
+  { email }: { email?: string } = {}
+) {
+  const query = new URLSearchParams({ callbackUrl })
+  if (email) query.set("email", email)
+  return appUrl(`/sign-in?${query}`)
 }
 
 /** The public path + query of the current request (set by the proxy). */

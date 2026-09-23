@@ -14,13 +14,16 @@ import { fileURLToPath } from "node:url"
 
 import { createDb } from "../index"
 import type { Db } from "../index"
+import { SEED_INVITATION, seedInvitations } from "./invitations"
 import { seedTenancy } from "./tenancy"
 
 export { SEED_ORGANIZATIONS, SEED_PLATFORM_ADMIN, seedTenancy } from "./tenancy"
+export { SEED_INVITATION, seedInvitations } from "./invitations"
 
 export async function seed(db: Db) {
   return db.transaction(async (tx) => {
     const organizations = await seedTenancy(tx)
+    await seedInvitations(tx, organizations)
     return { organizations }
   })
 }
@@ -35,7 +38,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const { organizations } = await seed(db)
     console.log(
-      `Seeded ${new URL(url).pathname.slice(1)}: Organizations ${Object.keys(organizations).join(", ")}.`
+      `Seeded ${new URL(url).pathname.slice(1)}: Organizations ${Object.keys(organizations).join(", ")}; ` +
+        `a pending Invitation for ${SEED_INVITATION.email} at /invitations/${SEED_INVITATION.token} on the app host.`
     )
   } finally {
     await db.$client.end()

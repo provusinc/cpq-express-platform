@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { eq, schema } from "@workspace/db"
+import { RESERVED_SLUGS } from "@workspace/domain/organizations"
 import type { Db } from "@workspace/db"
 
 import {
@@ -27,15 +28,8 @@ describe("organizations table", () => {
   it("rejects reserved, malformed and duplicate slugs", () =>
     withTestDb(async (db) => {
       await createOrganization(db, { slug: "taken" })
-      for (const slug of [
-        "app",
-        "admin",
-        "www",
-        "Acme",
-        "-acme",
-        "a.b",
-        "taken",
-      ]) {
+      // The check constraints are built from the domain's rules.
+      for (const slug of [...RESERVED_SLUGS, "Acme", "-acme", "a.b", "taken"]) {
         expect(
           await violation(db, (tx) => createOrganization(tx, { slug })),
           slug

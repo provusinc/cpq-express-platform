@@ -13,6 +13,7 @@
  * - allocations: planner cells, caps, default layout, effort resize, diff
  * - schedule: Quote date change (shift / clamp), Line Item start change
  * - phases:  Phase tree rules (depth ≤ 3, no cycles)
+ * - organizations: slug rules (format, reserved), currency codes
  */
 export * from "./enums"
 export * from "./money"
@@ -24,3 +25,4 @@ export * from "./effort"
 export * from "./allocations"
 export * from "./schedule"
 export * from "./phases"
+export * from "./organizations"

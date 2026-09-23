@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm"
 
+import type { Role } from "@workspace/domain/enums"
+
 import type { Db } from "../index"
 import { memberships, organizations, users } from "../schema"
-import type { Role } from "../schema"
 
 /**
  * Identity and tenancy demo data: a Platform Admin, `acme` (USD) with one

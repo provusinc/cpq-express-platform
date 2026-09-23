@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm"
-import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm"
+import type { InferSelectModel, SQL } from "drizzle-orm"
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core"
 
 import type { Db } from "./index"
@@ -11,13 +11,16 @@ export type OrganizationOwnedTable = PgTable & {
 }
 
 type Row<T extends OrganizationOwnedTable> = InferSelectModel<T>
+// Built on `T["$inferInsert"]` rather than `InferInsertModel<T>`: with the
+// latter, `Omit` inside these generic signatures drops the optional columns
+// (e.g. `isApprover`), so passing them failed to typecheck.
 /** Insert values without `organizationId` — the scope supplies it. */
 type Values<T extends OrganizationOwnedTable> = Omit<
-  InferInsertModel<T>,
+  T["$inferInsert"],
   "organizationId"
 >
 type Changes<T extends OrganizationOwnedTable> = Partial<
-  Omit<InferInsertModel<T>, "organizationId" | "id">
+  Omit<T["$inferInsert"], "organizationId" | "id">
 >
 
 /**

@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto"
 
 import type { SessionUser } from "@workspace/auth"
-import { schema, uuidv7 } from "@workspace/db"
+import type { Role } from "@workspace/domain/enums"
+import { createInvitationToken, schema, uuidv7 } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 type NewUser = typeof schema.users.$inferInsert
@@ -53,7 +54,6 @@ export function toSessionUser(user: SessionUser): SessionUser {
 }
 
 type NewOrganization = typeof schema.organizations.$inferInsert
-type Role = (typeof schema.ROLES)[number]
 
 /** Inserts an Organization (unique slug by default, USD). Returns the row. */
 export async function createOrganization(
@@ -124,4 +124,37 @@ export async function createMember(
     isApprover,
   })
   return { user, membership }
+}
+
+type NewInvitation = typeof schema.invitations.$inferInsert
+
+/**
+ * Inserts an Invitation directly (no email) and returns it with its raw
+ * `token`. Pending for a week by default; pass `expiresAt`, `acceptedAt` or
+ * `revokedAt` for the other outcomes.
+ */
+export async function createInvitation(
+  db: Db,
+  {
+    organization,
+    email = `invitee-${uuidv7()}@example.test`,
+    role = "member",
+    ...overrides
+  }: { organization: { id: string }; email?: string; role?: Role } & Partial<
+    Omit<NewInvitation, "organizationId" | "email" | "role" | "tokenHash">
+  >
+) {
+  const { token, tokenHash } = createInvitationToken()
+  const [invitation] = await db
+    .insert(schema.invitations)
+    .values({
+      organizationId: organization.id,
+      email: email.toLowerCase(),
+      role,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      ...overrides,
+    })
+    .returning()
+  return { invitation: invitation!, token }
 }

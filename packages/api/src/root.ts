@@ -1,7 +1,9 @@
 import { authRouter } from "./routers/auth"
 import { healthRouter } from "./routers/health"
+import { invitationRouter } from "./routers/invitation"
 import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
+import { platformRouter } from "./routers/platform"
 import { userRouter } from "./routers/user"
 import { createCallerFactory, createTRPCRouter } from "./trpc"
 
@@ -12,8 +14,10 @@ import { createCallerFactory, createTRPCRouter } from "./trpc"
 export const appRouter = createTRPCRouter({
   auth: authRouter,
   health: healthRouter,
+  invitation: invitationRouter,
   membership: membershipRouter,
   organization: organizationRouter,
+  platform: platformRouter,
   user: userRouter,
 })
 

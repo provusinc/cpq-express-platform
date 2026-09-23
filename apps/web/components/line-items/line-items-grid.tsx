@@ -48,7 +48,6 @@ import type { PhaseRollup } from "@workspace/domain/phases"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
-import { DataTableRowContextMenu } from "@workspace/ui/components/niko-table/components/data-table-row-context-menu"
 import {
   RowMenuItem,
   RowMenuSeparator,
@@ -81,6 +80,8 @@ import {
   LIST_TABLE_CLASS,
   resolveUpdater,
   RowActionsMenu,
+  RowContextMenuArea,
+  selectableRows,
 } from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
 import { formatDate } from "@/lib/format"
@@ -141,6 +142,11 @@ const rowIdOf = (row: GridRow) => row.id
 const subRowsOf = (row: GridRow) => row.subRows
 /** Only Line Items are selectable (bulk move, clone and delete). */
 const canSelect = (row: { original: GridRow }) => row.original.kind === "line"
+
+/** The right-click menu of a grid row: a Phase's or a Line Item's. */
+const rowMenuOf = (row: GridRow) =>
+  row.kind === "phase" ? <PhaseRowMenu /> : <LineRowMenu />
+const noRowMenu = () => null
 
 /** What an edit cell sends: one field of one line. */
 export type LineItemPatch = {
@@ -881,17 +887,7 @@ function LineItemsBody({
               ))}
             </DroppableRow>
           )
-        if (readOnly) return <Fragment key={row.id}>{element}</Fragment>
-        return (
-          <DataTableRowContextMenu
-            key={row.id}
-            row={row.original}
-            trigger={element}
-            className={row.original.kind === "phase" ? "w-56" : "w-52"}
-          >
-            {row.original.kind === "phase" ? <PhaseRowMenu /> : <LineRowMenu />}
-          </DataTableRowContextMenu>
-        )
+        return <Fragment key={row.id}>{element}</Fragment>
       })}
       {!readOnly && dragging && (
         <DroppableRow
@@ -1084,10 +1080,9 @@ export function LineItemsGrid({
           data={tree}
           getRowId={rowIdOf}
           getSubRows={subRowsOf}
-          enableRowSelection={canSelect}
           config={{
             enableExpanding: true,
-            enableRowSelection: !readOnly,
+            enableRowSelection: readOnly ? false : selectableRows(canSelect),
             enableSorting: false,
             enablePagination: false,
             enableFilters: false,
@@ -1098,14 +1093,19 @@ export function LineItemsGrid({
           }
           onExpandedChange={onExpandedChange}
         >
-          <DataTable className={LIST_TABLE_CLASS}>
-            <DataTableHeader sticky={false} />
-            <LineItemsBody
-              columnIds={columnIds}
-              hintFor={hintFor}
-              dragging={drag !== null}
-            />
-          </DataTable>
+          <RowContextMenuArea<GridRow>
+            menu={readOnly ? noRowMenu : rowMenuOf}
+            contentClassName={(row) => (row.kind === "phase" ? "w-56" : "w-52")}
+          >
+            <DataTable className={LIST_TABLE_CLASS}>
+              <DataTableHeader sticky={false} />
+              <LineItemsBody
+                columnIds={columnIds}
+                hintFor={hintFor}
+                dragging={drag !== null}
+              />
+            </DataTable>
+          </RowContextMenuArea>
         </DataTableRoot>
         <DragOverlay dropAnimation={null}>
           {overlayLabel !== null && (

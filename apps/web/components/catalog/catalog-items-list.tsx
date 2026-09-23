@@ -15,8 +15,6 @@ import type { RouterOutputs } from "@workspace/api"
 import type { CatalogItemKind } from "@workspace/domain/enums"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
-import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
@@ -24,7 +22,6 @@ import { ActiveBadge } from "@/components/shell/active-badge"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   actionsColumn,
-  ColumnsMenu,
   ColumnTitle,
   facetValues,
   ListTable,
@@ -32,6 +29,11 @@ import {
   ServerTableRoot,
   toColumnFilters,
 } from "@/components/shell/data-table"
+import {
+  ColumnsMenu,
+  FacetedFilter,
+  SearchFilter,
+} from "@/components/shell/table-toolbar"
 import { useLabels } from "@/components/shell/labels"
 import { PageHeader } from "@/components/shell/page-header"
 import { formatMoney } from "@/lib/money"
@@ -299,26 +301,26 @@ export function CatalogItemsList({
             onColumnVisibilityChange={setVisibility}
           >
             <DataTableToolbarSection className="px-0">
-              <DataTableSearchFilter
+              <SearchFilter
                 aria-label={`Search ${label.plural}`}
                 placeholder="Search name or description"
                 className="w-full flex-none sm:w-64"
               />
               {kind === "add_on" && (
-                <DataTableFacetedFilter
+                <FacetedFilter
                   accessorKey="billingUnit"
                   options={BILLING_UNIT_OPTIONS}
                   showCounts={false}
                   limitToFilteredRows={false}
                 />
               )}
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="active"
                 options={[...STATUS_OPTIONS]}
                 showCounts={false}
                 limitToFilteredRows={false}
               />
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="tags"
                 options={(tags.data ?? []).map((t) => ({ value: t, label: t }))}
                 multiple

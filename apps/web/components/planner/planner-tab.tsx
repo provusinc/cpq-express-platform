@@ -14,6 +14,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@workspace/ui/components/card"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+
+import { useQuoteEditor } from "@/components/quotes/autosave"
+import type { EditorLine } from "@/components/quotes/autosave"
+import { useQuote } from "@/components/quotes/quote-header"
 import {
   Empty,
   EmptyContent,
@@ -21,13 +27,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@workspace/ui/components/empty"
-import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
-
-import { useQuoteEditor } from "@/components/quotes/autosave"
-import type { EditorLine } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
+} from "@/components/shell/empty"
 import { useLabels } from "@/components/shell/labels"
 import { formatDate } from "@/lib/format"
 import { formatMoney, trimMoney } from "@/lib/money"

@@ -244,3 +244,17 @@
     letter-spacing: -0.01em;
   }
 }
+
+@layer components {
+  /*
+   * niko-table renders a custom trigger inside its own trigger <button>
+   * (PopoverTrigger children), so the app passes a <span> TriggerFace
+   * (apps/web components/shell/table-toolbar.tsx) that draws the button;
+   * the enclosing <button> is only the focus and click target.
+   */
+  [data-slot="popover-trigger"]:has(> [data-slot="trigger-face"]) {
+    display: inline-flex;
+    border-radius: var(--radius-lg);
+    outline: none;
+  }
+}

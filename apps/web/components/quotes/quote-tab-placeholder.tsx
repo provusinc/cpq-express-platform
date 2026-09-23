@@ -6,7 +6,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@workspace/ui/components/empty"
+} from "@/components/shell/empty"
 
 /** Stand-in for a Quote editor tab that a later ticket builds. */
 export function QuoteTabPlaceholder({

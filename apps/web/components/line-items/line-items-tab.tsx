@@ -22,6 +22,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+
+import { useQuoteEditor } from "@/components/quotes/autosave"
+import { useQuote } from "@/components/quotes/quote-header"
+import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   Empty,
   EmptyContent,
@@ -29,11 +33,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@workspace/ui/components/empty"
-
-import { useQuoteEditor } from "@/components/quotes/autosave"
-import { useQuote } from "@/components/quotes/quote-header"
-import { ConfirmDialog } from "@/components/shell/confirm-dialog"
+} from "@/components/shell/empty"
 import { useLabels } from "@/components/shell/labels"
 import {
   nestRows,

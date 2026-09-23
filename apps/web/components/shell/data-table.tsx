@@ -18,29 +18,32 @@ import type {
   TableFeatures,
   Updater,
 } from "@tanstack/react-table"
-import { ChevronsUpDownIcon, Columns3Icon, EllipsisIcon } from "lucide-react"
-import { useCallback, useMemo } from "react"
+import { EllipsisIcon } from "lucide-react"
+import { useMemo, useRef, useState } from "react"
 
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@workspace/ui/components/context-menu"
+import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
-import { DataTableColumnHeader } from "@workspace/ui/components/niko-table/components/data-table-column-header"
-import { DataTableColumnSortMenu } from "@workspace/ui/components/niko-table/components/data-table-column-sort"
+  DataTableColumnHeader,
+  useColumnHeaderContext,
+} from "@workspace/ui/components/niko-table/components/data-table-column-header"
+import { DataTableColumnSortOptions } from "@workspace/ui/components/niko-table/components/data-table-column-sort"
 import { DataTableColumnTitle } from "@workspace/ui/components/niko-table/components/data-table-column-title"
 import { DataTablePagination } from "@workspace/ui/components/niko-table/components/data-table-pagination"
-import { DataTableViewMenu } from "@workspace/ui/components/niko-table/components/data-table-view-menu"
 import { DataTableRowMenuScope } from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import { SORT_ICONS } from "@workspace/ui/components/niko-table/config/data-table"
+import { FILTER_VARIANTS } from "@workspace/ui/components/niko-table/lib/constants"
 import { DataTable } from "@workspace/ui/components/niko-table/core/data-table"
 import { useDataTable } from "@workspace/ui/components/niko-table/core/data-table-context"
 import { DataTableRoot } from "@workspace/ui/components/niko-table/core/data-table-root"
@@ -53,8 +56,17 @@ import {
 import type {
   DataTableColumnDef,
   DataTableColumns,
+  DataTableRow,
 } from "@workspace/ui/components/niko-table/types"
 import { cn } from "@workspace/ui/lib/utils"
+
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/shell/empty"
 
 declare module "@tanstack/react-table" {
   // Must repeat niko-table's augmentation's type parameters verbatim.
@@ -105,8 +117,54 @@ export function SortableColumnTitle({ column }: HeaderProps) {
   return (
     <DataTableColumnHeader className={end ? "justify-end" : undefined}>
       <DataTableColumnTitle />
-      <DataTableColumnSortMenu />
+      <ColumnSortMenu />
     </DataTableColumnHeader>
+  )
+}
+
+/**
+ * niko's column sort menu (asc / desc / clear) as niko's `TableColumnSortMenu`
+ * draws it, composed here from its `DataTableColumnSortOptions` so the
+ * options' label sits inside a `DropdownMenuGroup` (Base UI throws on a
+ * group label outside a group, which niko's own menu does).
+ */
+function ColumnSortMenu() {
+  const { column } = useColumnHeaderContext(true)
+  if (!column.getCanSort()) return null
+  const sorted = column.getIsSorted()
+  const variant = column.columnDef.meta?.variant ?? FILTER_VARIANTS.TEXT
+  const icons =
+    SORT_ICONS[variant as keyof typeof SORT_ICONS] ??
+    SORT_ICONS[FILTER_VARIANTS.TEXT]
+  const SortIcon =
+    sorted === "asc"
+      ? icons.asc
+      : sorted === "desc"
+        ? icons.desc
+        : icons.unsorted
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "size-7 transition-opacity dark:text-muted-foreground",
+              sorted && "text-primary"
+            )}
+          />
+        }
+      >
+        <SortIcon className="size-4" />
+        <span className="sr-only">Sort column</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuGroup>
+          <DataTableColumnSortOptions withSeparator={false} />
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -267,20 +325,14 @@ export function ListTable({
   maxHeight?: number | string
   className?: string
 }) {
-  const renderRowContextMenu = useCallback(
-    () => (RowMenu ? <RowMenu /> : null),
-    [RowMenu]
-  )
   const showFiltered = filtered && empty.filteredTitle !== undefined
-  return (
+  const table = (
     <DataTable
       maxHeight={maxHeight}
       className={cn(LIST_TABLE_CLASS, className)}
     >
       <DataTableHeader />
-      <DataTableBody
-        renderRowContextMenu={RowMenu ? renderRowContextMenu : undefined}
-      >
+      <DataTableBody>
         <DataTableSkeleton rows={skeletonRows} />
         <DataTableEmptyBody>
           <Empty className="py-6">
@@ -302,6 +354,100 @@ export function ListTable({
       </DataTableBody>
     </DataTable>
   )
+  if (!RowMenu) return table
+  return (
+    <RowContextMenuArea menu={() => <RowMenu />}>{table}</RowContextMenuArea>
+  )
+}
+
+/**
+ * Right-click menus for the rows of the table inside it (every `<tr
+ * data-row-id>`, as niko's bodies render them): one shadcn `ContextMenu`
+ * around the table that opens for the row under the pointer, with `menu`'s
+ * items inside a `DataTableRowMenuScope` (so `RowMenuItem` & co. and
+ * `useDataTableRow()` work as in the "…" menu). Right-clicking outside a
+ * row keeps the browser's menu. The row is highlighted while its menu is
+ * open (`data-context-menu-open`).
+ *
+ * Use this instead of niko's per-row `DataTableRowContextMenu` (and the
+ * bodies' `renderRowContextMenu`): its trigger is a `<div>` around the
+ * `<tr>`, which is invalid inside `<tbody>`.
+ */
+export function RowContextMenuArea<TData extends RowData>({
+  menu,
+  contentClassName,
+  children,
+}: {
+  /** The row's menu items, or `null` for no menu on that row. */
+  menu: (row: TData) => React.ReactNode
+  contentClassName?: string | ((row: TData) => string | undefined)
+  children: React.ReactNode
+}) {
+  const { table } = useDataTable<TData>()
+  const [target, setTarget] = useState<{ row: TData; items: React.ReactNode }>()
+  const rowElement = useRef<HTMLElement | null>(null)
+
+  function onContextMenuCapture(event: React.MouseEvent) {
+    const element = (event.target as HTMLElement).closest<HTMLElement>(
+      "tr[data-row-id]"
+    )
+    const id = element?.dataset.rowId
+    const row = id ? table.getRow(id, true)?.original : undefined
+    const items = row === undefined ? null : menu(row)
+    if (row === undefined || items === null) {
+      // Not a row (or a row without a menu): leave the browser's menu.
+      event.stopPropagation()
+      return
+    }
+    rowElement.current?.removeAttribute("data-context-menu-open")
+    rowElement.current = element
+    element?.setAttribute("data-context-menu-open", "")
+    setTarget({ row, items })
+  }
+
+  return (
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (open) return
+        rowElement.current?.removeAttribute("data-context-menu-open")
+        rowElement.current = null
+      }}
+    >
+      <ContextMenuTrigger
+        className="select-auto"
+        onContextMenuCapture={onContextMenuCapture}
+      >
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className={
+          target &&
+          (typeof contentClassName === "function"
+            ? contentClassName(target.row)
+            : contentClassName)
+        }
+      >
+        {target && (
+          <DataTableRowMenuScope row={target.row} surface="context">
+            {target.items}
+          </DataTableRowMenuScope>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}
+
+/**
+ * A per-row "may this row be selected" rule for `DataTableRoot`'s
+ * `config.enableRowSelection`. niko types that option as a boolean but
+ * hands it to TanStack's `enableRowSelection` unchanged, which takes a
+ * predicate too (its top-level `enableRowSelection` prop is overwritten by
+ * the config, so it can't carry one).
+ */
+export function selectableRows<TData extends RowData>(
+  canSelect: (row: DataTableRow<TData>) => boolean
+): boolean {
+  return canSelect as unknown as boolean
 }
 
 /**
@@ -550,33 +696,5 @@ export function LocalTableRoot<TData extends RowData>({
     >
       {children}
     </DataTableRoot>
-  )
-}
-
-/**
- * The toolbar's "Columns" menu (niko's view menu): show or hide the
- * table's optional columns, e.g. a Description hidden by default. Columns
- * with `enableHiding: false` (the Name, filter-only columns) aren't listed.
- */
-export function ColumnsMenu() {
-  return (
-    <div className="ml-auto">
-      <DataTableViewMenu trigger={<ColumnsButton />} />
-    </div>
-  )
-}
-
-/**
- * The trigger of the Columns menus. It is the popover trigger's `render`
- * element, so it must pass the props (handlers, ref, ARIA) it is given on
- * to the button.
- */
-export function ColumnsButton(props: React.ComponentProps<typeof Button>) {
-  return (
-    <Button variant="outline" size="sm" {...props}>
-      <Columns3Icon data-icon="inline-start" />
-      Columns
-      <ChevronsUpDownIcon data-icon="inline-end" className="opacity-50" />
-    </Button>
   )
 }

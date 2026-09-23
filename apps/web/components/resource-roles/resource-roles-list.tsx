@@ -13,8 +13,6 @@ import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
 import { Button } from "@workspace/ui/components/button"
-import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
-import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
@@ -29,7 +27,6 @@ import { ActiveBadge } from "@/components/shell/active-badge"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
   actionsColumn,
-  ColumnsMenu,
   ColumnTitle,
   facetValues,
   ListTable,
@@ -37,6 +34,11 @@ import {
   ServerTableRoot,
   toColumnFilters,
 } from "@/components/shell/data-table"
+import {
+  ColumnsMenu,
+  FacetedFilter,
+  SearchFilter,
+} from "@/components/shell/table-toolbar"
 import { useLabels } from "@/components/shell/labels"
 import { PageHeader } from "@/components/shell/page-header"
 import { formatMoney } from "@/lib/money"
@@ -315,32 +317,32 @@ export function ResourceRolesList({
             onColumnVisibilityChange={setVisibility}
           >
             <DataTableToolbarSection className="px-0">
-              <DataTableSearchFilter
+              <SearchFilter
                 aria-label={`Search ${label.plural}`}
                 placeholder="Search name or description"
                 className="w-full flex-none sm:w-64"
               />
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="active"
                 options={[...STATUS_OPTIONS]}
                 showCounts={false}
                 limitToFilteredRows={false}
               />
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="locationCountry"
                 title="Country"
                 options={distinct(all.map((l) => l.country))}
                 showCounts={false}
                 limitToFilteredRows={false}
               />
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="locationState"
                 title="State"
                 options={distinct(inCountry.map((l) => l.state))}
                 showCounts={false}
                 limitToFilteredRows={false}
               />
-              <DataTableFacetedFilter
+              <FacetedFilter
                 accessorKey="locationCity"
                 title="City"
                 options={distinct(inState.map((l) => l.city))}

@@ -20,22 +20,23 @@ import { toast } from "sonner"
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES } from "@workspace/domain/enums"
 import type { QuoteStatus } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
-import { DataTableDateFilter } from "@workspace/ui/components/niko-table/components/data-table-date-filter"
-import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
-import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
 import { DataTableSelectionBar } from "@workspace/ui/components/niko-table/components/data-table-selection-bar"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
-import { DataTableViewDndMenu } from "@workspace/ui/components/niko-table/components/data-table-view-dnd-menu"
 
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import {
-  ColumnsButton,
   facetValues,
   ListTable,
   ServerPagination,
   ServerTableRoot,
   toColumnFilters,
 } from "@/components/shell/data-table"
+import {
+  ColumnsDndMenu,
+  DateRangeFilter,
+  FacetedFilter,
+  SearchFilter,
+} from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
 import { resolveColumnLayout, toSavedLayout } from "@/lib/column-layout"
 import type { ColumnLayout } from "@/lib/column-layout"
@@ -329,19 +330,19 @@ export function QuotesList({
           ]}
         >
           <DataTableToolbarSection className="px-0">
-            <DataTableSearchFilter
+            <SearchFilter
               aria-label="Search Quotes"
               placeholder="Search name, description, Account"
               className="w-full flex-none sm:w-64"
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="status"
               options={STATUS_OPTIONS}
               multiple
               showCounts={false}
               limitToFilteredRows={false}
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="account"
               options={(options.data?.accounts ?? []).map((a) => ({
                 value: a.id,
@@ -350,13 +351,13 @@ export function QuotesList({
               showCounts={false}
               limitToFilteredRows={false}
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="owner"
               options={OWNER_OPTIONS}
               showCounts={false}
               limitToFilteredRows={false}
             />
-            <DataTableDateFilter accessorKey="createdAt" multiple />
+            <DateRangeFilter accessorKey="createdAt" />
             {filters.marginBelow !== undefined && (
               <Button
                 variant="secondary"
@@ -373,19 +374,16 @@ export function QuotesList({
                 Clear
               </Button>
             )}
-            <div className="ml-auto">
-              <DataTableViewDndMenu
-                columnOrder={movableOrder}
-                onColumnOrderChange={(order) =>
-                  changeLayout({
-                    ...layout,
-                    order: [...FIXED_QUOTE_COLUMNS, ...order],
-                  })
-                }
-                onReset={() => changeLayout(layoutFor(null))}
-                trigger={<ColumnsButton />}
-              />
-            </div>
+            <ColumnsDndMenu
+              columnOrder={movableOrder}
+              onColumnOrderChange={(order) =>
+                changeLayout({
+                  ...layout,
+                  order: [...FIXED_QUOTE_COLUMNS, ...order],
+                })
+              }
+              onReset={() => changeLayout(layoutFor(null))}
+            />
           </DataTableToolbarSection>
 
           <DataTableSelectionBar

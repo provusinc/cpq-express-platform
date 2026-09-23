@@ -26,13 +26,11 @@ import { toast } from "sonner"
 import type { RouterOutputs } from "@workspace/api"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
-import { DataTableFacetedFilter } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
 import {
   RowMenuItem,
   RowMenuSeparator,
   useDataTableRow,
 } from "@workspace/ui/components/niko-table/components/data-table-row-menu"
-import { DataTableSearchFilter } from "@workspace/ui/components/niko-table/components/data-table-search-filter"
 import { DataTableSelectionBar } from "@workspace/ui/components/niko-table/components/data-table-selection-bar"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
@@ -48,6 +46,7 @@ import {
   ServerTableRoot,
   toColumnFilters,
 } from "@/components/shell/data-table"
+import { FacetedFilter, SearchFilter } from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -306,12 +305,12 @@ export function AccountsList() {
           columnVisibility={COLUMN_VISIBILITY}
         >
           <DataTableToolbarSection className="px-0">
-            <DataTableSearchFilter
+            <SearchFilter
               aria-label="Search Accounts"
               placeholder="Search name, industry, website"
               className="w-full flex-none sm:w-64"
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="type"
               options={(options.data?.types ?? []).map((t) => ({
                 value: t,
@@ -320,7 +319,7 @@ export function AccountsList() {
               showCounts={false}
               limitToFilteredRows={false}
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="industry"
               options={(options.data?.industries ?? []).map((i) => ({
                 value: i,
@@ -329,7 +328,7 @@ export function AccountsList() {
               showCounts={false}
               limitToFilteredRows={false}
             />
-            <DataTableFacetedFilter
+            <FacetedFilter
               accessorKey="archived"
               options={STATUS_OPTIONS}
               showCounts={false}

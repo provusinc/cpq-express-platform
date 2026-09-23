@@ -1,6 +1,8 @@
 import { LockIcon } from "lucide-react"
 
 import { buttonVariants } from "@workspace/ui/components/button"
+
+import { BrandLockup } from "@/components/brand/brand"
 import {
   Empty,
   EmptyContent,
@@ -8,9 +10,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@workspace/ui/components/empty"
-
-import { BrandLockup } from "@/components/brand/brand"
+} from "@/components/shell/empty"
 
 /**
  * Shown on an Organization subdomain to a signed-in User without a

@@ -24,12 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@workspace/ui/components/empty"
 import { Field, FieldLabel } from "@workspace/ui/components/field"
 import {
   RowMenuItem,
@@ -46,6 +40,12 @@ import {
   ListTable,
   LocalTableRoot,
 } from "@/components/shell/data-table"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/shell/empty"
 import { formatDate } from "@/lib/format"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"

@@ -3,20 +3,32 @@ import type { QuoteStatus } from "@workspace/domain/enums"
 import { Badge } from "@workspace/ui/components/badge"
 import { cn } from "@workspace/ui/lib/utils"
 
-/** Status colour: grey while open, amber waiting, green won, red lost. */
+/**
+ * Status tones, the same everywhere a Quote Status shows (list, editor
+ * header, approval history, Key Insights): neutral while open, amber
+ * waiting on an Approver, iris out with the customer, green approved, red
+ * rejected. Customer Approved is the one solid badge: it is final.
+ */
 const TONES: Record<QuoteStatus, string> = {
-  draft: "bg-secondary text-secondary-foreground",
-  pending_approval:
-    "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200",
-  approved:
-    "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200",
-  rejected: "bg-destructive/10 text-destructive dark:bg-destructive/20",
-  pending_customer_approval:
-    "bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-200",
+  draft: "bg-neutral-soft text-neutral-ink",
+  pending_approval: "bg-warning-soft text-warning-ink",
+  approved: "bg-success-soft text-success-ink",
+  rejected: "bg-danger-soft text-danger-ink",
+  pending_customer_approval: "bg-iris-soft text-iris-ink",
   customer_approved:
-    "bg-emerald-600 text-white dark:bg-emerald-500 dark:text-emerald-950",
-  customer_rejected:
-    "bg-destructive/10 text-destructive dark:bg-destructive/20",
+    "bg-success text-white dark:text-[oklch(0.2_0.04_160)] [&>[data-dot]]:bg-current",
+  customer_rejected: "bg-danger-soft text-danger-ink",
+}
+
+/** The solid colour of each status (dots, the status distribution bar). */
+export const STATUS_SOLID: Record<QuoteStatus, string> = {
+  draft: "bg-neutral",
+  pending_approval: "bg-warning",
+  approved: "bg-success/60",
+  rejected: "bg-danger/70",
+  pending_customer_approval: "bg-iris",
+  customer_approved: "bg-success",
+  customer_rejected: "bg-danger",
 }
 
 /** A Quote Status as a coloured badge, labelled as in the glossary. */
@@ -28,7 +40,14 @@ export function QuoteStatusBadge({
   className?: string
 }) {
   return (
-    <Badge className={cn(TONES[status], className)}>
+    <Badge
+      className={cn("gap-1.5 rounded-md pl-1.5", TONES[status], className)}
+    >
+      <span
+        data-dot
+        aria-hidden
+        className={cn("size-1.5 shrink-0 rounded-full", STATUS_SOLID[status])}
+      />
       {QUOTE_STATUS_LABELS[status]}
     </Badge>
   )

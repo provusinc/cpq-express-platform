@@ -16,7 +16,7 @@ import { Button } from "@workspace/ui/components/button"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
 import type { DataTableColumns } from "@workspace/ui/components/niko-table/types"
 
-import { STATUS_OPTIONS } from "@/components/catalog/labels"
+import { activeViews } from "@/components/catalog/labels"
 import { PriceRangeFilter } from "@/components/catalog/price-range-filter"
 import {
   ManagedRowActionsContext,
@@ -41,6 +41,7 @@ import {
 } from "@/components/shell/table-toolbar"
 import { useLabels } from "@/components/shell/labels"
 import { PageHeader } from "@/components/shell/page-header"
+import { ViewTabs } from "@/components/shell/view-tabs"
 import { formatMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -252,7 +253,6 @@ export function ResourceRolesList({
   }
 
   const columnFilters = toColumnFilters({
-    active: filters.status === "all" ? undefined : filters.status,
     locationCountry: filters.country,
     locationState: filters.state,
     locationCity: filters.city,
@@ -267,8 +267,6 @@ export function ResourceRolesList({
     const city =
       state === filters.state ? facetValues(next, "locationCity")[0] : undefined
     setFilter({
-      status: (facetValues(next, "active")[0] ??
-        "all") as ResourceRoleListInput["status"],
       country,
       state,
       city,
@@ -296,6 +294,20 @@ export function ResourceRolesList({
         )}
       </PageHeader>
 
+      <ViewTabs
+        label={`${label.singular} status`}
+        views={activeViews(list.data?.statusCounts)}
+        value={filters.status ?? "all"}
+        onValueChange={(status) => setFilter({ status })}
+        summary={
+          <>
+            <span className="tabular-nums">{list.data?.total ?? 0}</span>{" "}
+            {list.data?.total === 1 ? label.singular : label.plural}
+            {filtered ? " match" : ""}
+          </>
+        }
+      />
+
       <CurrencyContext value={currencyCode}>
         <ManagedRowActionsContext value={rowActions}>
           <ServerTableRoot
@@ -321,12 +333,6 @@ export function ResourceRolesList({
                 aria-label={`Search ${label.plural}`}
                 placeholder="Search name or description"
                 className="w-full flex-none sm:w-64"
-              />
-              <FacetedFilter
-                accessorKey="active"
-                options={[...STATUS_OPTIONS]}
-                showCounts={false}
-                limitToFilteredRows={false}
               />
               <FacetedFilter
                 accessorKey="locationCountry"
@@ -368,6 +374,15 @@ export function ResourceRolesList({
                   : `An Admin adds ${label.plural} here.`,
                 filteredTitle: `No ${label.plural} match`,
                 filteredDescription: "Try another search or clear the filters.",
+                action: canManage ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button onClick={() => setDialog({ role: null })}>
+                      <PlusIcon data-icon="inline-start" />
+                      New {label.singular}
+                    </Button>
+                    {toolbar}
+                  </div>
+                ) : undefined,
               }}
             />
             <ServerPagination

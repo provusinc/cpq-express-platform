@@ -215,10 +215,14 @@ const columns: DataTableColumns<Member> = [
 /** The Organization's Members: Role, Approver flag, removal (Admins). */
 export function MembersTable({
   members,
+  rows = members,
   currentMembershipId,
   pickerUrl,
 }: {
+  /** Every Member (the last-Admin guard counts them all). */
   members: Member[]
+  /** The Members shown (a view of `members`); all of them by default. */
+  rows?: Member[]
   currentMembershipId: string
   pickerUrl: string
 }) {
@@ -229,10 +233,17 @@ export function MembersTable({
     <MembersContext
       value={{ currentMembershipId, adminCount, onRemove: setRemoving }}
     >
-      <LocalTableRoot columns={columns} data={members} sortable>
+      <LocalTableRoot columns={columns} data={rows} sortable>
         <ListTable
           rowMenu={MemberRowMenu}
-          empty={{ icon: <UsersIcon />, title: "No Members yet" }}
+          filtered={rows.length !== members.length}
+          empty={{
+            icon: <UsersIcon />,
+            title: "No Members yet",
+            filteredTitle: "Nobody in this view",
+            filteredDescription:
+              "Change someone's Role or Approver right, or invite a new Member.",
+          }}
         />
       </LocalTableRoot>
       <RemoveMemberDialog

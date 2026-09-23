@@ -1,17 +1,26 @@
 "use client"
 
 import { useSuspenseQuery } from "@tanstack/react-query"
+import { useState } from "react"
+
+import { ROLE_LABELS, ROLES } from "@workspace/domain/enums"
+import type { Role } from "@workspace/domain/enums"
 
 import { PageHeader } from "@/components/shell/page-header"
+import { ViewTabs } from "@/components/shell/view-tabs"
 import { useTRPC } from "@/trpc/react"
 
 import { InvitationsTable } from "./invitations-table"
 import { InviteMemberDialog } from "./invite-member-dialog"
 import { MembersTable } from "./members-table"
 
+type MemberView = "all" | Role | "approvers"
+
+const plural = (label: string) => `${label}s`
+
 /**
  * The Members page: who is in the Organization (Role, Approver, joined) and
- * who has been invited. Every change is one command, checked again by the
+ * who has been invited. Tabs narrow the table to a Role or the Approvers. Every change is one command, checked again by the
  * API (Admin only, last-Admin guard).
  */
 export function MembersPage({
@@ -31,6 +40,25 @@ export function MembersPage({
     trpc.invitation.list.queryOptions()
   )
 
+  const [view, setView] = useState<MemberView>("all")
+  const inView = (v: MemberView) =>
+    members.filter((m) =>
+      v === "all" ? true : v === "approvers" ? m.isApprover : m.role === v
+    )
+  const views = [
+    { value: "all" as const, label: "All", count: members.length },
+    ...ROLES.map((role) => ({
+      value: role,
+      label: plural(ROLE_LABELS[role]),
+      count: inView(role).length,
+    })),
+    {
+      value: "approvers" as const,
+      label: "Approvers",
+      count: inView("approvers").length,
+    },
+  ]
+
   return (
     <>
       <PageHeader
@@ -39,8 +67,20 @@ export function MembersPage({
       >
         <InviteMemberDialog />
       </PageHeader>
+      <ViewTabs
+        label="Members by Role"
+        views={views}
+        value={view}
+        onValueChange={setView}
+        summary={
+          invitations.length > 0
+            ? `${invitations.length} pending ${invitations.length === 1 ? "Invitation" : "Invitations"}`
+            : undefined
+        }
+      />
       <MembersTable
         members={members}
+        rows={inView(view)}
         currentMembershipId={currentMembershipId}
         pickerUrl={pickerUrl}
       />

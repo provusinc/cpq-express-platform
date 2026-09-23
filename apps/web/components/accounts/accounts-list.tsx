@@ -17,6 +17,7 @@ import {
   ExternalLinkIcon,
   PlusIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -48,6 +49,7 @@ import {
 } from "@/components/shell/data-table"
 import { FacetedFilter, SearchFilter } from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
+import { ViewTabs } from "@/components/shell/view-tabs"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
@@ -57,10 +59,12 @@ import type { AccountListInput } from "./list-input"
 
 type AccountRow = RouterOutputs["account"]["list"]["rows"][number]
 
-const STATUS_OPTIONS = [
-  { value: "archived", label: "Archived" },
-  { value: "all", label: "Active and archived" },
-]
+/** The status tabs; Active is the default. */
+const STATUS_VIEWS = [
+  { value: "active", label: "Active", dot: "bg-success" },
+  { value: "archived", label: "Archived", dot: "bg-neutral" },
+  { value: "all", label: "All" },
+] as const
 
 interface AccountRowActions {
   onArchive: (account: AccountRow) => void
@@ -158,20 +162,11 @@ const columns: DataTableColumns<AccountRow> = [
         </span>
       ),
   },
-  // Filter-only column (never shown): active / archived / all.
-  {
-    id: "archived",
-    accessorKey: "archived",
-    meta: { label: "Archived" },
-    enableHiding: false,
-  },
   actionsColumn<AccountRow>({
     label: (account) => `Actions for ${account.name}`,
     Menu: AccountRowMenu,
   }),
 ]
-
-const COLUMN_VISIBILITY = { archived: false }
 
 /** The Accounts page: search, filters, paging, create and bulk delete. */
 export function AccountsList() {
@@ -256,21 +251,21 @@ export function AccountsList() {
   const columnFilters = toColumnFilters({
     type: filters.type,
     industry: filters.industry,
-    archived: filters.status === "active" ? undefined : filters.status,
   })
   const onColumnFiltersChange = (next: ColumnFiltersState) =>
     setFilter({
       type: facetValues(next, "type")[0],
       industry: facetValues(next, "industry")[0],
-      status: (facetValues(next, "archived")[0] ??
-        "active") as AccountListInput["status"],
     })
 
   const filtered =
     Boolean(deferredSearch) ||
     Boolean(filters.type) ||
-    Boolean(filters.industry) ||
-    filters.status !== "active"
+    Boolean(filters.industry)
+  const clearFilters = () => {
+    setSearch("")
+    setFilter({ type: undefined, industry: undefined })
+  }
 
   return (
     <>
@@ -283,6 +278,23 @@ export function AccountsList() {
           New Account
         </Button>
       </PageHeader>
+
+      <ViewTabs
+        label="Account status"
+        views={STATUS_VIEWS.map((view) => ({
+          ...view,
+          count: list.data?.statusCounts[view.value],
+        }))}
+        value={filters.status ?? "active"}
+        onValueChange={(status) => setFilter({ status })}
+        summary={
+          <>
+            <span className="tabular-nums">{list.data?.total ?? 0}</span>{" "}
+            {list.data?.total === 1 ? "Account" : "Accounts"}
+            {filtered ? " match" : ""}
+          </>
+        }
+      />
 
       <AccountRowActionsContext value={rowActions}>
         <ServerTableRoot
@@ -302,7 +314,6 @@ export function AccountsList() {
           }}
           rowSelection={selection}
           onRowSelectionChange={setSelection}
-          columnVisibility={COLUMN_VISIBILITY}
         >
           <DataTableToolbarSection className="px-0">
             <SearchFilter
@@ -325,12 +336,6 @@ export function AccountsList() {
                 value: i,
                 label: i,
               }))}
-              showCounts={false}
-              limitToFilteredRows={false}
-            />
-            <FacetedFilter
-              accessorKey="archived"
-              options={STATUS_OPTIONS}
               showCounts={false}
               limitToFilteredRows={false}
             />
@@ -361,10 +366,29 @@ export function AccountsList() {
             rowMenu={AccountRowMenu}
             empty={{
               icon: <Building2Icon />,
-              title: "No Accounts yet",
-              description: "Create the first company you quote.",
+              title:
+                filters.status === "archived"
+                  ? "No archived Accounts"
+                  : "No Accounts yet",
+              description:
+                filters.status === "archived"
+                  ? "Archive an Account to hide it from new Quotes."
+                  : "Create the first company you quote.",
               filteredTitle: "No Accounts match",
               filteredDescription: "Try another search or clear the filters.",
+              action:
+                filters.status === "archived" ? undefined : (
+                  <Button onClick={() => setCreating(true)}>
+                    <PlusIcon data-icon="inline-start" />
+                    New Account
+                  </Button>
+                ),
+              filteredAction: (
+                <Button variant="outline" onClick={clearFilters}>
+                  <XIcon data-icon="inline-start" />
+                  Clear filters
+                </Button>
+              ),
             }}
           />
           <ServerPagination

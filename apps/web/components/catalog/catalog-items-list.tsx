@@ -36,12 +36,13 @@ import {
 } from "@/components/shell/table-toolbar"
 import { useLabels } from "@/components/shell/labels"
 import { PageHeader } from "@/components/shell/page-header"
+import { ViewTabs } from "@/components/shell/view-tabs"
 import { formatMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 import { CatalogItemDialog } from "./catalog-item-dialog"
-import { BILLING_UNIT_LABELS, STATUS_OPTIONS } from "./labels"
+import { activeViews, BILLING_UNIT_LABELS } from "./labels"
 import { initialCatalogItemListInput } from "./list-input"
 import type { CatalogItemListInput } from "./list-input"
 import { PriceRangeFilter } from "./price-range-filter"
@@ -238,7 +239,6 @@ export function CatalogItemsList({
 
   const columnFilters = toColumnFilters({
     billingUnit: filters.billingUnit,
-    active: filters.status === "all" ? undefined : filters.status,
     tags: filters.tags,
   })
   const onColumnFiltersChange = (next: ColumnFiltersState) => {
@@ -247,8 +247,6 @@ export function CatalogItemsList({
       billingUnit: facetValues(next, "billingUnit")[0] as
         | CatalogItemListInput["billingUnit"]
         | undefined,
-      status: (facetValues(next, "active")[0] ??
-        "all") as CatalogItemListInput["status"],
       tags: nextTags.length > 0 ? nextTags : undefined,
     })
   }
@@ -279,6 +277,20 @@ export function CatalogItemsList({
           </Button>
         )}
       </PageHeader>
+
+      <ViewTabs
+        label={`${label.singular} status`}
+        views={activeViews(list.data?.statusCounts)}
+        value={filters.status ?? "all"}
+        onValueChange={(status) => setFilter({ status })}
+        summary={
+          <>
+            <span className="tabular-nums">{list.data?.total ?? 0}</span>{" "}
+            {list.data?.total === 1 ? label.singular : label.plural}
+            {filtered ? " match" : ""}
+          </>
+        }
+      />
 
       <CurrencyContext value={currencyCode}>
         <ManagedRowActionsContext value={rowActions}>
@@ -315,12 +327,6 @@ export function CatalogItemsList({
                 />
               )}
               <FacetedFilter
-                accessorKey="active"
-                options={[...STATUS_OPTIONS]}
-                showCounts={false}
-                limitToFilteredRows={false}
-              />
-              <FacetedFilter
                 accessorKey="tags"
                 options={(tags.data ?? []).map((t) => ({ value: t, label: t }))}
                 multiple
@@ -346,6 +352,15 @@ export function CatalogItemsList({
                   : `An Admin adds ${label.plural} here.`,
                 filteredTitle: `No ${label.plural} match`,
                 filteredDescription: "Try another search or clear the filters.",
+                action: canManage ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button onClick={() => setDialog({ item: null })}>
+                      <PlusIcon data-icon="inline-start" />
+                      New {label.singular}
+                    </Button>
+                    {toolbar}
+                  </div>
+                ) : undefined,
               }}
             />
             <ServerPagination

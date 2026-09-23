@@ -16,7 +16,8 @@ packages/api          tRPC routers and procedure tiers, plus the API test harnes
 packages/db           Drizzle schema, client, migrations (committed SQL)
 packages/domain       Pure business rules (pricing, dates, status, permissions)
 packages/auth         Auth.js config and session helpers
-packages/documents    Quote Document PDF components (placeholder, arrives in #21)
+packages/documents    Quote Document PDF components (react-pdf), browser preview + server render
+packages/storage      S3-compatible object storage (MinIO locally) for logos and Quote Documents
 packages/ui           shadcn/ui components (base-nova, Base UI)
 packages/eslint-config, packages/typescript-config   shared configs
 e2e                   Playwright smoke flows (`pnpm test:e2e`)
@@ -36,17 +37,29 @@ pnpm db:seed                  # demo Organizations and Users (idempotent)
 pnpm dev                      # http://localhost:3000
 ```
 
-Sign in at http://app.localtest.me:3000 with any seeded email; the magic link
-arrives in Mailpit (http://localhost:8025). Seeded Users:
+### Signing in (no passwords)
 
-| Email                   | Where                                   |
-| ----------------------- | --------------------------------------- |
-| `platform@provus.local` | Platform Admin (http://admin.localtest.me:3000) |
-| `admin@acme.test`       | `acme` Admin                            |
-| `manager@acme.test`     | `acme` Manager                          |
-| `member@acme.test`      | `acme` Member                           |
-| `approver@acme.test`    | `acme` Member and Approver              |
-| `admin@globex.test`     | `globex` Admin (a second Organization)  |
+There are no usernames or passwords: sign-in is by emailed magic link (plus
+Google / Microsoft when their credentials are set in `.env`). Locally every
+email is caught by Mailpit, so nothing leaves your machine.
+
+1. Open http://app.localtest.me:3000 and enter a seeded email (below).
+2. Open Mailpit at http://localhost:8025 and click the newest
+   "Sign in to app.localtest.me:3000" message.
+3. Follow the link; you land signed in on the Organization's subdomain.
+
+Links are single-use and expire, so always use the newest message. One sign-in
+works across every `*.localtest.me` subdomain. Start with `admin@acme.test` to
+see everything in `acme`.
+
+| Email                   | Who                                                        |
+| ----------------------- | ---------------------------------------------------------- |
+| `admin@acme.test`       | `acme` Admin: settings, catalog, members, edits any Quote  |
+| `manager@acme.test`     | `acme` Manager: own Quotes and Members' Quotes              |
+| `member@acme.test`      | `acme` Member: own Quotes only                             |
+| `approver@acme.test`    | `acme` Member with the Approver right                      |
+| `admin@globex.test`     | `globex` Admin (a second Organization, for isolation)      |
+| `platform@provus.local` | Platform Admin: console at http://admin.localtest.me:3000   |
 
 Organizations live at http://acme.localtest.me:3000 and
 http://globex.localtest.me:3000.
@@ -138,3 +151,23 @@ variable. Package scripts load it with `dotenv -e ../../.env --` (the
 `@t3-oss/env-nextjs` (`apps/web/env.ts`), and the db package does the same with
 `@t3-oss/env-core` (`packages/db/src/env.ts`). Set `SKIP_ENV_VALIDATION=1` to
 skip validation, for example for a CI lint without services.
+
+## Troubleshooting
+
+- **Nothing on port 3000:** run `pnpm dev` (and `pnpm services:up` first if
+  Docker was restarted). `curl http://localhost:3000/api/health` should report
+  the database as connected.
+- **No sign-in email:** check Mailpit (http://localhost:8025) is up
+  (`docker compose ps`). The email is only sent for the address you typed.
+- **"No access" on an Organization subdomain:** the signed-in User has no
+  Membership there. Sign out on `app.` and sign in as a User of that
+  Organization, or pick another from the Organization picker.
+- **`*.localtest.me` doesn't resolve:** some DNS resolvers or VPNs block it.
+  Switch DNS (e.g. 1.1.1.1) or add the subdomains you need to `/etc/hosts`.
+- **Migration errors after pulling:** run `pnpm db:migrate && pnpm db:migrate:test`.
+  If a local database has drifted, point `DATABASE_URL` / `TEST_DATABASE_URL`
+  in `.env` at fresh databases (create them with
+  `docker compose exec postgres psql -U cpq -c "create database <name>"`),
+  then migrate and `pnpm db:seed`.
+- **Demo data looks odd:** `pnpm db:seed` restores the demo Quotes (it's safe to
+  re-run; it doesn't remove Quotes you or the e2e flows created).

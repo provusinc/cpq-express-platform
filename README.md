@@ -15,7 +15,7 @@ apps/web              Next.js app (every subdomain), tRPC endpoint, RSC prefetch
 packages/api          tRPC routers and procedure tiers, plus the API test harness
 packages/db           Drizzle schema, client, migrations (committed SQL)
 packages/domain       Pure business rules (pricing, dates, status, permissions)
-packages/auth         Auth.js config (placeholder, arrives in #3)
+packages/auth         Auth.js config and session helpers
 packages/documents    Quote Document PDF components (placeholder, arrives in #21)
 packages/ui           shadcn/ui components (base-nova, Base UI)
 packages/eslint-config, packages/typescript-config   shared configs
@@ -31,8 +31,24 @@ pnpm install
 cp .env.example .env          # then set AUTH_SECRET: openssl rand -base64 32
 pnpm services:up              # docker compose up -d: Postgres, MinIO, Mailpit
 pnpm db:migrate               # apply migrations to the dev database (cpq)
+pnpm db:seed                  # demo Organizations and Users (idempotent)
 pnpm dev                      # http://localhost:3000
 ```
+
+Sign in at http://app.localtest.me:3000 with any seeded email; the magic link
+arrives in Mailpit (http://localhost:8025). Seeded Users:
+
+| Email                   | Where                                   |
+| ----------------------- | --------------------------------------- |
+| `platform@provus.local` | Platform Admin (http://admin.localtest.me:3000) |
+| `admin@acme.test`       | `acme` Admin                            |
+| `manager@acme.test`     | `acme` Manager                          |
+| `member@acme.test`      | `acme` Member                           |
+| `approver@acme.test`    | `acme` Member and Approver              |
+| `admin@globex.test`     | `globex` Admin (a second Organization)  |
+
+Organizations live at http://acme.localtest.me:3000 and
+http://globex.localtest.me:3000.
 
 Check it's working: the home page shows the API and database status, and so
 does `curl http://localhost:3000/api/health`.
@@ -56,10 +72,11 @@ database by hand.
 | `pnpm build`              | Production build                                        |
 | `pnpm typecheck`          | `tsc --noEmit` in every package                         |
 | `pnpm lint`               | ESLint in every package (zero warnings allowed)         |
-| `pnpm test`               | Vitest in `domain` and `api`                            |
+| `pnpm test`               | Vitest in `domain`, `auth`, `api` and `web`             |
 | `pnpm db:generate`        | Generate a SQL migration from schema changes            |
 | `pnpm db:migrate`         | Apply migrations to `DATABASE_URL`                      |
 | `pnpm db:migrate:test`    | Apply migrations to `TEST_DATABASE_URL`                 |
+| `pnpm db:seed`            | Upsert demo data into `DATABASE_URL` (safe to re-run)   |
 | `pnpm db:push`            | Push the schema without a migration (experiments only)  |
 | `pnpm db:studio`          | Drizzle Studio                                          |
 | `pnpm services:up/down`   | Start or stop the Docker services                       |

@@ -1,0 +1,43 @@
+/**
+ * `pnpm db:seed` — demo data for local development, into DATABASE_URL.
+ *
+ * Idempotent: every step upserts by a natural key (User email, Organization
+ * slug, Membership (Organization, User)), so it can run any number of times
+ * and resets seeded rows to their seed values without touching anything
+ * else. For a clean slate, drop the database volume (`docker compose down -v`)
+ * and run `pnpm services:up && pnpm db:migrate && pnpm db:seed`.
+ *
+ * Add later areas (Accounts, catalog, …) as further `seed<Area>(tx, orgs)`
+ * steps below, each idempotent the same way.
+ */
+import { fileURLToPath } from "node:url"
+
+import { createDb } from "../index"
+import type { Db } from "../index"
+import { seedTenancy } from "./tenancy"
+
+export { SEED_ORGANIZATIONS, SEED_PLATFORM_ADMIN, seedTenancy } from "./tenancy"
+
+export async function seed(db: Db) {
+  return db.transaction(async (tx) => {
+    const organizations = await seedTenancy(tx)
+    return { organizations }
+  })
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const url = process.env.DATABASE_URL
+  if (!url) {
+    console.error("DATABASE_URL is not set (copy .env.example to .env).")
+    process.exit(1)
+  }
+  const db = createDb(url, { max: 1 })
+  try {
+    const { organizations } = await seed(db)
+    console.log(
+      `Seeded ${new URL(url).pathname.slice(1)}: Organizations ${Object.keys(organizations).join(", ")}.`
+    )
+  } finally {
+    await db.$client.end()
+  }
+}

@@ -17,18 +17,31 @@
  * becomes a SAVEPOINT, so commit/rollback semantics are preserved.
  *
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
- * `createSession`. Organizations and Memberships join in #4.
+ * `createSession`, `createOrganization`, `createMembership`, `createMember`.
+ *
+ * Organization-tier procedures: `organizationCaller(db, { organization, user })`
+ * calls as `user` on `organization`'s subdomain. Every such procedure that
+ * takes a record id also gets an `expectIsolated` test (`./isolation`).
  */
 import { createDb, TransactionRollbackError } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 import type { SessionUser } from "@workspace/auth"
 
+import { ORGANIZATION_SLUG_HEADER } from "../headers"
 import { createCaller } from "../root"
 import { createTRPCContext } from "../trpc"
 import { toSessionUser } from "./fixtures"
 
-export { createSession, createUser, toSessionUser } from "./fixtures"
+export {
+  createMember,
+  createMembership,
+  createOrganization,
+  createSession,
+  createUser,
+  toSessionUser,
+} from "./fixtures"
+export { expectIsolated, ISOLATION_CODES } from "./isolation"
 
 let testDb: ReturnType<typeof createDb> | undefined
 
@@ -84,4 +97,28 @@ export function createTestCaller(db: Db, opts: TestCallerOptions = {}) {
       }
     : undefined
   return createCaller(() => createTRPCContext({ db, headers, session }))
+}
+
+export type TestCaller = ReturnType<typeof createTestCaller>
+
+/**
+ * A caller for `user` on `organization`'s subdomain (sets the Organization
+ * slug header as the proxy does). `user` needn't be a member — that's how
+ * refusals are tested.
+ */
+export function organizationCaller(
+  db: Db,
+  {
+    organization,
+    user,
+    headers,
+  }: {
+    organization: { slug: string }
+    user?: SessionUser
+    headers?: HeadersInit
+  }
+) {
+  const merged = new Headers(headers)
+  merged.set(ORGANIZATION_SLUG_HEADER, organization.slug)
+  return createTestCaller(db, { user, headers: merged })
 }

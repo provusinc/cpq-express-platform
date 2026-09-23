@@ -39,7 +39,12 @@ export function TRPCReactProvider({ children }: { children: React.ReactNode }) {
         }),
         httpBatchStreamLink({
           transformer: superjson,
-          // Same-origin: every subdomain serves its own /api/trpc.
+          // Browser: same-origin, so the request carries this subdomain's
+          // Host and the shared session cookie, and the proxy stamps the
+          // Organization slug header. Server render has neither the cookie
+          // nor the Host, so data a client component needs on first paint
+          // must be prefetched in the RSC (`prefetch` + `<HydrateClient>`);
+          // this URL is only a fallback and is called anonymously.
           url:
             (typeof window === "undefined"
               ? `http://localhost:${process.env.PORT ?? 3000}`

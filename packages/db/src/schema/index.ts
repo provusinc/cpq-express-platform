@@ -4,3 +4,5 @@
  * is what drizzle-kit reads and what `createDb` registers for relational queries.
  */
 export * from "./auth"
+export * from "./organizations"
+export * from "./memberships"

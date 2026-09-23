@@ -10,7 +10,8 @@
     "start": "pnpm with-env next start",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.13.11",
@@ -40,6 +41,7 @@
     "@workspace/typescript-config": "workspace:*",
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   }
 }

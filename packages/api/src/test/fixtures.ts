@@ -51,3 +51,77 @@ export function toSessionUser(user: SessionUser): SessionUser {
     isPlatformAdmin: user.isPlatformAdmin,
   }
 }
+
+type NewOrganization = typeof schema.organizations.$inferInsert
+type Role = (typeof schema.ROLES)[number]
+
+/** Inserts an Organization (unique slug by default, USD). Returns the row. */
+export async function createOrganization(
+  db: Db,
+  overrides: Partial<NewOrganization> = {}
+) {
+  const suffix = uuidv7().slice(-12)
+  const [organization] = await db
+    .insert(schema.organizations)
+    .values({
+      slug: `org-${suffix}`,
+      name: `Organization ${suffix}`,
+      currencyCode: "USD",
+      ...overrides,
+    })
+    .returning()
+  return organization!
+}
+
+/** Gives `user` a Membership in `organization` (Role Member by default). */
+export async function createMembership(
+  db: Db,
+  {
+    organization,
+    user,
+    role = "member",
+    isApprover = false,
+  }: {
+    organization: { id: string }
+    user: { id: string }
+    role?: Role
+    isApprover?: boolean
+  }
+) {
+  const [membership] = await db
+    .insert(schema.memberships)
+    .values({
+      organizationId: organization.id,
+      userId: user.id,
+      role,
+      isApprover,
+    })
+    .returning()
+  return membership!
+}
+
+/**
+ * A new User holding a Membership in `organization`: the usual way to get a
+ * caller for an Organization-tier test.
+ *
+ *   const { user } = await createMember(db, acme, { role: "admin" })
+ *   const caller = organizationCaller(db, { organization: acme, user })
+ */
+export async function createMember(
+  db: Db,
+  organization: { id: string },
+  {
+    role,
+    isApprover,
+    user: userOverrides,
+  }: { role?: Role; isApprover?: boolean; user?: Partial<NewUser> } = {}
+) {
+  const user = await createUser(db, userOverrides)
+  const membership = await createMembership(db, {
+    organization,
+    user,
+    role,
+    isApprover,
+  })
+  return { user, membership }
+}

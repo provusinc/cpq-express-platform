@@ -9,6 +9,16 @@ export { schema }
 export * from "drizzle-orm/sql"
 export { TransactionRollbackError } from "drizzle-orm/errors"
 export { uuidv7 } from "./columns"
+export {
+  organizationColumns,
+  organizationReference,
+  organizationTable,
+} from "./organization-table"
+export { organizationScope } from "./organization-scope"
+export type {
+  OrganizationOwnedTable,
+  OrganizationScope,
+} from "./organization-scope"
 
 /** Create a Drizzle client (and its postgres-js pool) for a connection URL. */
 export function createDb(

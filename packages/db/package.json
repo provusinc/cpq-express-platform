@@ -8,7 +8,8 @@
     "./client": "./src/client.ts",
     "./schema": "./src/schema/index.ts",
     "./migrate": "./src/migrate.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./seed": "./src/seed/index.ts"
   },
   "scripts": {
     "lint": "eslint --max-warnings 0",
@@ -19,7 +20,8 @@
     "db:migrate": "pnpm with-env tsx src/migrate.ts",
     "db:migrate:test": "pnpm with-env tsx src/migrate.ts --test",
     "db:push": "pnpm with-env drizzle-kit push",
-    "db:studio": "pnpm with-env drizzle-kit studio"
+    "db:studio": "pnpm with-env drizzle-kit studio",
+    "db:seed": "pnpm with-env tsx src/seed/index.ts"
   },
   "dependencies": {
     "@t3-oss/env-core": "^0.13.11",

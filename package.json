@@ -1,0 +1,33 @@
+{
+  "name": "cpq-express-platform",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "format": "turbo format",
+    "services:up": "docker compose up -d",
+    "services:down": "docker compose down",
+    "db:generate": "pnpm --filter @workspace/db db:generate",
+    "db:migrate": "pnpm --filter @workspace/db db:migrate",
+    "db:migrate:test": "pnpm --filter @workspace/db db:migrate:test",
+    "db:push": "pnpm --filter @workspace/db db:push",
+    "db:studio": "pnpm --filter @workspace/db db:studio"
+  },
+  "devDependencies": {
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "dotenv-cli": "^11.0.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "turbo": "^2.9.18",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.12"
+  }
+}

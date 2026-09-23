@@ -1,0 +1,33 @@
+{
+  "name": "@workspace/api",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,tsx,js}\"",
+    "typecheck": "tsc --noEmit",
+    "with-env": "dotenv -e ../../.env --",
+    "test": "pnpm with-env vitest run",
+    "test:watch": "pnpm with-env vitest"
+  },
+  "dependencies": {
+    "@trpc/server": "^11.19.0",
+    "@workspace/db": "workspace:*",
+    "@workspace/domain": "workspace:*",
+    "superjson": "^2.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^9.39.4",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

@@ -42,7 +42,7 @@ export function AppSidebar({
 }) {
   const labels = useLabels()
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <OrganizationSwitcher
           current={organization}

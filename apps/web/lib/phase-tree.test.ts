@@ -6,6 +6,7 @@ import {
   phaseOptions,
   resolveDrop,
   visibleTreeRows,
+  nestRows,
 } from "./phase-tree"
 
 const phases = [
@@ -151,5 +152,29 @@ describe("movePhaseLocally", () => {
       parentId: "a",
       sequence: 1,
     })
+  })
+})
+
+describe("nestRows", () => {
+  it("nests items under their container in order, unknown containers at the top", () => {
+    const items = [
+      { id: "a", in: null },
+      { id: "a1", in: "a" },
+      { id: "b", in: "a" },
+      { id: "b1", in: "b" },
+      { id: "a2", in: "a" },
+      { id: "x", in: "gone" },
+      { id: "top", in: null },
+    ]
+    const tree = nestRows(items, (i) => i.in)
+    const shape = (nodes: { id: string; subRows: unknown[] }[]): unknown =>
+      nodes.map((n) =>
+        n.subRows.length ? { [n.id]: shape(n.subRows as typeof nodes) } : n.id
+      )
+    expect(shape(tree)).toEqual([
+      { a: ["a1", { b: ["b1"] }, "a2"] },
+      "x",
+      "top",
+    ])
   })
 })

@@ -229,3 +229,27 @@ export function subtreeIds(
 ): Set<string> {
   return new Set(phaseSubtree(phases, phaseId))
 }
+
+/**
+ * Nests grid rows (in grid order) into a tree for a tree table: each item
+ * goes under the item `containerOf` names (its Phase's row), or at the top
+ * level for `null` or an unknown container. Order within a level is kept.
+ */
+export function nestRows<T extends { id: string }>(
+  items: readonly T[],
+  containerOf: (item: T) => string | null
+): (T & { subRows: (T & { subRows: unknown[] })[] })[] {
+  type Node = T & { subRows: Node[] }
+  const nodes = new Map<string, Node>(
+    items.map((item) => [item.id, { ...item, subRows: [] }])
+  )
+  const roots: Node[] = []
+  for (const item of items) {
+    const node = nodes.get(item.id)!
+    const container = containerOf(item)
+    const parent = container === null ? undefined : nodes.get(container)
+    if (parent) parent.subRows.push(node)
+    else roots.push(node)
+  }
+  return roots
+}

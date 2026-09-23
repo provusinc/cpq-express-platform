@@ -35,14 +35,21 @@ import { useQuoteEditor } from "@/components/quotes/autosave"
 import { useQuote } from "@/components/quotes/quote-header"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import { useLabels } from "@/components/shell/labels"
-import { phaseOptions, subtreeIds, visibleTreeRows } from "@/lib/phase-tree"
+import {
+  nestRows,
+  phaseOptions,
+  subtreeIds,
+  visibleTreeRows,
+} from "@/lib/phase-tree"
 
 import { AddItemsSheet } from "./add-items-sheet"
 import { useLineItemCommands } from "./commands"
-import { LineItemsGrid } from "./line-items-grid"
+import { LineItemsGrid, phaseRowId } from "./line-items-grid"
 import type { GridActions, GridRow } from "./line-items-grid"
 import { PhaseDialog } from "./phase-dialog"
 import { QuoteSummary } from "./quote-summary"
+
+const NO_COLLAPSED: ReadonlySet<string> = new Set()
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`
@@ -75,23 +82,31 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
   const phaseById = new Map(phases.map((p) => [p.id, p]))
   const lineById = new Map(lines.map((l) => [l.id, l]))
   const rollups = phaseRollups(phases, lines)
-  const rows: GridRow[] = visibleTreeRows(phases, lines, collapsed).map(
-    (row) =>
-      row.kind === "phase"
-        ? {
-            kind: "phase",
-            id: `phase:${row.id}`,
-            phase: phaseById.get(row.id)!,
-            depth: row.depth,
-            rollup: rollups[row.id]!,
-          }
-        : {
-            kind: "line",
-            id: row.id,
-            line: lineById.get(row.id)!,
-            depth: row.depth,
-          }
-  )
+  // Every row in grid order, nested by Phase for the tree table (which
+  // leaves out the contents of collapsed Phases itself).
+  const tree = nestRows(
+    visibleTreeRows(phases, lines, NO_COLLAPSED).map(
+      (row): GridRow & { container: string | null } =>
+        row.kind === "phase"
+          ? {
+              kind: "phase",
+              id: phaseRowId(row.id),
+              phase: phaseById.get(row.id)!,
+              depth: row.depth,
+              rollup: rollups[row.id]!,
+              subRows: [],
+              container: phaseById.get(row.id)!.parentId,
+            }
+          : {
+              kind: "line",
+              id: row.id,
+              line: lineById.get(row.id)!,
+              depth: row.depth,
+              container: lineById.get(row.id)!.phaseId,
+            }
+    ),
+    (row) => (row.container === null ? null : phaseRowId(row.container))
+  ) as unknown as GridRow[]
   const options = phaseOptions(phases)
 
   // Drop selected ids that no longer exist (deleted here or elsewhere).
@@ -268,7 +283,7 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
           </Empty>
         ) : (
           <LineItemsGrid
-            rows={rows}
+            tree={tree}
             phases={phases}
             lines={lines}
             currency={editor.totals.currencyCode}

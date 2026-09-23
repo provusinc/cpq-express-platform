@@ -690,7 +690,12 @@ function DataTableRootInternal<TData extends RowData>({
       // the drag; `<ColumnResizePreviewLine>` shows a live guide line instead.
       columnResizeMode: "onEnd",
       onColumnSizingChange: onColumnSizingChange ?? handleColumnSizingChange,
-      enableRowSelection: detectFeatures.enableRowSelection,
+      // A per-row predicate passed as a table option (e.g. only leaf rows are
+      // selectable) wins; otherwise the detected/configured boolean.
+      enableRowSelection:
+        typeof passthroughTableOptions.enableRowSelection === "function"
+          ? passthroughTableOptions.enableRowSelection
+          : detectFeatures.enableRowSelection,
       enableFilters: detectFeatures.enableFilters,
       enableSorting: detectFeatures.enableSorting,
       enableMultiSort: detectFeatures.enableMultiSort,

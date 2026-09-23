@@ -18,13 +18,8 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from "@dnd-kit/core"
-import {
-  createColumnHelper,
-  rowSelectionFeature,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table"
-import type { CellContext, RowSelectionState } from "@tanstack/react-table"
+import { flexRender } from "@tanstack/react-table"
+import type { ExpandedState, RowSelectionState } from "@tanstack/react-table"
 import {
   CalendarClockIcon,
   ChevronDownIcon,
@@ -35,11 +30,17 @@ import {
   FolderPlusIcon,
   GripVerticalIcon,
   ListPlusIcon,
-  MoreHorizontalIcon,
   RotateCcwIcon,
   Trash2Icon,
 } from "lucide-react"
-import { createContext, useContext, useId, useState } from "react"
+import {
+  createContext,
+  Fragment,
+  useCallback,
+  useContext,
+  useId,
+  useState,
+} from "react"
 import { toast } from "sonner"
 
 import { canPlacePhase, MAX_PHASE_DEPTH } from "@workspace/domain/phases"
@@ -47,24 +48,24 @@ import type { PhaseRollup } from "@workspace/domain/phases"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
+import { DataTableRowContextMenu } from "@workspace/ui/components/niko-table/components/data-table-row-context-menu"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
+  RowMenuItem,
+  RowMenuSeparator,
+  RowMenuSub,
+  RowMenuSubContent,
+  RowMenuSubTrigger,
+  useDataTableRow,
+} from "@workspace/ui/components/niko-table/components/data-table-row-menu"
+import { DataTable } from "@workspace/ui/components/niko-table/core/data-table"
+import { useDataTable } from "@workspace/ui/components/niko-table/core/data-table-context"
+import { DataTableRoot } from "@workspace/ui/components/niko-table/core/data-table-root"
+import { DataTableHeader } from "@workspace/ui/components/niko-table/core/data-table-structure"
+import type {
+  DataTableColumns,
+  DataTableRow,
+} from "@workspace/ui/components/niko-table/types"
+import { TableBody, TableCell, TableRow } from "@workspace/ui/components/table"
 import {
   Tooltip,
   TooltipContent,
@@ -75,6 +76,11 @@ import { cn } from "@workspace/ui/lib/utils"
 import type { EditorLine, EditorPhase } from "@/components/quotes/autosave"
 import { InlineDate } from "@/components/quotes/inline-date"
 import { InlineText } from "@/components/quotes/inline-text"
+import {
+  ColumnTitle,
+  resolveUpdater,
+  RowActionsMenu,
+} from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
 import { formatDate } from "@/lib/format"
 import { formatMoney, isMoneyInput, trimMoney } from "@/lib/money"
@@ -89,7 +95,11 @@ import type {
 /** Quantity as typed: digits with up to 3 decimals. */
 const QUANTITY_INPUT = /^\d{1,15}(\.\d{1,3})?$/
 
-/** One row of the grid: a Phase (with its derived figures) or a Line Item. */
+/**
+ * One row of the grid: a Phase (with its derived figures) or a Line Item.
+ * Phase rows carry their contents as `subRows` (niko-table's tree: the
+ * table's expanded row model shows them unless the Phase is collapsed).
+ */
 export type GridRow =
   | {
       kind: "phase"
@@ -98,8 +108,18 @@ export type GridRow =
       phase: EditorPhase
       depth: number
       rollup: PhaseRollup
+      subRows: GridRow[]
     }
-  | { kind: "line"; id: string; line: EditorLine; depth: number }
+  | {
+      kind: "line"
+      id: string
+      line: EditorLine
+      depth: number
+      subRows?: undefined
+    }
+
+/** The grid row id of a Phase. */
+export const phaseRowId = (phaseId: string) => `${PHASE_ROW_PREFIX}${phaseId}`
 
 const PHASE_ROW_PREFIX = "phase:"
 const END_ZONE_ID = "grid:end"
@@ -115,12 +135,11 @@ function targetOf(rowId: string): DropTarget {
   return rowId === END_ZONE_ID ? { kind: "end" } : sourceOf(rowId)
 }
 
-/**
- * The Line Items grid's features: row selection (Line Items only) for bulk
- * move, clone and delete. Rows come in grid order, Phases interleaved.
- */
-const lineItemFeatures = tableFeatures({ rowSelectionFeature })
-const helper = createColumnHelper<typeof lineItemFeatures, GridRow>()
+// Module-level so the table options stay stable.
+const rowIdOf = (row: GridRow) => row.id
+const subRowsOf = (row: GridRow) => row.subRows
+/** Only Line Items are selectable (bulk move, clone and delete). */
+const canSelect = (row: { original: GridRow }) => row.original.kind === "line"
 
 /** What an edit cell sends: one field of one line. */
 export type LineItemPatch = {
@@ -173,7 +192,7 @@ interface GridContextValue extends GridActions {
 const GridContext = createContext<GridContextValue | null>(null)
 const useGrid = () => useContext(GridContext)!
 
-type Cell = CellContext<typeof lineItemFeatures, GridRow, unknown>
+type Cell = { row: DataTableRow<GridRow> }
 
 /** The line of a line row (cells only render for line rows). */
 function lineOf(row: Cell["row"]): { line: EditorLine; depth: number } {
@@ -411,124 +430,131 @@ function PhaseMenuItems({
   const labels = useLabels()
   return (
     <>
-      <DropdownMenuItem
-        disabled={current === null}
-        onClick={() => onPick(null)}
-      >
+      <RowMenuItem disabled={current === null} onClick={() => onPick(null)}>
         No {labels.phase.singular}
-      </DropdownMenuItem>
-      {options.length > 0 && <DropdownMenuSeparator />}
+      </RowMenuItem>
+      {options.length > 0 && <RowMenuSeparator />}
       {options.map((option) => (
-        <DropdownMenuItem
+        <RowMenuItem
           key={option.value}
           disabled={current === option.value}
           onClick={() => onPick(option.value)}
         >
           <span style={indent(option.depth - 1)}>{option.label.trim()}</span>
-        </DropdownMenuItem>
+        </RowMenuItem>
       ))}
     </>
   )
 }
 
-function LineActionsCell({ row }: Cell) {
+/**
+ * A Line Item's actions: its "…" menu and its right-click menu (niko's
+ * row menu pieces render as either).
+ */
+function LineRowMenu() {
   const { onDelete, onCloneLines, onMoveLines } = useGrid()
-  const { line } = lineOf(row)
+  const row = useDataTableRow<GridRow>()
+  if (row.kind !== "line") return null
+  const { line } = row
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Actions for ${line.name}`}
+    <>
+      <RowMenuItem onClick={() => onCloneLines({ ids: [line.id] })}>
+        <CopyIcon />
+        Clone
+      </RowMenuItem>
+      <RowMenuSub>
+        <RowMenuSubTrigger>
+          <CopyPlusIcon />
+          Duplicate into
+        </RowMenuSubTrigger>
+        <RowMenuSubContent className="max-h-80 overflow-y-auto">
+          <PhaseMenuItems
+            onPick={(phaseId) => onCloneLines({ ids: [line.id], phaseId })}
           />
-        }
-      >
-        <MoreHorizontalIcon />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuItem onClick={() => onCloneLines({ ids: [line.id] })}>
-          <CopyIcon />
-          Clone
-        </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <CopyPlusIcon />
-            Duplicate into
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-            <PhaseMenuItems
-              onPick={(phaseId) => onCloneLines({ ids: [line.id], phaseId })}
-            />
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <FolderInputIcon />
-            Move to
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-            <PhaseMenuItems
-              current={line.phaseId}
-              onPick={(phaseId) => onMoveLines({ ids: [line.id], phaseId })}
-            />
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() => onDelete([line.id])}
-        >
-          <Trash2Icon />
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </RowMenuSubContent>
+      </RowMenuSub>
+      <RowMenuSub>
+        <RowMenuSubTrigger>
+          <FolderInputIcon />
+          Move to
+        </RowMenuSubTrigger>
+        <RowMenuSubContent className="max-h-80 overflow-y-auto">
+          <PhaseMenuItems
+            current={line.phaseId}
+            onPick={(phaseId) => onMoveLines({ ids: [line.id], phaseId })}
+          />
+        </RowMenuSubContent>
+      </RowMenuSub>
+      <RowMenuSeparator />
+      <RowMenuItem variant="destructive" onClick={() => onDelete([line.id])}>
+        <Trash2Icon />
+        Delete
+      </RowMenuItem>
+    </>
   )
 }
 
-const right = (label: string) => {
-  function RightHeader() {
-    return <div className="text-right">{label}</div>
-  }
-  return RightHeader
+function LineActionsCell({ row }: Cell) {
+  const { line } = lineOf(row)
+  return (
+    <RowActionsMenu
+      row={row.original}
+      label={`Actions for ${line.name}`}
+      className="w-52"
+    >
+      <LineRowMenu />
+    </RowActionsMenu>
+  )
 }
 
-const dataColumns = [
-  helper.display({ id: "name", header: "Name", cell: NameCell }),
-  helper.display({ id: "notes", header: "Notes", cell: NotesCell }),
-  helper.display({ id: "startDate", header: "Start", cell: StartCell }),
-  helper.display({ id: "endDate", header: "End", cell: EndCell }),
-  helper.display({
+const dataColumns: DataTableColumns<GridRow> = [
+  { id: "name", header: ColumnTitle, meta: { label: "Name" }, cell: NameCell },
+  {
+    id: "notes",
+    header: ColumnTitle,
+    meta: { label: "Notes" },
+    cell: NotesCell,
+  },
+  {
+    id: "startDate",
+    header: ColumnTitle,
+    meta: { label: "Start" },
+    cell: StartCell,
+  },
+  { id: "endDate", header: ColumnTitle, meta: { label: "End" }, cell: EndCell },
+  {
     id: "quantity",
-    header: right("Quantity"),
+    header: ColumnTitle,
+    meta: { label: "Quantity", align: "end" },
     cell: QuantityCell,
-  }),
-  helper.display({ id: "unit", header: "Unit", cell: UnitCell }),
-  helper.display({
+  },
+  { id: "unit", header: ColumnTitle, meta: { label: "Unit" }, cell: UnitCell },
+  {
     id: "unitPrice",
-    header: right("Unit price"),
+    header: ColumnTitle,
+    meta: { label: "Unit price", align: "end" },
     cell: UnitPriceCell,
-  }),
-  helper.display({
+  },
+  {
     id: "lineTotal",
-    header: right("Line total"),
+    header: ColumnTitle,
+    meta: { label: "Line total", align: "end" },
     cell: LineTotalCell,
-  }),
-  helper.display({
+  },
+  {
     id: "lineMarginPct",
-    header: right("Margin"),
+    header: ColumnTitle,
+    meta: { label: "Margin", align: "end" },
     cell: MarginCell,
-  }),
+  },
 ]
 
 /** Read-only grid: just the data columns. */
-const readOnlyColumns = helper.columns(dataColumns)
+const readOnlyColumns = dataColumns
 
 /** Editable grid: a drag-and-select column first and an actions column last. */
-const editableColumns = helper.columns([
-  helper.display({
+const editableColumns: DataTableColumns<GridRow> = [
+  {
     id: "select",
     header: ({ table }) => (
       <Checkbox
@@ -544,14 +570,14 @@ const editableColumns = helper.columns([
       />
     ),
     cell: SelectCell,
-  }),
+  },
   ...dataColumns,
-  helper.display({
+  {
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
     cell: LineActionsCell,
-  }),
-])
+  },
+]
 
 /** A `<tr>` that is a drop target for drag-and-drop. */
 function DroppableRow({
@@ -559,15 +585,25 @@ function DroppableRow({
   hint,
   className,
   children,
+  ref,
   ...props
 }: React.ComponentProps<typeof TableRow> & {
   id: string
   hint: "before" | "into" | null
 }) {
   const { setNodeRef } = useDroppable({ id })
+  // The row is also the context menu's trigger, which passes its own ref.
+  const setRef = useCallback(
+    (node: HTMLTableRowElement | null) => {
+      setNodeRef(node)
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [setNodeRef, ref]
+  )
   return (
     <TableRow
-      ref={setNodeRef}
+      ref={setRef}
       className={cn(
         hint === "before" && "shadow-[inset_0_2px_0_0_var(--color-primary)]",
         hint === "into" && "bg-primary/10 ring-2 ring-primary ring-inset",
@@ -580,8 +616,8 @@ function DroppableRow({
   )
 }
 
-/** The actions menu of a Phase row. */
-function PhaseActions({ phase, depth }: { phase: EditorPhase; depth: number }) {
+/** A Phase row's actions: its "…" menu and its right-click menu. */
+function PhaseRowMenu() {
   const {
     phases,
     onAddSubPhase,
@@ -592,6 +628,9 @@ function PhaseActions({ phase, depth }: { phase: EditorPhase; depth: number }) {
     options,
   } = useGrid()
   const labels = useLabels()
+  const row = useDataTableRow<GridRow>()
+  if (row.kind !== "phase") return null
+  const { phase, depth } = row
   const { singular } = labels.phase
   // Valid new parents: top level, or any Phase canPlacePhase allows.
   const targets = options.filter(
@@ -600,71 +639,58 @@ function PhaseActions({ phase, depth }: { phase: EditorPhase; depth: number }) {
       canPlacePhase(phases, { phaseId: phase.id, parentId: o.value }).ok
   )
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Actions for ${phase.name}`}
-          />
-        }
+    <>
+      <RowMenuItem onClick={() => onAddItemsTo(phase.id)}>
+        <ListPlusIcon />
+        Add items here
+      </RowMenuItem>
+      <RowMenuItem
+        disabled={depth >= MAX_PHASE_DEPTH}
+        onClick={() => onAddSubPhase(phase.id)}
       >
-        <MoreHorizontalIcon />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => onAddItemsTo(phase.id)}>
-          <ListPlusIcon />
-          Add items here
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={depth >= MAX_PHASE_DEPTH}
-          onClick={() => onAddSubPhase(phase.id)}
-        >
-          <FolderPlusIcon />
-          Add sub-{singular.toLowerCase()}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onClonePhase(phase.id)}>
-          <CopyIcon />
-          Clone {singular.toLowerCase()}
-        </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <FolderInputIcon />
-            Move to
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
-            <DropdownMenuItem
-              disabled={phase.parentId === null}
-              onClick={() => onMovePhase({ id: phase.id, parentId: null })}
+        <FolderPlusIcon />
+        Add sub-{singular.toLowerCase()}
+      </RowMenuItem>
+      <RowMenuItem onClick={() => onClonePhase(phase.id)}>
+        <CopyIcon />
+        Clone {singular.toLowerCase()}
+      </RowMenuItem>
+      <RowMenuSub>
+        <RowMenuSubTrigger>
+          <FolderInputIcon />
+          Move to
+        </RowMenuSubTrigger>
+        <RowMenuSubContent className="max-h-80 overflow-y-auto">
+          <RowMenuItem
+            disabled={phase.parentId === null}
+            onClick={() => onMovePhase({ id: phase.id, parentId: null })}
+          >
+            Top level
+          </RowMenuItem>
+          {targets.length > 0 && <RowMenuSeparator />}
+          {targets.map((option) => (
+            <RowMenuItem
+              key={option.value}
+              onClick={() =>
+                onMovePhase({ id: phase.id, parentId: option.value })
+              }
             >
-              Top level
-            </DropdownMenuItem>
-            {targets.length > 0 && <DropdownMenuSeparator />}
-            {targets.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() =>
-                  onMovePhase({ id: phase.id, parentId: option.value })
-                }
-              >
-                <span style={indent(option.depth - 1)}>
-                  {option.label.trim()}
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() => onDeletePhase(phase.id)}
-        >
-          <Trash2Icon />
-          Delete {singular.toLowerCase()}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+              <span style={indent(option.depth - 1)}>
+                {option.label.trim()}
+              </span>
+            </RowMenuItem>
+          ))}
+        </RowMenuSubContent>
+      </RowMenuSub>
+      <RowMenuSeparator />
+      <RowMenuItem
+        variant="destructive"
+        onClick={() => onDeletePhase(phase.id)}
+      >
+        <Trash2Icon />
+        Delete {singular.toLowerCase()}
+      </RowMenuItem>
+    </>
   )
 }
 
@@ -787,7 +813,13 @@ function PhaseRowCells({
       case "actions":
         cells.push(
           <TableCell key={columnId} className="py-1">
-            <PhaseActions phase={phase} depth={depth} />
+            <RowActionsMenu
+              row={row}
+              label={`Actions for ${phase.name}`}
+              className="w-56"
+            >
+              <PhaseRowMenu />
+            </RowActionsMenu>
           </TableCell>
         )
         break
@@ -804,19 +836,97 @@ const collision: CollisionDetection = (args) => {
 }
 
 /**
- * The Line Items grid (TanStack Table): Phase rows (expand/collapse,
- * inline rename, derived total, margin and date span, actions) with their
- * Line Items indented under them, and per line: name, notes, start and
- * end dates, quantity, unit, unit price (marked when it overrides the
- * Base Rate, with a reset), line total and line margin. Every editable
- * cell autosaves through `onUpdate`. Rows drag by their handle (dnd-kit):
- * each drop is one command (see `resolveDrop` for what a drop means), and
- * dragging a selected line moves the whole selection. `readOnly` (locked
- * Quote or no edit permission) disables every cell and drops the select,
- * drag and actions.
+ * The grid's rows, as niko-table's expanded row model yields them (the
+ * contents of collapsed Phases left out): Phase rows span their columns,
+ * line rows render their cells. Every row is a drop target and (when
+ * editable) has the same right-click menu as its "…" menu.
+ */
+function LineItemsBody({
+  columnIds,
+  hintFor,
+  dragging,
+}: {
+  columnIds: string[]
+  hintFor: (rowId: string) => "before" | "into" | null
+  dragging: boolean
+}) {
+  const { table } = useDataTable<GridRow>()
+  const { readOnly } = useGrid()
+  const labels = useLabels()
+  return (
+    <TableBody>
+      {table.getRowModel().rows.map((row) => {
+        const element =
+          row.original.kind === "phase" ? (
+            <DroppableRow
+              id={row.id}
+              hint={hintFor(row.id)}
+              data-row-id={row.id}
+              className="bg-muted/40 hover:bg-muted/60"
+            >
+              <PhaseRowCells row={row.original} columnIds={columnIds} />
+            </DroppableRow>
+          ) : (
+            <DroppableRow
+              id={row.id}
+              hint={hintFor(row.id)}
+              data-row-id={row.id}
+              data-state={row.getIsSelected() ? "selected" : undefined}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className="py-1">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </DroppableRow>
+          )
+        if (readOnly) return <Fragment key={row.id}>{element}</Fragment>
+        return (
+          <DataTableRowContextMenu
+            key={row.id}
+            row={row.original}
+            trigger={element}
+            className={row.original.kind === "phase" ? "w-56" : "w-52"}
+          >
+            {row.original.kind === "phase" ? <PhaseRowMenu /> : <LineRowMenu />}
+          </DataTableRowContextMenu>
+        )
+      })}
+      {!readOnly && dragging && (
+        <DroppableRow
+          id={END_ZONE_ID}
+          hint={hintFor(END_ZONE_ID)}
+          className="hover:bg-transparent"
+        >
+          <TableCell
+            colSpan={columnIds.length}
+            className="py-3 text-center text-sm text-muted-foreground"
+          >
+            Drop here to move to the end, outside every{" "}
+            {labels.phase.singular.toLowerCase()}
+          </TableCell>
+        </DroppableRow>
+      )}
+    </TableBody>
+  )
+}
+
+/**
+ * The Line Items grid (niko-table): a tree table of Phase rows (expand /
+ * collapse, inline rename, derived total, margin and date span, actions)
+ * with their Line Items and sub-Phases nested under them (`subRows`), and
+ * per line: name, notes, start and end dates, quantity, unit, unit price
+ * (marked when it overrides the Base Rate, with a reset), line total and
+ * line margin. Every editable cell autosaves through `onUpdate`. Rows drag
+ * by their handle (dnd-kit, not niko's row DnD, which only reorders a flat
+ * list): each drop is one command (see `resolveDrop` for what a drop means:
+ * before a line, into a Phase, or the end zone), and dragging a selected
+ * line moves the whole selection. Right-click a row for its menu.
+ * `readOnly` (locked Quote or no edit permission) disables every cell and
+ * drops the select, drag, menus and actions.
  */
 export function LineItemsGrid({
-  rows,
+  tree,
   phases,
   lines,
   currency,
@@ -828,7 +938,8 @@ export function LineItemsGrid({
   collapsed,
   actions,
 }: {
-  rows: GridRow[]
+  /** The grid rows nested by Phase (`nestRows`), in grid order. */
+  tree: GridRow[]
   phases: readonly EditorPhase[]
   lines: readonly EditorLine[]
   currency: string
@@ -841,19 +952,23 @@ export function LineItemsGrid({
   actions: GridActions
 }) {
   const labels = useLabels()
-  const table = useTable({
-    features: lineItemFeatures,
-    columns: readOnly ? readOnlyColumns : editableColumns,
-    data: rows,
-    getRowId: (row) => row.id,
-    enableRowSelection: (row) => !readOnly && row.original.kind === "line",
-    state: { rowSelection: selection },
-    onRowSelectionChange: (updater) =>
-      onSelectionChange(
-        typeof updater === "function" ? updater(selection) : updater
-      ),
-  })
-  const columnIds = table.getAllLeafColumns().map((c) => c.id)
+  const columns = readOnly ? readOnlyColumns : editableColumns
+  const columnIds = columns.map((c) => c.id!)
+  // Collapsed Phases are the ones the table doesn't expand.
+  const expanded: Record<string, boolean> = Object.fromEntries(
+    phases
+      .filter((p) => !collapsed.has(p.id))
+      .map((p) => [phaseRowId(p.id), true])
+  )
+  const onExpandedChange = (
+    updater: ExpandedState | ((old: ExpandedState) => ExpandedState)
+  ) => {
+    const next = resolveUpdater<ExpandedState>(updater, expanded)
+    for (const phase of phases) {
+      const open = next === true || Boolean(next[phaseRowId(phase.id)])
+      if (open === collapsed.has(phase.id)) actions.onToggleCollapsed(phase.id)
+    }
+  }
 
   // A stable id keeps dnd-kit's aria ids equal on the server and client.
   const dndId = useId()
@@ -963,65 +1078,34 @@ export function LineItemsGrid({
           },
         }}
       >
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((group) => (
-                <TableRow key={group.id}>
-                  {group.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder ? null : (
-                        <table.FlexRender header={header} />
-                      )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) =>
-                row.original.kind === "phase" ? (
-                  <DroppableRow
-                    key={row.id}
-                    id={row.id}
-                    hint={hintFor(row.id)}
-                    className="bg-muted/40 hover:bg-muted/60"
-                  >
-                    <PhaseRowCells row={row.original} columnIds={columnIds} />
-                  </DroppableRow>
-                ) : (
-                  <DroppableRow
-                    key={row.id}
-                    id={row.id}
-                    hint={hintFor(row.id)}
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                  >
-                    {row.getAllCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-1">
-                        <table.FlexRender cell={cell} />
-                      </TableCell>
-                    ))}
-                  </DroppableRow>
-                )
-              )}
-              {!readOnly && drag && (
-                <DroppableRow
-                  id={END_ZONE_ID}
-                  hint={hintFor(END_ZONE_ID)}
-                  className="hover:bg-transparent"
-                >
-                  <TableCell
-                    colSpan={columnIds.length}
-                    className="py-3 text-center text-sm text-muted-foreground"
-                  >
-                    Drop here to move to the end, outside every{" "}
-                    {labels.phase.singular.toLowerCase()}
-                  </TableCell>
-                </DroppableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTableRoot
+          columns={columns}
+          data={tree}
+          getRowId={rowIdOf}
+          getSubRows={subRowsOf}
+          enableRowSelection={canSelect}
+          config={{
+            enableExpanding: true,
+            enableRowSelection: !readOnly,
+            enableSorting: false,
+            enablePagination: false,
+            enableFilters: false,
+          }}
+          state={{ rowSelection: selection, expanded }}
+          onRowSelectionChange={(updater) =>
+            onSelectionChange(resolveUpdater(updater, selection))
+          }
+          onExpandedChange={onExpandedChange}
+        >
+          <DataTable className="bg-background">
+            <DataTableHeader sticky={false} />
+            <LineItemsBody
+              columnIds={columnIds}
+              hintFor={hintFor}
+              dragging={drag !== null}
+            />
+          </DataTable>
+        </DataTableRoot>
         <DragOverlay dropAnimation={null}>
           {overlayLabel !== null && (
             <div className="flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm font-medium shadow-lg">

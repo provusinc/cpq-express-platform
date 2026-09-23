@@ -278,19 +278,19 @@ export function PlannerGrid({
         onFocus={() => {
           if (!selection && lineRows.length > 0) select({ row: 0, col: 0 })
         }}
-        className="overflow-auto rounded-lg border outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="overflow-auto rounded-lg border bg-background outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20 bg-background">
             <tr>
-              <th className="sticky left-0 z-30 min-w-56 border-r border-b bg-background px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-30 h-10 min-w-56 border-r border-b bg-background px-2 text-left font-semibold">
                 Line Item
               </th>
               {periods.map((p) => (
                 <th
                   key={p.start}
                   scope="col"
-                  className="min-w-16 border-b px-2 py-1 text-right font-medium tabular-nums"
+                  className="min-w-16 border-b px-2 py-1 text-right font-semibold tabular-nums"
                 >
                   <div>{p.label}</div>
                   <div className="text-[10px] font-normal text-muted-foreground">
@@ -298,7 +298,7 @@ export function PlannerGrid({
                   </div>
                 </th>
               ))}
-              <th className="sticky right-0 z-30 min-w-20 border-b border-l bg-background px-3 py-2 text-right font-medium">
+              <th className="sticky right-0 z-30 h-10 min-w-20 border-b border-l bg-background px-2 text-right font-semibold">
                 Total
               </th>
             </tr>
@@ -307,7 +307,7 @@ export function PlannerGrid({
             {rows.map((row) => {
               if (row.kind === "phase") {
                 return (
-                  <tr key={`phase-${row.id}`} className="bg-muted/50">
+                  <tr key={`phase-${row.id}`} className="bg-muted/40">
                     <th
                       scope="row"
                       className="sticky left-0 z-10 border-r border-b bg-muted px-2 py-1 text-left font-medium"

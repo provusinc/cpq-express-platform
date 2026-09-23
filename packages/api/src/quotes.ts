@@ -30,13 +30,17 @@
  * `fn` then receives a `QuoteCommand`: the transaction's `scope`, the locked
  * `quote` row, its `facts`, the `actor`, and `update(changes)`, which writes
  * only the given fields plus `updatedById` (last write wins per field) and
- * returns the updated row. Commands that change Line Items reprice the
- * Quote in the same `fn` before returning (ADR-0002).
+ * returns the updated row, and `reprice()`, which runs
+ * `recomputeQuoteTotals` (domain pricing over the current Line Items and
+ * Quote Discount, persisted) and returns the new totals and lines. Commands
+ * that change money reprice in the same `fn` before returning (ADR-0002) —
+ * usually through `editorResult(cmd, …)` from `./line-items`, which builds
+ * the standard `{ lines, deletedLineIds, totals }` result.
  */
 import { TRPCError } from "@trpc/server"
 
-import { eq, schema } from "@workspace/db"
-import type { OrganizationScope } from "@workspace/db"
+import { eq, recomputeQuoteTotals, schema } from "@workspace/db"
+import type { OrganizationScope, RecomputeResult } from "@workspace/db"
 import type { Role } from "@workspace/domain/enums"
 import { can } from "@workspace/domain/policy"
 import type {
@@ -79,6 +83,12 @@ export interface QuoteCommand {
    * updated row. The owner, creator and currency never change.
    */
   update(changes: QuoteChanges): Promise<QuoteRow>
+  /**
+   * Recomputes and persists the Quote's money from its current Line Items
+   * and Quote Discount (`recomputeQuoteTotals`, also setting `updatedById`)
+   * and returns the new totals and every line as stored.
+   */
+  reprice(): Promise<RecomputeResult>
 }
 
 /** Refusals about the Quote's state rather than about who is asking. */
@@ -193,6 +203,8 @@ export function quoteCommand<T>(
         .returning()
       return row!
     }
-    return fn({ scope, quote, facts, actor: ctx.actor, update })
+    const reprice = () =>
+      recomputeQuoteTotals(scope, quote.id, { updatedById: ctx.actor.userId })
+    return fn({ scope, quote, facts, actor: ctx.actor, update, reprice })
   })
 }

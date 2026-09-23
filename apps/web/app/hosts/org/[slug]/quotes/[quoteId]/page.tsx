@@ -1,19 +1,22 @@
-import { QuoteTabPlaceholder } from "@/components/quotes/quote-tab-placeholder"
-import { getLabels } from "@/components/shell/get-labels"
+import { LineItemsTab } from "@/components/line-items/line-items-tab"
+import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
-export default async function QuoteLineItemsPage() {
-  const labels = await getLabels()
-  const sellables = (["product", "add_on", "resource_role"] as const)
-    .filter((term) => labels[term].enabled)
-    .map((term) => labels[term].plural)
-  const list =
-    sellables.length > 1
-      ? `${sellables.slice(0, -1).join(", ")} and ${sellables.at(-1)}`
-      : (sellables[0] ?? "items")
+type Params = Promise<{ slug: string; quoteId: string }>
+
+/**
+ * The Quote editor's index tab, Line Items: the grid, the Add Items sheet
+ * and the Summary. The layout has already checked the Quote exists.
+ */
+export default async function QuoteLineItemsPage({
+  params,
+}: {
+  params: Params
+}) {
+  const { quoteId } = await params
+  prefetch(trpc.quote.editor.queryOptions({ id: quoteId }))
   return (
-    <QuoteTabPlaceholder
-      title="Line Items"
-      description={`Add ${list} and edit them in place.`}
-    />
+    <HydrateClient>
+      <LineItemsTab quoteId={quoteId} />
+    </HydrateClient>
   )
 }

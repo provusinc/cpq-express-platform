@@ -18,6 +18,8 @@ export type {
 export { getCompany, getLabels, getOrganizationSettings } from "./settings"
 export type { OrganizationSettings } from "./settings"
 export type { QuoteCommand, QuoteRow } from "./quotes"
+export type { EditorResult, LineItemView } from "./line-items"
+export { LINE_ITEM_BATCH_MAX } from "./routers/line-item"
 export { QUOTE_SORT_COLUMNS } from "./routers/quote"
 export type { QuoteSortColumn } from "./routers/quote"
 

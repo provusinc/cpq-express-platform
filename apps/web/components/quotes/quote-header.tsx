@@ -1,21 +1,8 @@
 "use client"
 
-import {
-  useIsMutating,
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query"
-import {
-  ArrowLeftIcon,
-  CalendarX2Icon,
-  CheckIcon,
-  LoaderCircleIcon,
-  LockIcon,
-} from "lucide-react"
+import { useSuspenseQuery } from "@tanstack/react-query"
+import { ArrowLeftIcon, CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
-import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
 import {
@@ -31,16 +18,13 @@ import {
 import { Badge } from "@workspace/ui/components/badge"
 
 import { formatDate } from "@/lib/format"
-import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
+import { QUOTE_POLL_MS, QuoteSaveIndicator, useQuoteCommand } from "./autosave"
 import { InlineText } from "./inline-text"
 import { QuoteStatusBadge } from "./quote-status-badge"
 
 type Quote = RouterOutputs["quote"]["byId"]
-
-/** Refetch the open Quote this often, so a colleague's edits show up (ADR-0003). */
-const POLL_MS = 30_000
 
 /**
  * The open Quote: `quote.byId`, refetched on window focus and every 30 s.
@@ -51,82 +35,28 @@ export function useQuote(quoteId: string) {
   return useSuspenseQuery({
     ...trpc.quote.byId.queryOptions({ id: quoteId }),
     refetchOnWindowFocus: true,
-    refetchInterval: POLL_MS,
+    refetchInterval: QUOTE_POLL_MS,
   }).data
 }
 
 /**
- * The header commands (`quote.rename`, `quote.setDescription`), applied
- * optimistically to the cached Quote and rolled back with a toast when the
- * server refuses (locked, no permission). Each saves one field.
+ * The header commands (`quote.rename`, `quote.setDescription`), each saving
+ * one field through `useQuoteCommand`: applied optimistically to the cached
+ * Quote and rolled back with a toast when the server refuses.
  */
 function useHeaderCommands(quoteId: string) {
   const trpc = useTRPC()
-  const queryClient = useQueryClient()
-  const queryKey = trpc.quote.byId.queryKey({ id: quoteId })
-  const [saved, setSaved] = useState(false)
-
-  const optimistic = <TInput,>(patch: (input: TInput) => Partial<Quote>) => ({
-    onMutate: async (input: TInput) => {
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData(queryKey)
-      if (previous) {
-        queryClient.setQueryData(queryKey, { ...previous, ...patch(input) })
-      }
-      return { previous }
-    },
-    onError: (
-      error: unknown,
-      _input: TInput,
-      context: { previous?: Quote } | undefined
-    ) => {
-      if (context?.previous)
-        queryClient.setQueryData(queryKey, context.previous)
-      toast.error(errorMessage(error))
-    },
-    onSuccess: () => setSaved(true),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey }),
-        queryClient.invalidateQueries(trpc.quote.list.pathFilter()),
-      ]),
+  const rename = useQuoteCommand(quoteId, trpc.quote.rename.mutationOptions(), {
+    optimisticQuote: (_quote, input) => ({ name: input.name }),
   })
-
-  const rename = useMutation(
-    trpc.quote.rename.mutationOptions(
-      optimistic((input: { name: string }) => ({ name: input.name }))
-    )
+  const setDescription = useQuoteCommand(
+    quoteId,
+    trpc.quote.setDescription.mutationOptions(),
+    {
+      optimisticQuote: (_quote, input) => ({ description: input.description }),
+    }
   )
-  const setDescription = useMutation(
-    trpc.quote.setDescription.mutationOptions(
-      optimistic((input: { description: string | null }) => ({
-        description: input.description,
-      }))
-    )
-  )
-  const saving =
-    useIsMutating({ mutationKey: trpc.quote.rename.mutationKey() }) +
-      useIsMutating({ mutationKey: trpc.quote.setDescription.mutationKey() }) >
-    0
-  return { rename, setDescription, saving, saved }
-}
-
-function SaveIndicator({ saving, saved }: { saving: boolean; saved: boolean }) {
-  if (saving) {
-    return (
-      <span className="flex items-center gap-1 text-sm text-muted-foreground">
-        <LoaderCircleIcon className="size-3.5 animate-spin" aria-hidden />
-        Saving…
-      </span>
-    )
-  }
-  if (!saved) return null
-  return (
-    <span className="flex items-center gap-1 text-sm text-muted-foreground">
-      <CheckIcon className="size-3.5" aria-hidden />
-      Saved
-    </span>
-  )
+  return { rename, setDescription }
 }
 
 /** Why the viewer sees the Quote read-only. */
@@ -173,7 +103,7 @@ export function QuoteHeader({
   actions?: React.ReactNode
 }) {
   const quote = useQuote(quoteId)
-  const { rename, setDescription, saving, saved } = useHeaderCommands(quoteId)
+  const { rename, setDescription } = useHeaderCommands(quoteId)
   const canEdit = quote.permissions.canEdit
 
   return (
@@ -215,7 +145,7 @@ export function QuoteHeader({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <SaveIndicator saving={saving} saved={saved} />
+          <QuoteSaveIndicator quoteId={quoteId} />
           {actions}
         </div>
       </div>

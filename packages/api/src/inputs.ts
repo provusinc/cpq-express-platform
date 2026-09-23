@@ -3,7 +3,12 @@ import { z } from "zod"
 
 import { isIsoDate } from "@workspace/domain/dates"
 import { ROLES } from "@workspace/domain/enums"
-import { Decimal, toMoneyString } from "@workspace/domain/money"
+import {
+  Decimal,
+  toMoneyString,
+  toPercentString,
+  toQuantityString,
+} from "@workspace/domain/money"
 import { checkSlug, isCurrencyCode } from "@workspace/domain/organizations"
 
 /** An email address, trimmed and lowercased (how Invitations store it). */
@@ -79,6 +84,37 @@ export function isMoney(value: string | number) {
     )
   }
   return MONEY_PATTERN.test(value)
+}
+
+/**
+ * A non-negative quantity (numeric(18,3)): up to 15 integer digits and 3
+ * decimals, normalised to storage scale ("40" → "40.000").
+ */
+export const quantityInput = z
+  .union([z.string().trim(), z.number()])
+  .refine((v) => QUANTITY_PATTERN.test(decimalText(v)), {
+    message: "Enter a quantity of 0 or more with up to 3 decimals.",
+  })
+  .transform((v) => toQuantityString(v))
+
+const QUANTITY_PATTERN = /^\d{1,15}(\.\d{1,3})?$/
+
+/** A percentage from 0 to 100 with up to 4 decimals ("12.5" → "12.5000"). */
+export const percentInput = z
+  .union([z.string().trim(), z.number()])
+  .refine(
+    (v) =>
+      PERCENT_PATTERN.test(decimalText(v)) && new Decimal(v).lessThanOrEqualTo(100),
+    { message: "Enter a percentage from 0 to 100 with up to 4 decimals." }
+  )
+  .transform((v) => toPercentString(v))
+
+const PERCENT_PATTERN = /^\d{1,3}(\.\d{1,4})?$/
+
+/** A number's exact decimal text (never exponent notation), or the string as given. */
+function decimalText(value: string | number) {
+  if (typeof value === "string") return value
+  return Number.isFinite(value) ? new Decimal(value).toFixed() : "invalid"
 }
 
 /** Page through a list: 1-based `page`, `pageSize` up to 100. */

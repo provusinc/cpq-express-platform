@@ -7,8 +7,8 @@ import { accounts, quotes, users } from "../schema"
 import type { Organization } from "../schema"
 
 /**
- * Demo Quotes for `acme`: header only (no Line Items yet, so every total is
- * zero), spread across owners, Accounts and statuses so the list's filters,
+ * Demo Quotes for `acme` (their Line Items and Quote Discounts are in
+ * `seed/line-items.ts`), spread across owners, Accounts and statuses so the list's filters,
  * the Role rules and the lock can be tried straight away. One has a Valid
  * Until in the past (highlighted in the list).
  *

@@ -9,7 +9,8 @@ import { cn } from "@workspace/ui/lib/utils"
  * An always-editable text field for autosave (ADR-0003): it looks like
  * plain text until hovered or focused, and saves on blur or Enter (⌘/Ctrl +
  * Enter when `multiline`). Escape restores the saved value. An unchanged
- * value isn't saved; a blank `required` value is refused and restored.
+ * value isn't saved; a blank `required` value, or one `validate` rejects
+ * (it returns the message to show), is refused and restored.
  * While not focused it follows `value`, so a colleague's change shows up
  * after a refetch.
  */
@@ -22,6 +23,8 @@ export function InlineText({
   required,
   multiline,
   maxLength,
+  validate,
+  inputMode,
   className,
 }: {
   value: string | null
@@ -34,6 +37,9 @@ export function InlineText({
   required?: boolean
   multiline?: boolean
   maxLength?: number
+  /** A message when the trimmed, non-blank value is invalid; null when fine. */
+  validate?: (value: string) => string | null
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"]
   className?: string
 }) {
   const [draft, setDraft] = useState(value ?? "")
@@ -50,6 +56,12 @@ export function InlineText({
     const next = draft.trim()
     if (required && !next) {
       toast.error(`${label} can't be blank.`)
+      setDraft(value ?? "")
+      return
+    }
+    const problem = next && validate ? validate(next) : null
+    if (problem) {
+      toast.error(problem)
       setDraft(value ?? "")
       return
     }
@@ -96,6 +108,6 @@ export function InlineText({
       rows={Math.min(4, Math.max(1, draft.split("\n").length))}
     />
   ) : (
-    <input {...props} type="text" />
+    <input {...props} type="text" inputMode={inputMode} />
   )
 }

@@ -21,6 +21,7 @@ import {
   summarize,
 } from "../catalog-import"
 import { inUseError, notFound } from "../errors"
+import { lineItemSourceUsage } from "../line-items"
 import {
   activeFilter,
   containsPattern,
@@ -36,7 +37,7 @@ import {
   permittedProcedure,
 } from "../trpc"
 
-const { catalogItems } = schema
+const { catalogItems, lineItems } = schema
 
 /** Only Admins manage the catalog (domain policy "catalog.manage"). */
 const manageProcedure = permittedProcedure("catalog.manage")
@@ -75,15 +76,8 @@ const importInput = z.object({
 /** Rows inserted per statement during an import. */
 const IMPORT_CHUNK = 500
 
-/**
- * What references each Catalog Item and would block its deletion. Line
- * Items don't exist yet; the Line Items ticket counts them here (and
- * references Catalog Items with ON DELETE RESTRICT).
- */
-async function catalogItemUsage(itemId: string) {
-  void itemId // nothing references it yet
-  return { counts: {} as { quotes?: number; lineItems?: number }, examples: [] }
-}
+/** Rows per page of the Add Items sheet's infinite list. */
+export const PICKER_PAGE_SIZE = 30
 
 export const catalogItemRouter = createTRPCRouter({
   /**
@@ -144,6 +138,65 @@ export const catalogItemRouter = createTRPCRouter({
       }
     }),
 
+  /**
+   * The Add Items sheet's list: active Products or Add-ons by name, in
+   * pages for infinite scroll. `cursor` is the offset of the next page
+   * (from the previous page's `nextCursor`, null at the end). Filters:
+   * `search` (name, description), `billingUnit`, `tags` (all of them).
+   */
+  listForPicker: organizationProcedure
+    .input(
+      z.object({
+        kind: kindFilter,
+        search: z.string().trim().max(200).optional(),
+        billingUnit: z.enum(BILLING_UNITS).optional(),
+        tags: tagsInput.optional(),
+        cursor: z.number().int().min(0).nullish(),
+        limit: z.number().int().min(1).max(100).default(PICKER_PAGE_SIZE),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const offset = input.cursor ?? 0
+      const rows = await ctx.scope.db
+        .select({
+          id: catalogItems.id,
+          kind: catalogItems.kind,
+          name: catalogItems.name,
+          description: catalogItems.description,
+          price: catalogItems.price,
+          billingUnit: catalogItems.billingUnit,
+          tags: catalogItems.tags,
+        })
+        .from(catalogItems)
+        .where(
+          ctx.scope.where(
+            catalogItems,
+            eq(catalogItems.kind, input.kind),
+            eq(catalogItems.active, true),
+            input.search
+              ? or(
+                  ilike(catalogItems.name, containsPattern(input.search)),
+                  ilike(catalogItems.description, containsPattern(input.search))
+                )
+              : undefined,
+            input.billingUnit
+              ? eq(catalogItems.billingUnit, input.billingUnit)
+              : undefined,
+            input.tags?.length
+              ? arrayContains(catalogItems.tags, input.tags)
+              : undefined
+          )
+        )
+        .orderBy(asc(sql`lower(${catalogItems.name})`), asc(catalogItems.id))
+        .limit(input.limit + 1)
+        .offset(offset)
+      const more = rows.length > input.limit
+      return {
+        rows: more ? rows.slice(0, input.limit) : rows,
+        nextCursor: more ? offset + input.limit : null,
+      }
+    }),
+
   /** The tags in use on this kind of Catalog Item, alphabetically. */
   tags: organizationProcedure
     .input(z.object({ kind: kindFilter }))
@@ -188,7 +241,7 @@ export const catalogItemRouter = createTRPCRouter({
   /**
    * Edits a Catalog Item; omitted fields keep their value. Price changes
    * never touch existing Quotes. (Cost Propagation to Draft Quotes arrives
-   * with Line Items.) Admins only.
+   * with #24.) Admins only.
    */
   update: manageProcedure
     .input(
@@ -243,7 +296,11 @@ export const catalogItemRouter = createTRPCRouter({
       ctx.scope.transaction(async (scope) => {
         const item = await scope.findById(catalogItems, input.id)
         if (!item) throw notFound("Catalog Item")
-        const usage = await catalogItemUsage(item.id)
+        const usage = await lineItemSourceUsage(
+          scope,
+          lineItems.catalogItemId,
+          item.id
+        )
         if (Object.values(usage.counts).some((n) => n > 0)) {
           throw inUseError({
             entity: "catalog_item",

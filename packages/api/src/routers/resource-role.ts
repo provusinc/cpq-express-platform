@@ -20,6 +20,7 @@ import {
   summarize,
 } from "../catalog-import"
 import { inUseError, notFound } from "../errors"
+import { lineItemSourceUsage } from "../line-items"
 import {
   activeFilter,
   containsPattern,
@@ -35,7 +36,7 @@ import {
   permittedProcedure,
 } from "../trpc"
 
-const { resourceRoles } = schema
+const { lineItems, resourceRoles } = schema
 
 /** Only Admins manage Resource Roles (domain policy "catalog.manage"). */
 const manageProcedure = permittedProcedure("catalog.manage")
@@ -55,15 +56,6 @@ const roleFields = {
   locationCity: optionalText(100),
 }
 
-/**
- * What references each Resource Role and would block its deletion. Line
- * Items don't exist yet; the Line Items ticket counts them here (and
- * references Resource Roles with ON DELETE RESTRICT).
- */
-async function resourceRoleUsage(roleId: string) {
-  void roleId // nothing references it yet
-  return { counts: {} as { quotes?: number; lineItems?: number }, examples: [] }
-}
 
 export const resourceRoleRouter = createTRPCRouter({
   /**
@@ -122,6 +114,63 @@ export const resourceRoleRouter = createTRPCRouter({
         total: total?.n ?? 0,
         page: input.page,
         pageSize: input.pageSize,
+      }
+    }),
+
+  /**
+   * The Add Items sheet's list: active Resource Roles by name, in pages for
+   * infinite scroll (`cursor` = offset of the next page, `nextCursor` null
+   * at the end). Filters: `search` (name, description) and location
+   * (country, state, city — each an exact match).
+   */
+  listForPicker: organizationProcedure
+    .input(
+      z.object({
+        search: z.string().trim().max(200).optional(),
+        country: z.string().optional(),
+        state: z.string().optional(),
+        city: z.string().optional(),
+        cursor: z.number().int().min(0).nullish(),
+        limit: z.number().int().min(1).max(100).default(30),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const offset = input.cursor ?? 0
+      const rows = await ctx.scope.db
+        .select({
+          id: resourceRoles.id,
+          name: resourceRoles.name,
+          description: resourceRoles.description,
+          billRate: resourceRoles.billRate,
+          locationCountry: resourceRoles.locationCountry,
+          locationState: resourceRoles.locationState,
+          locationCity: resourceRoles.locationCity,
+        })
+        .from(resourceRoles)
+        .where(
+          ctx.scope.where(
+            resourceRoles,
+            eq(resourceRoles.active, true),
+            input.search
+              ? or(
+                  ilike(resourceRoles.name, containsPattern(input.search)),
+                  ilike(resourceRoles.description, containsPattern(input.search))
+                )
+              : undefined,
+            input.country
+              ? eq(resourceRoles.locationCountry, input.country)
+              : undefined,
+            input.state ? eq(resourceRoles.locationState, input.state) : undefined,
+            input.city ? eq(resourceRoles.locationCity, input.city) : undefined
+          )
+        )
+        .orderBy(asc(sql`lower(${resourceRoles.name})`), asc(resourceRoles.id))
+        .limit(input.limit + 1)
+        .offset(offset)
+      const more = rows.length > input.limit
+      return {
+        rows: more ? rows.slice(0, input.limit) : rows,
+        nextCursor: more ? offset + input.limit : null,
       }
     }),
 
@@ -215,7 +264,11 @@ export const resourceRoleRouter = createTRPCRouter({
       ctx.scope.transaction(async (scope) => {
         const role = await scope.findById(resourceRoles, input.id)
         if (!role) throw notFound("Resource Role")
-        const usage = await resourceRoleUsage(role.id)
+        const usage = await lineItemSourceUsage(
+          scope,
+          lineItems.resourceRoleId,
+          role.id
+        )
         if (Object.values(usage.counts).some((n) => n > 0)) {
           throw inUseError({
             entity: "resource_role",

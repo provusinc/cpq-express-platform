@@ -4,6 +4,7 @@ import { catalogItemRouter } from "./routers/catalog-item"
 import { contactRouter } from "./routers/contact"
 import { healthRouter } from "./routers/health"
 import { invitationRouter } from "./routers/invitation"
+import { lineItemRouter } from "./routers/line-item"
 import { membershipRouter } from "./routers/membership"
 import { organizationRouter } from "./routers/organization"
 import { platformRouter } from "./routers/platform"
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
   contact: contactRouter,
   health: healthRouter,
   invitation: invitationRouter,
+  lineItem: lineItemRouter,
   membership: membershipRouter,
   organization: organizationRouter,
   platform: platformRouter,

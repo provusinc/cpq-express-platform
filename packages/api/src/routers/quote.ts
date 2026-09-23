@@ -24,12 +24,20 @@ import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import { isLocked } from "@workspace/domain/status"
 
 import { notFound } from "../errors"
-import { containsPattern, isoDateInput, paging, requiredText } from "../inputs"
+import {
+  containsPattern,
+  isoDateInput,
+  money,
+  paging,
+  percentInput,
+  requiredText,
+} from "../inputs"
+import { editorResult, lineItemViews } from "../line-items"
 import { quoteCommand, quoteFacts } from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 
-const { accounts, quotes, users } = schema
+const { accounts, lineItems, phases, quotes, users } = schema
 
 /** The longest Description the API accepts. */
 const DESCRIPTION_MAX = 2000
@@ -385,6 +393,81 @@ export const quoteRouter = createTRPCRouter({
         }),
       }
     }),
+
+  /**
+   * What the Quote editor's grid and Summary show: the Phases, every Line
+   * Item in grid order (sequence, then id) and the Quote's server-computed
+   * totals. Every member may read it. Editor commands return the same
+   * pieces (`EditorResult`), which the client merges into this query.
+   */
+  editor: organizationProcedure
+    .input(z.object({ id: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const quote = await ctx.scope.findById(quotes, input.id)
+      if (!quote) throw notFound("Quote")
+      const [phaseRows, lineRows] = await Promise.all([
+        ctx.scope.findMany(phases, {
+          where: eq(phases.quoteId, quote.id),
+          orderBy: [asc(phases.sequence), asc(phases.id)],
+        }),
+        ctx.scope.findMany(lineItems, {
+          where: eq(lineItems.quoteId, quote.id),
+          orderBy: [asc(lineItems.sequence), asc(lineItems.id)],
+        }),
+      ])
+      return {
+        quoteId: quote.id,
+        phases: phaseRows.map((p) => ({
+          id: p.id,
+          parentId: p.parentId,
+          name: p.name,
+          sequence: p.sequence,
+        })),
+        lines: await lineItemViews(ctx.scope, lineRows),
+        totals: {
+          currencyCode: quote.currencyCode,
+          discountKind: quote.discountKind,
+          discountValue: quote.discountValue,
+          subtotal: quote.subtotal,
+          discountAmount: quote.discountAmount,
+          total: quote.total,
+          cost: quote.cost,
+          margin: quote.margin,
+          marginPct: quote.marginPct,
+          updatedAt: quote.updatedAt,
+          updatedById: quote.updatedById,
+        },
+      }
+    }),
+
+  /**
+   * Sets the Quote Discount as entered — a percentage of the Subtotal (0 to
+   * 100) or a fixed amount — or clears it (`null`). Whichever was entered
+   * stays authoritative as lines change; the amount is derived and capped at
+   * the Subtotal, so the Total never goes below 0. Returns the standard
+   * editor result with the new totals.
+   */
+  setDiscount: organizationProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        discount: z
+          .discriminatedUnion("kind", [
+            z.object({ kind: z.literal("percent"), value: percentInput }),
+            z.object({ kind: z.literal("amount"), value: money }),
+          ])
+          .nullable(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.id, "quote.edit", async (cmd) => {
+        await cmd.update({
+          discountKind: input.discount?.kind ?? null,
+          discountValue: input.discount?.value ?? null,
+        })
+        return editorResult(cmd, {})
+      })
+    ),
 
   /** Renames the Quote (Name only). Needs edit permission and an unlocked Quote. */
   rename: organizationProcedure

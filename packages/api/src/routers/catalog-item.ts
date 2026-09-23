@@ -15,6 +15,11 @@ import {
 } from "@workspace/db"
 import { BILLING_UNITS, CATALOG_ITEM_KINDS } from "@workspace/domain/enums"
 
+import {
+  importRowsInput,
+  parseCatalogItemRow,
+  summarize,
+} from "../catalog-import"
 import { inUseError, notFound } from "../errors"
 import {
   activeFilter,
@@ -60,6 +65,15 @@ const itemFields = {
 }
 
 const kindFilter = z.enum(CATALOG_ITEM_KINDS)
+
+const importInput = z.object({
+  rows: importRowsInput,
+  /** Fills a blank Type: the page the import started from. */
+  defaultKind: kindFilter.optional(),
+})
+
+/** Rows inserted per statement during an import. */
+const IMPORT_CHUNK = 500
 
 /**
  * What references each Catalog Item and would block its deletion. Line
@@ -242,4 +256,43 @@ export const catalogItemRouter = createTRPCRouter({
         return { id: item.id }
       })
     ),
+
+  /**
+   * CSV import preview: parses every row with the import rules and returns
+   * per-row errors (nothing is saved). Admins only.
+   */
+  validateImport: manageProcedure
+    .input(importInput)
+    .mutation(({ input }) =>
+      summarize(
+        input.rows.map((row, i) =>
+          parseCatalogItemRow(row, i, input.defaultKind)
+        )
+      )
+    ),
+
+  /**
+   * Imports Products and Add-ons from CSV rows, all or nothing: the rows are
+   * re-validated and, if any has an error, nothing is saved (BAD_REQUEST);
+   * otherwise every row is inserted in one transaction. Admins only.
+   */
+  import: manageProcedure.input(importInput).mutation(({ ctx, input }) => {
+    const results = input.rows.map((row, i) =>
+      parseCatalogItemRow(row, i, input.defaultKind)
+    )
+    const { errorCount } = summarize(results)
+    if (errorCount > 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `${errorCount} of ${results.length} rows have errors, so nothing was imported. Fix them and upload the file again.`,
+      })
+    }
+    const values = results.map((r) => r.values!)
+    return ctx.scope.transaction(async (scope) => {
+      for (let i = 0; i < values.length; i += IMPORT_CHUNK) {
+        await scope.insertMany(catalogItems, values.slice(i, i + IMPORT_CHUNK))
+      }
+      return { imported: values.length }
+    })
+  }),
 })

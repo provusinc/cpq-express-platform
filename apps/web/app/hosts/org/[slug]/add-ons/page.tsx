@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { CatalogItemsList } from "@/components/catalog/catalog-items-list"
+import { CsvImportButton } from "@/components/catalog/csv-import-dialog"
 import { initialCatalogItemListInput } from "@/components/catalog/list-input"
 import { organizationAccess } from "@/lib/organization-access"
 import { HydrateClient, prefetch, trpc } from "@/trpc/server"
@@ -19,6 +20,11 @@ export default async function AddOnsPage() {
         kind="add_on"
         canManage={access.allowed}
         currencyCode={access.currencyCode}
+        toolbar={
+          <CsvImportButton
+            target={{ type: "catalogItems", defaultKind: "add_on" }}
+          />
+        }
       />
     </HydrateClient>
   )

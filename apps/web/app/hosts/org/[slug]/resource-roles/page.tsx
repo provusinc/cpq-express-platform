@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { CsvImportButton } from "@/components/catalog/csv-import-dialog"
 import { INITIAL_RESOURCE_ROLE_LIST_INPUT } from "@/components/resource-roles/list-input"
 import { ResourceRolesList } from "@/components/resource-roles/resource-roles-list"
 import { organizationAccess } from "@/lib/organization-access"
@@ -18,6 +19,7 @@ export default async function ResourceRolesPage() {
       <ResourceRolesList
         canManage={access.allowed}
         currencyCode={access.currencyCode}
+        toolbar={<CsvImportButton target={{ type: "resourceRoles" }} />}
       />
     </HydrateClient>
   )

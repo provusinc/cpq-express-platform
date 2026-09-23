@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import {
@@ -13,6 +14,11 @@ import {
   sql,
 } from "@workspace/db"
 
+import {
+  importRowsInput,
+  parseResourceRoleRow,
+  summarize,
+} from "../catalog-import"
 import { inUseError, notFound } from "../errors"
 import {
   activeFilter,
@@ -33,6 +39,11 @@ const { resourceRoles } = schema
 
 /** Only Admins manage Resource Roles (domain policy "catalog.manage"). */
 const manageProcedure = permittedProcedure("catalog.manage")
+
+const importInput = z.object({ rows: importRowsInput })
+
+/** Rows inserted per statement during an import. */
+const IMPORT_CHUNK = 500
 
 const roleFields = {
   name: requiredText(200),
@@ -217,4 +228,36 @@ export const resourceRoleRouter = createTRPCRouter({
         return { id: role.id }
       })
     ),
+
+  /**
+   * CSV import preview: parses every row with the import rules and returns
+   * per-row errors (nothing is saved). Admins only.
+   */
+  validateImport: manageProcedure
+    .input(importInput)
+    .mutation(({ input }) =>
+      summarize(input.rows.map((row, i) => parseResourceRoleRow(row, i)))
+    ),
+
+  /**
+   * Imports Resource Roles from CSV rows, all or nothing: re-validated, and
+   * inserted in one transaction only when every row is valid. Admins only.
+   */
+  import: manageProcedure.input(importInput).mutation(({ ctx, input }) => {
+    const results = input.rows.map((row, i) => parseResourceRoleRow(row, i))
+    const { errorCount } = summarize(results)
+    if (errorCount > 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `${errorCount} of ${results.length} rows have errors, so nothing was imported. Fix them and upload the file again.`,
+      })
+    }
+    const values = results.map((r) => r.values!)
+    return ctx.scope.transaction(async (scope) => {
+      for (let i = 0; i < values.length; i += IMPORT_CHUNK) {
+        await scope.insertMany(resourceRoles, values.slice(i, i + IMPORT_CHUNK))
+      }
+      return { imported: values.length }
+    })
+  }),
 })

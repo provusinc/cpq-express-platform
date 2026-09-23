@@ -38,7 +38,7 @@ export function isInteractiveClickTarget(target: HTMLElement): boolean {
     target.tagName === "TEXTAREA" ||
     target.tagName === "SELECT" ||
     target.tagName === "BUTTON" ||
-    target.tagName === "A"
+    target.tagName === "A",
   )
 }
 
@@ -48,7 +48,7 @@ export function isInteractiveClickTarget(target: HTMLElement): boolean {
  */
 export function resolveRowFromClick<TData extends RowData>(
   target: HTMLElement,
-  table: DataTableInstance<TData>
+  table: DataTableInstance<TData>,
 ) {
   if (isInteractiveClickTarget(target)) return null
   const rowEl = target.closest("tr[data-row-id]")

@@ -13,7 +13,7 @@
  */
 import React from "react"
 
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 /**
  * Wrapper for groups of column filters.

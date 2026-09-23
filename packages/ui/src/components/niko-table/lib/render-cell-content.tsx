@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@workspace/ui/components/button"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 import type { DataTableCell } from "../types"
 
@@ -19,7 +19,7 @@ import type { DataTableCell } from "../types"
  * virtualized, and DnD tables.
  */
 export function renderCellContent<TData extends RowData, TValue>(
-  cell: DataTableCell<TData, TValue>
+  cell: DataTableCell<TData, TValue>,
 ): ReactNode {
   const context = cell.getContext()
 
@@ -43,7 +43,7 @@ export function renderCellContent<TData extends RowData, TValue>(
   if (cell.getIsAggregated()) {
     return flexRender(
       cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
-      context
+      context,
     )
   }
 

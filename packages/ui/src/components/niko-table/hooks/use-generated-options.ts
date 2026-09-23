@@ -62,7 +62,7 @@ export interface GenerateOptionsConfig {
  */
 export function useGeneratedOptions<TData extends RowData>(
   table: DataTableInstance<TData>,
-  config: GenerateOptionsConfig = {}
+  config: GenerateOptionsConfig = {},
 ): Record<string, Option[]> {
   const {
     showCounts = true,
@@ -83,7 +83,7 @@ export function useGeneratedOptions<TData extends RowData>(
   // server-side facets) invalidate the memo — `table` ref alone is too stable.
   const columns = React.useMemo(
     () => table.getAllColumns(),
-    [table, table.options.columns]
+    [table, table.options.columns],
   )
 
   // Extract `coreRows` so async-data row-array identity changes drive recompute;
@@ -140,7 +140,7 @@ export function useGeneratedOptions<TData extends RowData>(
               coreRows,
               colId,
               columnFilters,
-              globalFilter
+              globalFilter,
             )
           : coreRows
       const optionSourceRows = limitToFilteredRows ? filteredRowsExcl : coreRows
@@ -175,7 +175,7 @@ export function useGeneratedOptions<TData extends RowData>(
             }
           }
           filteredStaticOptions = meta.options.filter((opt: Option) =>
-            occurrenceMap.has(opt.value)
+            occurrenceMap.has(opt.value),
           )
         }
 
@@ -231,7 +231,7 @@ export function useGeneratedOptions<TData extends RowData>(
       }
 
       const options: Option[] = Array.from(optionValues)
-        .map((value) => ({
+        .map(value => ({
           value,
           label: colFormatOptionLabel
             ? colFormatOptionLabel(value)
@@ -266,7 +266,7 @@ export function useGeneratedOptions<TData extends RowData>(
             }
           }
           result[colId] = meta.options.filter((opt: Option) =>
-            availableOptions.has(opt.value)
+            availableOptions.has(opt.value),
           )
         } else {
           result[colId] = meta.options
@@ -305,7 +305,7 @@ export function useGeneratedOptions<TData extends RowData>(
 export function useGeneratedOptionsForColumn<TData extends RowData>(
   table: DataTableInstance<TData>,
   columnId: string,
-  config?: GenerateOptionsConfig
+  config?: GenerateOptionsConfig,
 ): Option[] {
   const map = useGeneratedOptions(table, {
     ...config,

@@ -4,10 +4,12 @@ import { config } from "@workspace/eslint-config/react-internal"
 export default [
   ...config,
   {
-    // niko-table is vendored from its shadcn registry (re-added with the
-    // shadcn CLI, not hand-edited): its refs-in-render and effect patterns
-    // trip the React Compiler rules, which then just skip those components.
-    files: ["src/components/niko-table/**"],
+    // Everything in src/components and src/hooks is vendored: stock shadcn
+    // components and the niko-table registry, written by the shadcn CLI and
+    // never hand-edited (see "UI component policy" in AGENTS.md). Their
+    // refs-in-render and effect patterns trip the React Compiler rules,
+    // which then just skip those components.
+    files: ["src/components/**", "src/hooks/**"],
     linterOptions: { reportUnusedDisableDirectives: "off" },
     rules: {
       "react-hooks/exhaustive-deps": "off",

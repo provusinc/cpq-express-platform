@@ -32,7 +32,7 @@ export type ScrollAlign = "auto" | "start" | "center" | "end"
 /** Scroll a row into view by its position in the current row model. */
 export type ScrollRowIntoView = (
   index: number,
-  opts?: { align?: ScrollAlign }
+  opts?: { align?: ScrollAlign },
 ) => void
 
 /**
@@ -81,7 +81,7 @@ export interface FlashCellRef {
  */
 export type FlashCells = (
   cells: FlashCellRef[],
-  opts?: FlashRowsOptions
+  opts?: FlashRowsOptions,
 ) => void
 
 /** Internal key for a flashing cell (row id + column id). */
@@ -181,7 +181,7 @@ export function useDataTableActiveCellSetter(): (cell: ActiveCell) => void {
   const setter = useContext(ActiveCellSetterContext)
   if (setter === null) {
     throw new Error(
-      "useDataTableActiveCellSetter must be used within DataTableRoot"
+      "useDataTableActiveCellSetter must be used within DataTableRoot",
     )
   }
   return setter
@@ -221,7 +221,7 @@ export function useColumnResizeInfo(): ColumnResizeInfo {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DataTableContext = createContext<DataTableContextProps<any> | undefined>(
-  undefined
+  undefined,
 )
 
 export function useDataTable<
@@ -246,7 +246,7 @@ type DataTableAction = {
 
 function dataTableReducer(
   state: DataTableContextState,
-  action: DataTableAction
+  action: DataTableAction,
 ): DataTableContextState {
   switch (action.type) {
     case DataTableActions.SET_IS_LOADING:
@@ -280,18 +280,18 @@ function useFlashSet(): [
 ] {
   const [set, setSet] = React.useState<Set<string>>(() => new Set())
   const timers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map()
+    new Map(),
   )
   React.useEffect(() => {
     const t = timers.current
     return () => {
-      t.forEach((timer) => clearTimeout(timer))
+      t.forEach(timer => clearTimeout(timer))
       t.clear()
     }
   }, [])
   const flash = useCallback((keys: string[], durationMs: number) => {
     if (keys.length === 0) return
-    setSet((prev) => {
+    setSet(prev => {
       const next = new Set(prev)
       for (const k of keys) next.add(k)
       return next
@@ -302,14 +302,14 @@ function useFlashSet(): [
       timers.current.set(
         k,
         setTimeout(() => {
-          setSet((prev) => {
+          setSet(prev => {
             if (!prev.has(k)) return prev
             const next = new Set(prev)
             next.delete(k)
             return next
           })
           timers.current.delete(k)
-        }, durationMs)
+        }, durationMs),
       )
     }
   }, [])
@@ -324,7 +324,7 @@ export function DataTableProvider<TData extends RowData>({
 }: DataTableProviderProps<TData>) {
   const [state, dispatch] = useReducer(
     dataTableReducer,
-    deriveInitialState(externalIsLoading)
+    deriveInitialState(externalIsLoading),
   )
 
   const setIsLoading = useCallback((value: boolean) => {
@@ -349,7 +349,7 @@ export function DataTableProvider<TData extends RowData>({
     React.useState<HTMLElement | null>(null)
   const registerScrollContainer = useCallback(
     (el: HTMLElement | null) => setScrollContainer(el),
-    []
+    [],
   )
   const scrollRowIntoView = useCallback<ScrollRowIntoView>((index, opts) => {
     if (rowScrollerRef.current) {
@@ -394,8 +394,8 @@ export function DataTableProvider<TData extends RowData>({
         // Select every row between the anchor and this one in DISPLAY order.
         // Use positions in `model.rows` — TanStack's `row.index` is the
         // source-data index and diverges after sort/filter.
-        const a = model.rows.findIndex((r) => r.id === anchorId)
-        const b = model.rows.findIndex((r) => r.id === rowId)
+        const a = model.rows.findIndex(r => r.id === anchorId)
+        const b = model.rows.findIndex(r => r.id === rowId)
         if (a === -1 || b === -1) return
         const next = { ...table.state.rowSelection }
         for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
@@ -408,7 +408,7 @@ export function DataTableProvider<TData extends RowData>({
       row.toggleSelected()
       rowSelectionAnchorRef.current = rowId
     },
-    [table]
+    [table],
   )
 
   const scrollFirstIdIntoView = useCallback(
@@ -417,14 +417,14 @@ export function DataTableProvider<TData extends RowData>({
       for (const id of ids) {
         // Display index — `scrollRowIntoView` / the virtualizer speak display
         // space, not TanStack's source-data `row.index`.
-        const idx = model.rows.findIndex((r) => r.id === id)
+        const idx = model.rows.findIndex(r => r.id === id)
         if (idx !== -1) {
           scrollRowIntoView(idx, { align: "center" })
           return
         }
       }
     },
-    [table, scrollRowIntoView]
+    [table, scrollRowIntoView],
   )
 
   const flashRows = useCallback<FlashRows>(
@@ -433,20 +433,20 @@ export function DataTableProvider<TData extends RowData>({
       if (opts?.scrollIntoView ?? true) scrollFirstIdIntoView(ids)
       flashRowKeys(ids, opts?.durationMs ?? 1400)
     },
-    [flashRowKeys, scrollFirstIdIntoView]
+    [flashRowKeys, scrollFirstIdIntoView],
   )
 
   const flashCells = useCallback<FlashCells>(
     (cells, opts) => {
       if (cells.length === 0) return
       if (opts?.scrollIntoView ?? true)
-        scrollFirstIdIntoView(cells.map((c) => c.rowId))
+        scrollFirstIdIntoView(cells.map(c => c.rowId))
       flashCellKeys(
-        cells.map((c) => flashCellKey(c.rowId, c.columnId)),
-        opts?.durationMs ?? 1400
+        cells.map(c => flashCellKey(c.rowId, c.columnId)),
+        opts?.durationMs ?? 1400,
       )
     },
-    [flashCellKeys, scrollFirstIdIntoView]
+    [flashCellKeys, scrollFirstIdIntoView],
   )
 
   /**
@@ -493,7 +493,7 @@ export function DataTableProvider<TData extends RowData>({
     // Full sorted-keys hash — a "first 3 keys" signature collided on
     // sequential row IDs (`r1,r2,r3` vs `r1,r2,r4`).
     const getObjectHash = (
-      obj: Record<string, unknown> | undefined
+      obj: Record<string, unknown> | undefined,
     ): string => {
       if (!obj) return "0"
       const keys = Object.keys(obj)
@@ -516,13 +516,13 @@ export function DataTableProvider<TData extends RowData>({
       sortingHash: JSON.stringify(sorting),
       columnFiltersHash: JSON.stringify(columnFilters),
       columnVisibilityHash: getObjectHash(
-        columnVisibility as Record<string, unknown> | undefined
+        columnVisibility as Record<string, unknown> | undefined,
       ),
       expandedHash: getObjectHash(
-        expanded as Record<string, unknown> | undefined
+        expanded as Record<string, unknown> | undefined,
       ),
       rowSelectionHash: getObjectHash(
-        rowSelection as Record<string, unknown> | undefined
+        rowSelection as Record<string, unknown> | undefined,
       ),
       paginationKey,
       columnPinningHash: JSON.stringify(columnPinning),
@@ -554,7 +554,7 @@ export function DataTableProvider<TData extends RowData>({
   const headerMinWidths = useHeaderMinWidths(
     table,
     scrollContainer,
-    table.options.enableColumnResizing ?? false
+    table.options.enableColumnResizing ?? false,
   )
 
   // Publish the in-flight resize offset for the preview guide line (see
@@ -574,7 +574,7 @@ export function DataTableProvider<TData extends RowData>({
         resizingColumnId,
         deltaOffset: resizeDeltaOffset,
       },
-    [manualResizePreview, resizingColumnId, resizeDeltaOffset]
+    [manualResizePreview, resizingColumnId, resizeDeltaOffset],
   )
 
   // Memoize so context consumers (10+ filter/action components) only re-render
@@ -619,7 +619,7 @@ export function DataTableProvider<TData extends RowData>({
       flashCells,
       toggleRowSelection,
       tableStateKey,
-    ]
+    ],
   )
 
   return (

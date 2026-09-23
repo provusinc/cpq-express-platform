@@ -18,7 +18,7 @@ import React from "react"
 
 import { Button } from "@workspace/ui/components/button"
 import { TableCell, TableRow } from "@workspace/ui/components/table"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 import {
   DataTableGroupRowProvider,
@@ -46,7 +46,7 @@ export function DataTableGroupedRowCells() {
 
   return (
     <>
-      {row.getVisibleCells().map((cell) => {
+      {row.getVisibleCells().map(cell => {
         const cellStyle = {
           width: columnWidths.get(cell.column.id),
           ...getCommonPinningStyles(cell.column, false),
@@ -69,7 +69,7 @@ export function DataTableGroupedRowCells() {
                     ? `Collapse the ${groupLabel} group`
                     : `Expand the ${groupLabel} group`
                 }
-                onClick={(event) => {
+                onClick={event => {
                   event.stopPropagation()
                   toggle()
                 }}
@@ -77,7 +77,7 @@ export function DataTableGroupedRowCells() {
                 <ChevronRight
                   className={cn(
                     "size-3.5 transition-transform",
-                    isExpanded && "rotate-90"
+                    isExpanded && "rotate-90",
                   )}
                 />
               </Button>
@@ -95,7 +95,7 @@ export function DataTableGroupedRowCells() {
         } else if (cell.getIsAggregated()) {
           content = flexRender(
             cell.column.columnDef.aggregatedCell ?? cell.column.columnDef.cell,
-            cell.getContext()
+            cell.getContext(),
           )
         }
 
@@ -108,7 +108,7 @@ export function DataTableGroupedRowCells() {
               "truncate",
               // A pinned cell must be opaque to occlude what scrolls under it,
               // so it carries a flat token rather than the row's translucent tint.
-              cell.column.getIsPinned() && "bg-muted"
+              cell.column.getIsPinned() && "bg-muted",
             )}
           >
             {content}
@@ -184,7 +184,7 @@ export const GroupedBodyRow = React.memo(function GroupedBodyRow<
       event.stopPropagation()
       row.toggleExpanded()
     },
-    [row]
+    [row],
   )
 
   const contextValue = React.useMemo<DataTableGroupRowContextValue<TData>>(
@@ -206,7 +206,7 @@ export const GroupedBodyRow = React.memo(function GroupedBodyRow<
       toggle,
       displayIndex,
       columnWidths,
-    ]
+    ],
   )
 
   // A custom child replaces the built-in cells; `enabledFor` lets a table opt
@@ -233,5 +233,5 @@ export const GroupedBodyRow = React.memo(function GroupedBodyRow<
     </DataTableGroupRowProvider>
   )
 }) as <TData extends RowData = RowData>(
-  props: GroupedBodyRowProps<TData>
+  props: GroupedBodyRowProps<TData>,
 ) => React.JSX.Element

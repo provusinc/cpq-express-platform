@@ -12,7 +12,7 @@
  * https://github.com/Semkoo/niko-table-registry
  */
 import React from "react"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import { TableComponent } from "@workspace/ui/components/table"
 
 import { useColumnResizeInfo, useDataTable } from "./data-table-context"
@@ -129,7 +129,7 @@ function ColumnResizePreviewLine() {
       ? CSS.escape(resizingColumnId)
       : resizingColumnId
   const cell = scrollContainer.querySelector<HTMLElement>(
-    `thead [data-col-id="${escapedId}"]`
+    `thead [data-col-id="${escapedId}"]`,
   )
   if (!cell) return null
 
@@ -147,7 +147,7 @@ function ColumnResizePreviewLine() {
     <div
       aria-hidden
       data-slot="column-resize-preview"
-      className="pointer-events-none absolute top-0 z-40 w-px bg-primary"
+      className="bg-primary pointer-events-none absolute top-0 z-40 w-px"
       style={{ left, height: scrollContainer.scrollHeight }}
     />
   )
@@ -162,7 +162,7 @@ export function DataTable({
   // Parse height from className if not provided via props
   const parsed = React.useMemo(
     () => parseHeightFromClassName(className),
-    [className]
+    [className],
   )
 
   const finalHeight = height ?? parsed.height
@@ -188,7 +188,7 @@ export function DataTable({
         // Firefox scrollbar styling
         "scrollbar-thin scrollbar-thumb-border/40 scrollbar-track-transparent",
         "hover:scrollbar-thumb-border",
-        parsed.safeClassName
+        parsed.safeClassName,
       )}
       style={{
         height: finalHeight,

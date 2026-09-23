@@ -32,7 +32,7 @@ import {
   type Updater,
 } from "@tanstack/react-table"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import React from "react"
 import { detectFeaturesFromChildren } from "../config/feature-detection"
 import {
@@ -188,20 +188,20 @@ function DataTableRootInternal<TData extends RowData>({
 }) {
   // Memoize so `columns.some()` only runs when the columns array changes.
   const hasSelectColumn = React.useMemo(
-    () => columns?.some((col) => col.id === SYSTEM_COLUMN_IDS.SELECT) ?? false,
-    [columns]
+    () => columns?.some(col => col.id === SYSTEM_COLUMN_IDS.SELECT) ?? false,
+    [columns],
   )
 
   const hasExpandColumn = React.useMemo(
     () =>
       columns?.some(
-        (col) =>
+        col =>
           col.id === SYSTEM_COLUMN_IDS.EXPAND ||
           (col.meta &&
             "expandedContent" in col.meta &&
-            col.meta.expandedContent)
+            col.meta.expandedContent),
       ) ?? false,
-    [columns]
+    [columns],
   )
 
   // Stable identity prevents downstream memo cascades (detectFeatures,
@@ -250,7 +250,7 @@ function DataTableRootInternal<TData extends RowData>({
       config?.initialPageIndex,
       config?.autoResetPageIndex,
       config?.autoResetExpanded,
-    ]
+    ],
   )
 
   // Cache once: `detectFeaturesFromChildren` recursively walks the React tree
@@ -314,36 +314,36 @@ function DataTableRootInternal<TData extends RowData>({
 
   // State management
   const [globalFilter, setGlobalFilter] = React.useState<GlobalFilter>(
-    restInitialState?.globalFilter ?? ""
+    restInitialState?.globalFilter ?? "",
   )
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>(
-    restInitialState?.rowSelection ?? {}
+    restInitialState?.rowSelection ?? {},
   )
   const [columnVisibility, setColumnVisibility] =
     React.useState<ColumnVisibilityState>(
-      restInitialState?.columnVisibility ?? {}
+      restInitialState?.columnVisibility ?? {},
     )
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    restInitialState?.columnFilters ?? []
+    restInitialState?.columnFilters ?? [],
   )
   const [sorting, setSorting] = React.useState<SortingState>(
-    restInitialState?.sorting ?? []
+    restInitialState?.sorting ?? [],
   )
   const [expanded, setExpanded] = React.useState<ExpandedState>(
-    restInitialState?.expanded ?? {}
+    restInitialState?.expanded ?? {},
   )
   const [grouping, setGrouping] = React.useState<GroupingState>(
-    restInitialState?.grouping ?? []
+    restInitialState?.grouping ?? [],
   )
   const [columnPinning, setColumnPinning] = React.useState<ColumnPinningState>({
     start: restInitialState?.columnPinning?.start ?? [],
     end: restInitialState?.columnPinning?.end ?? [],
   })
   const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>(
-    restInitialState?.columnOrder ?? []
+    restInitialState?.columnOrder ?? [],
   )
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(
-    restInitialState?.columnSizing ?? {}
+    restInitialState?.columnSizing ?? {},
   )
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex:
@@ -375,7 +375,7 @@ function DataTableRootInternal<TData extends RowData>({
       }
       onGlobalFilterChange?.(value)
     },
-    [onGlobalFilterChange]
+    [onGlobalFilterChange],
   )
 
   // O(1) row-by-id lookup; Array.find()-per-selection is O(n × m) — ~500ms lag
@@ -399,12 +399,12 @@ function DataTableRootInternal<TData extends RowData>({
     (valueFn: Updater<RowSelectionState>) => {
       if (!isMountedRef.current) return
       if (typeof valueFn === "function") {
-        setRowSelection((prev) => valueFn(prev))
+        setRowSelection(prev => valueFn(prev))
       } else {
         setRowSelection(valueFn)
       }
     },
-    []
+    [],
   )
 
   /**
@@ -428,20 +428,20 @@ function DataTableRootInternal<TData extends RowData>({
     (u: Updater<ColumnFiltersState>) => {
       if (isMountedRef.current) setColumnFilters(u)
     },
-    []
+    [],
   )
 
   const handleColumnVisibilityChange = React.useCallback(
     (u: Updater<ColumnVisibilityState>) => {
       if (isMountedRef.current) setColumnVisibility(u)
     },
-    []
+    [],
   )
 
   const handleColumnPinningChange = React.useCallback(
     (updater: Updater<ColumnPinningState>) => {
       if (!isMountedRef.current) return
-      setColumnPinning((prev) => {
+      setColumnPinning(prev => {
         const next = typeof updater === "function" ? updater(prev) : updater
         return {
           start: next.start ?? [],
@@ -449,42 +449,42 @@ function DataTableRootInternal<TData extends RowData>({
         }
       })
     },
-    []
+    [],
   )
 
   const handleColumnOrderChange = React.useCallback(
     (u: Updater<ColumnOrderState>) => {
       if (isMountedRef.current) setColumnOrder(u)
     },
-    []
+    [],
   )
 
   const handleColumnSizingChange = React.useCallback(
     (u: Updater<ColumnSizingState>) => {
       if (isMountedRef.current) setColumnSizing(u)
     },
-    []
+    [],
   )
 
   const handleExpandedChange = React.useCallback(
     (u: Updater<ExpandedState>) => {
       if (isMountedRef.current) setExpanded(u)
     },
-    []
+    [],
   )
 
   const handleGroupingChange = React.useCallback(
     (u: Updater<GroupingState>) => {
       if (isMountedRef.current) setGrouping(u)
     },
-    []
+    [],
   )
 
   const handlePaginationChange = React.useCallback(
     (u: Updater<PaginationState>) => {
       if (isMountedRef.current) setPagination(u)
     },
-    []
+    [],
   )
 
   // Fire `onRowSelection` only on user-driven changes — skip the initial mount.
@@ -497,8 +497,8 @@ function DataTableRootInternal<TData extends RowData>({
     }
     if (!onRowSelection) return
     const selectedRows = Object.keys(rowSelection)
-      .filter((key) => rowSelection[key])
-      .map((key) => rowIdMap.get(key))
+      .filter(key => rowSelection[key])
+      .map(key => rowIdMap.get(key))
       .filter((row): row is TData => row !== undefined)
     onRowSelection(selectedRows)
   }, [rowSelection, rowIdMap, onRowSelection])
@@ -508,7 +508,7 @@ function DataTableRootInternal<TData extends RowData>({
    * This allows developers to set variant in meta and get the right filterFn automatically
    */
   const processedColumns = React.useMemo(() => {
-    return columns.map((col) => {
+    return columns.map(col => {
       // If filterFn is already defined, use it (manual override)
       if (col.filterFn) return col
 
@@ -561,7 +561,7 @@ function DataTableRootInternal<TData extends RowData>({
         ? { minSize: DEFAULT_MIN_COLUMN_SIZE }
         : {}),
     }),
-    [detectFeatures.enableColumnResizing, detectFeatures.enableSorting]
+    [detectFeatures.enableColumnResizing, detectFeatures.enableSorting],
   )
 
   // Extract controlled-state slices for the tableOptions dep array.
@@ -588,7 +588,7 @@ function DataTableRootInternal<TData extends RowData>({
 
     // Helper to safely extract column ID (handles both id and accessorKey)
     const getColumnId = (
-      col: DataTableColumnDef<TData>
+      col: DataTableColumnDef<TData>,
     ): string | undefined => {
       if (col.id) return col.id
       // Type-safe check for accessorKey property
@@ -599,7 +599,7 @@ function DataTableRootInternal<TData extends RowData>({
     }
 
     // 1. Identify the "First Data Column" (first non-system column)
-    const firstDataCol = columns.find((col) => {
+    const firstDataCol = columns.find(col => {
       const id = getColumnId(col)
       return id && !SYSTEM_COLUMN_ID_LIST.includes(id)
     })
@@ -628,8 +628,8 @@ function DataTableRootInternal<TData extends RowData>({
     if (hasExpandColumn) systemColsPresent.push(SYSTEM_COLUMN_IDS.EXPAND)
 
     // 4. Clean existing lists (remove system cols to avoid duplication)
-    const cleanStart = start.filter((id) => !SYSTEM_COLUMN_ID_LIST.includes(id))
-    const cleanEnd = end.filter((id) => !SYSTEM_COLUMN_ID_LIST.includes(id))
+    const cleanStart = start.filter(id => !SYSTEM_COLUMN_ID_LIST.includes(id))
+    const cleanEnd = end.filter(id => !SYSTEM_COLUMN_ID_LIST.includes(id))
 
     // 5. Construct new pinning state
     if (isPinnedStart) {
@@ -690,12 +690,7 @@ function DataTableRootInternal<TData extends RowData>({
       // the drag; `<ColumnResizePreviewLine>` shows a live guide line instead.
       columnResizeMode: "onEnd",
       onColumnSizingChange: onColumnSizingChange ?? handleColumnSizingChange,
-      // A per-row predicate passed as a table option (e.g. only leaf rows are
-      // selectable) wins; otherwise the detected/configured boolean.
-      enableRowSelection:
-        typeof passthroughTableOptions.enableRowSelection === "function"
-          ? passthroughTableOptions.enableRowSelection
-          : detectFeatures.enableRowSelection,
+      enableRowSelection: detectFeatures.enableRowSelection,
       enableFilters: detectFeatures.enableFilters,
       enableSorting: detectFeatures.enableSorting,
       enableMultiSort: detectFeatures.enableMultiSort,
@@ -808,7 +803,7 @@ function DataTableRootInternal<TData extends RowData>({
       controlledPagination,
       // Add column pinning state to dependencies so the table updates when it changes
       finalColumnPinning,
-    ]
+    ],
   )
 
   // Instance ref is stable across state changes; React Compiler warns about
@@ -861,7 +856,7 @@ export function DataTableRoot<TData extends RowData>({
   // Validate required props for internal table creation
   if (!columns || !data) {
     throw new Error(
-      "DataTableRoot: Either provide a 'table' prop or both 'columns' and 'data' props"
+      "DataTableRoot: Either provide a 'table' prop or both 'columns' and 'data' props",
     )
   }
 

@@ -21,7 +21,7 @@ import { useColumnHeaderContext } from "./data-table-column-header"
  * Renders the column title using context.
  */
 export function DataTableColumnTitle<TData extends RowData, TValue>(
-  props: Omit<React.ComponentProps<typeof TableColumnTitle>, "column">
+  props: Omit<React.ComponentProps<typeof TableColumnTitle>, "column">,
 ) {
   const { column } = useColumnHeaderContext<TData, TValue>(true)
   return <TableColumnTitle column={column} {...props} />

@@ -12,7 +12,7 @@
  * https://github.com/Semkoo/niko-table-registry
  */
 import React from "react"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 export interface DataTableToolbarSectionProps extends React.ComponentProps<"div"> {
   children?: React.ReactNode
@@ -72,7 +72,7 @@ DataTableToolbarSectionInternal.displayName = "DataTableToolbarSectionInternal"
 
 // Memoized so table-state changes don't re-render unchanged toolbars.
 export const DataTableToolbarSection = React.memo(
-  DataTableToolbarSectionInternal
+  DataTableToolbarSectionInternal,
 )
 
 DataTableToolbarSection.displayName = "DataTableToolbarSection"

@@ -27,7 +27,7 @@ import type { DataTableColumn, DataTableInstance } from "../types"
  * no eligible column exists — the table then sizes to its columns as before).
  */
 export function resolveFlexColumnIds<TData extends RowData>(
-  table: DataTableInstance<TData>
+  table: DataTableInstance<TData>,
 ): ReadonlySet<string> {
   const ids = new Set<string>()
   // Flex only applies under the fixed layout that resizing turns on.
@@ -59,11 +59,11 @@ export function resolveFlexColumnIds<TData extends RowData>(
 
   // Default: the first non-pinned, resizable, un-resized, non-opted-out column.
   const auto = leafColumns.find(
-    (column) =>
+    column =>
       column.getCanResize() &&
       !column.getIsPinned() &&
       column.columnDef.meta?.flex !== false &&
-      columnSizing[column.id] == null
+      columnSizing[column.id] == null,
   )
   if (auto) ids.add(auto.id)
   return ids
@@ -88,7 +88,7 @@ export function resolveColumnWidth<TData extends RowData>(
     isFlex: boolean
     columnSizing: ColumnSizingState
     headerMinWidths: ReadonlyMap<string, number>
-  }
+  },
 ): number | string | undefined {
   const size = column.columnDef.size
   // Off (no resizing): the declared `size`. Flex only means "fill the surplus"

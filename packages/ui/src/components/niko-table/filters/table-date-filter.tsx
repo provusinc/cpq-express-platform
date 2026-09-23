@@ -54,7 +54,7 @@ function parseColumnFilterValue(value: unknown) {
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => {
+    return value.map(item => {
       if (typeof item === "number" || typeof item === "string") {
         return item
       }
@@ -117,7 +117,7 @@ export function TableDateFilter<TData extends RowData>({
         column.setFilterValue(date.getTime())
       }
     },
-    [column, multiple]
+    [column, multiple],
   )
 
   const onReset = React.useCallback(
@@ -125,7 +125,7 @@ export function TableDateFilter<TData extends RowData>({
       event.stopPropagation()
       column.setFilterValue(undefined)
     },
-    [column]
+    [column],
   )
 
   const hasValue = React.useMemo(() => {
@@ -195,28 +195,26 @@ export function TableDateFilter<TData extends RowData>({
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={
-          (trigger as React.ReactElement | undefined) || (
-            <Button variant="outline" size="sm" className="h-8 border-dashed">
-              {hasValue ? (
-                <div
-                  role="button"
-                  aria-label={`Clear ${title} filter`}
-                  tabIndex={0}
-                  onClick={onReset}
-                  className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                  <XCircle className="size-4" />
-                </div>
-              ) : (
-                <CalendarIcon className="size-4" />
-              )}
-              {label}
-            </Button>
-          )
-        }
-      />
+      <PopoverTrigger>
+        {trigger || (
+          <Button variant="outline" size="sm" className="h-8 border-dashed">
+            {hasValue ? (
+              <div
+                role="button"
+                aria-label={`Clear ${title} filter`}
+                tabIndex={0}
+                onClick={onReset}
+                className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <XCircle className="size-4" />
+              </div>
+            ) : (
+              <CalendarIcon className="size-4" />
+            )}
+            {label}
+          </Button>
+        )}
+      </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         {multiple ? (
           <Calendar

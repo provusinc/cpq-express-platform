@@ -118,14 +118,14 @@ export function TablePagination<TData extends RowData>({
       table.setPageSize(newPageSize)
       onPageSizeChange?.(newPageSize, newPageIndex)
     },
-    [table, pageIndex, pageSize, onPageSizeChange]
+    [table, pageIndex, pageSize, onPageSizeChange],
   )
 
   const handlePageInputChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setPageInput(e.target.value)
     },
-    []
+    [],
   )
 
   const handlePageInputBlur = React.useCallback(() => {
@@ -144,7 +144,7 @@ export function TablePagination<TData extends RowData>({
         e.currentTarget.blur()
       }
     },
-    []
+    [],
   )
 
   const handlePreviousPage = React.useCallback(() => {
@@ -208,7 +208,7 @@ export function TablePagination<TData extends RowData>({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {pageSizeOptions?.map((size) => (
+            {pageSizeOptions?.map(size => (
               <SelectItem key={size} value={`${size}`}>
                 {size}
               </SelectItem>

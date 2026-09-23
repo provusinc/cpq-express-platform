@@ -12,11 +12,11 @@ export function getFilteredRowsExcludingColumn<TData extends RowData>(
   coreRows: DataTableRow<TData>[],
   excludeColumnId: string,
   columnFilters: Array<{ id: string; value: unknown }>,
-  globalFilter: unknown
+  globalFilter: unknown,
 ): DataTableRow<TData>[] {
   // Filter out the current column's filter
   const otherFilters = columnFilters.filter(
-    (filter) => filter.id !== excludeColumnId
+    filter => filter.id !== excludeColumnId,
   )
 
   // If no filters to apply (excluding the current column), return core rows
@@ -30,10 +30,10 @@ export function getFilteredRowsExcludingColumn<TData extends RowData>(
   // below — checking membership here avoids TanStack's `table.getColumn` dev
   // warning ("Column with id 'x' does not exist") that fires before the
   // `!column` guard would catch it.
-  const columnIds = new Set(table.getAllLeafColumns().map((c) => c.id))
+  const columnIds = new Set(table.getAllLeafColumns().map(c => c.id))
 
   // Filter rows manually, excluding the current column's filter
-  return coreRows.filter((row) => {
+  return coreRows.filter(row => {
     // Apply column filters (excluding the current column)
     for (const filter of otherFilters) {
       if (!columnIds.has(filter.id)) continue

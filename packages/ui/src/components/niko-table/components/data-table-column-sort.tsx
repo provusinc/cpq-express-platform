@@ -28,7 +28,7 @@ export function DataTableColumnSortOptions<TData extends RowData, TValue>(
   props: Omit<
     React.ComponentProps<typeof TableColumnSortOptions>,
     "column" | "table"
-  >
+  >,
 ) {
   const { column } = useColumnHeaderContext<TData, TValue>(true)
   const { table } = useDataTable<TData>()
@@ -46,7 +46,7 @@ export function DataTableColumnSortMenu<TData extends RowData, TValue>(
   props: Omit<
     React.ComponentProps<typeof TableColumnSortMenu>,
     "column" | "table"
-  >
+  >,
 ) {
   const { column } = useColumnHeaderContext<TData, TValue>(true)
   const { table } = useDataTable<TData>()

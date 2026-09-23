@@ -56,7 +56,7 @@ export function buildFacetedOptions<TData extends RowData>(
   accessorKey: string,
   columnFilters: Array<{ id: string; value: unknown }>,
   globalFilter: unknown,
-  config: BuildFacetedOptionsConfig
+  config: BuildFacetedOptionsConfig,
 ): Option[] {
   const {
     staticOptions,
@@ -70,7 +70,7 @@ export function buildFacetedOptions<TData extends RowData>(
   // Fast path: explicit options, no narrowing, no counts — just normalize the
   // shape so every return path of this function looks the same to callers.
   if (staticOptions && !limitToFilteredRows && !showCounts) {
-    return staticOptions.map((opt) => ({ ...opt, count: undefined }))
+    return staticOptions.map(opt => ({ ...opt, count: undefined }))
   }
 
   // Only compute the filtered row subset if at least one flag actually needs
@@ -83,7 +83,7 @@ export function buildFacetedOptions<TData extends RowData>(
         coreRows,
         accessorKey,
         columnFilters,
-        globalFilter
+        globalFilter,
       )
     : coreRows
 
@@ -106,14 +106,14 @@ export function buildFacetedOptions<TData extends RowData>(
   let baseOptions: Option[]
   if (staticOptions) {
     baseOptions = limitToFilteredRows
-      ? staticOptions.filter((opt) => keepValue(opt.value))
+      ? staticOptions.filter(opt => keepValue(opt.value))
       : staticOptions
   } else {
     const optionValues = limitToFilteredRows
       ? new Set([...availableValues, ...selectedValues])
       : availableValues
     baseOptions = Array.from(optionValues)
-      .map((value) => ({
+      .map(value => ({
         value,
         label: formatOptionLabel
           ? formatOptionLabel(value)
@@ -125,12 +125,12 @@ export function buildFacetedOptions<TData extends RowData>(
   }
 
   if (!showCounts) {
-    return baseOptions.map((opt) => ({ ...opt, count: undefined }))
+    return baseOptions.map(opt => ({ ...opt, count: undefined }))
   }
 
   // Scope counts to baseOptions values up-front so every returned option
   // has a count and every count maps to a returned option.
-  const targetValues = new Set(baseOptions.map((opt) => opt.value))
+  const targetValues = new Set(baseOptions.map(opt => opt.value))
   const valueCounts = new Map<string, number>()
   for (const row of countRows) {
     const raw = row.getValue(accessorKey) as unknown
@@ -145,7 +145,7 @@ export function buildFacetedOptions<TData extends RowData>(
     }
   }
 
-  return baseOptions.map((opt) => ({
+  return baseOptions.map(opt => ({
     ...opt,
     // Prefer a caller-supplied count over the row-derived one. On a server-side
     // table the rows are only the current page, so the caller passes true
@@ -169,20 +169,20 @@ export function extractFilterSelectedValues(rawValue: unknown): Set<string> {
   if (raw == null || raw === "") return new Set()
 
   const values = Array.isArray(raw) ? raw : [raw]
-  return new Set(values.filter((v) => v != null && v !== "").map(String))
+  return new Set(values.filter(v => v != null && v !== "").map(String))
 }
 
 function getSelectedValues(
   columnFilters: Array<{ id: string; value: unknown }>,
-  accessorKey: string
+  accessorKey: string,
 ): Set<string> {
-  const entry = columnFilters.find((filter) => filter.id === accessorKey)
+  const entry = columnFilters.find(filter => filter.id === accessorKey)
   return entry ? extractFilterSelectedValues(entry.value) : new Set()
 }
 
 function collectRowValues<TData extends RowData>(
   rows: DataTableRow<TData>[],
-  accessorKey: string
+  accessorKey: string,
 ): Set<string> {
   const set = new Set<string>()
   for (const row of rows) {

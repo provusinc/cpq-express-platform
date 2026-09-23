@@ -87,7 +87,7 @@ export function DataTableDateFilter<TData extends RowData>({
   // Early return if column not found
   if (!column) {
     console.warn(
-      `Column with accessorKey "${accessorKey}" not found in table columns`
+      `Column with accessorKey "${accessorKey}" not found in table columns`,
     )
     return null
   }

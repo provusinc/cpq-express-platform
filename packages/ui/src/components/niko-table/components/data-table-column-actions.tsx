@@ -35,7 +35,7 @@ export function DataTableColumnActions<TData extends RowData, TValue>(
   props: Omit<React.ComponentProps<typeof TableColumnActions>, "isActive"> & {
     /** Override to manually set active state */
     isActive?: boolean
-  }
+  },
 ) {
   const context = useColumnHeaderContext<TData, TValue>(false)
 

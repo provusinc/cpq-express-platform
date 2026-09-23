@@ -84,7 +84,7 @@ export function useDataTableRow<TData>(): TData {
   const row = React.useContext(DataTableRowValueContext)
   if (row === NO_ROW) {
     throw new Error(
-      'useDataTableRow must be used inside a DataTableRowMenuScope — i.e. a table row context menu, or a kebab DropdownMenuContent wrapped with surface="dropdown".'
+      'useDataTableRow must be used inside a DataTableRowMenuScope — i.e. a table row context menu, or a kebab DropdownMenuContent wrapped with surface="dropdown".',
     )
   }
   return row as TData
@@ -94,7 +94,7 @@ function useRowMenuSurface(): RowMenuSurface {
   const surface = React.useContext(RowMenuSurfaceContext)
   if (!surface) {
     throw new Error(
-      'Row menu pieces (RowMenuItem, RowMenuSub, …) must be rendered inside a DataTableRowMenuScope — i.e. a table row context menu or a kebab DropdownMenuContent wrapped with surface="dropdown".'
+      'Row menu pieces (RowMenuItem, RowMenuSub, …) must be rendered inside a DataTableRowMenuScope — i.e. a table row context menu or a kebab DropdownMenuContent wrapped with surface="dropdown".',
     )
   }
   return surface
@@ -105,7 +105,7 @@ function useRowMenuSurface(): RowMenuSurface {
 // ---------------------------------------------------------------------------
 
 export function RowMenuItem(
-  props: React.ComponentProps<typeof DropdownMenuItem>
+  props: React.ComponentProps<typeof DropdownMenuItem>,
 ) {
   const Item =
     useRowMenuSurface() === "context" ? ContextMenuItem : DropdownMenuItem
@@ -113,7 +113,7 @@ export function RowMenuItem(
 }
 
 export function RowMenuSeparator(
-  props: React.ComponentProps<typeof DropdownMenuSeparator>
+  props: React.ComponentProps<typeof DropdownMenuSeparator>,
 ) {
   const Separator =
     useRowMenuSurface() === "context"
@@ -123,7 +123,7 @@ export function RowMenuSeparator(
 }
 
 export function RowMenuGroup(
-  props: React.ComponentProps<typeof DropdownMenuGroup>
+  props: React.ComponentProps<typeof DropdownMenuGroup>,
 ) {
   const Group =
     useRowMenuSurface() === "context" ? ContextMenuGroup : DropdownMenuGroup
@@ -131,7 +131,7 @@ export function RowMenuGroup(
 }
 
 export function RowMenuLabel(
-  props: React.ComponentProps<typeof DropdownMenuLabel>
+  props: React.ComponentProps<typeof DropdownMenuLabel>,
 ) {
   const Label =
     useRowMenuSurface() === "context" ? ContextMenuLabel : DropdownMenuLabel
@@ -139,7 +139,7 @@ export function RowMenuLabel(
 }
 
 export function RowMenuSub(
-  props: React.ComponentProps<typeof DropdownMenuSub>
+  props: React.ComponentProps<typeof DropdownMenuSub>,
 ) {
   const Sub =
     useRowMenuSurface() === "context" ? ContextMenuSub : DropdownMenuSub
@@ -147,7 +147,7 @@ export function RowMenuSub(
 }
 
 export function RowMenuSubTrigger(
-  props: React.ComponentProps<typeof DropdownMenuSubTrigger>
+  props: React.ComponentProps<typeof DropdownMenuSubTrigger>,
 ) {
   const SubTrigger =
     useRowMenuSurface() === "context"
@@ -157,7 +157,7 @@ export function RowMenuSubTrigger(
 }
 
 export function RowMenuSubContent(
-  props: React.ComponentProps<typeof DropdownMenuSubContent>
+  props: React.ComponentProps<typeof DropdownMenuSubContent>,
 ) {
   const SubContent =
     useRowMenuSurface() === "context"

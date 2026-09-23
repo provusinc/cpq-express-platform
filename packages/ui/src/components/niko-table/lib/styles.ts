@@ -4,7 +4,7 @@ import type React from "react"
 
 export const getCommonPinningStyles = <TData extends RowData>(
   column: Column<DataTableFeatures, TData>,
-  isHeader: boolean = false
+  isHeader: boolean = false,
 ): React.CSSProperties => {
   const isPinned = column.getIsPinned()
   if (!isPinned) return {}

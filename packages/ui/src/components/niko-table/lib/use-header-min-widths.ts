@@ -45,7 +45,7 @@ function getMeasureContext(): CanvasRenderingContext2D | null {
  * header-fit measures the right string.
  */
 function headerLabel<TData extends RowData>(
-  column: DataTableColumn<TData, unknown>
+  column: DataTableColumn<TData, unknown>,
 ): string | null {
   const columnDef = column.columnDef
   if (columnDef.meta?.label) return columnDef.meta.label
@@ -56,7 +56,7 @@ function headerLabel<TData extends RowData>(
 /** Content equality so a re-measure with identical results keeps identity. */
 function minWidthsEqual(
   a: ReadonlyMap<string, number>,
-  b: ReadonlyMap<string, number>
+  b: ReadonlyMap<string, number>,
 ): boolean {
   if (a.size !== b.size) return false
   for (const [id, width] of b) {
@@ -80,7 +80,7 @@ function minWidthsEqual(
 export function useHeaderMinWidths<TData extends RowData>(
   table: DataTableInstance<TData>,
   scrollElement: HTMLElement | null,
-  enabled: boolean
+  enabled: boolean,
 ): ReadonlyMap<string, number> {
   const [minWidths, setMinWidths] =
     React.useState<ReadonlyMap<string, number>>(EMPTY_MIN_WIDTHS)
@@ -88,7 +88,7 @@ export function useHeaderMinWidths<TData extends RowData>(
   const leafColumns = table.getVisibleLeafColumns()
   // Signature: recompute when the visible set, a label, or sortability changes.
   const signature = leafColumns
-    .map((c) => `${c.id}:${headerLabel(c) ?? ""}:${c.getCanSort() ? 1 : 0}`)
+    .map(c => `${c.id}:${headerLabel(c) ?? ""}:${c.getCanSort() ? 1 : 0}`)
     .join("|")
 
   // Measure-then-store is the canonical layout-measurement pattern (same as
@@ -99,7 +99,7 @@ export function useHeaderMinWidths<TData extends RowData>(
     // `columnWidths` memos and memoized body rows only re-render when a floor
     // actually changed, not on every re-measure.
     const store = (next: ReadonlyMap<string, number>) =>
-      setMinWidths((prev) => (minWidthsEqual(prev, next) ? prev : next))
+      setMinWidths(prev => (minWidthsEqual(prev, next) ? prev : next))
 
     if (!enabled || !scrollElement) {
       store(EMPTY_MIN_WIDTHS)
@@ -112,7 +112,7 @@ export function useHeaderMinWidths<TData extends RowData>(
     // to the header cell itself so raw string headers are still measurable.
     const fontEl =
       scrollElement.querySelector<HTMLElement>(
-        'thead [data-slot="column-title"]'
+        'thead [data-slot="column-title"]',
       ) ?? scrollElement.querySelector<HTMLElement>("thead th[data-col-id]")
     if (!ctx || !fontEl) {
       // No header rendered yet / nothing to measure — drop any stale floors.

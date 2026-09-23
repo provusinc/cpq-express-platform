@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import React from "react"
 import { DataTableColumnHeaderRoot } from "../components/data-table-column-header"
 import { DataTableEmptyState } from "../components/data-table-empty-state"
@@ -82,12 +82,12 @@ export const DataTableHeader = React.memo(function DataTableHeader({
         // Ensure border is visible when sticky using pseudo-element
         sticky &&
           "after:absolute after:right-0 after:bottom-0 after:left-0 after:h-px after:bg-border",
-        className
+        className,
       )}
     >
-      {headerGroups.map((headerGroup) => (
+      {headerGroups.map(headerGroup => (
         <TableRow key={headerGroup.id}>
-          {headerGroup.headers.map((header) => {
+          {headerGroup.headers.map(header => {
             // A flex column has no explicit width — under `table-layout: fixed`
             // it soaks up the leftover row width. Not drag-resizable.
             const isFlex = flexColumnIds.has(header.column.id)
@@ -109,7 +109,7 @@ export const DataTableHeader = React.memo(function DataTableHeader({
                 className={cn(
                   header.column.getIsPinned() && "bg-background",
                   // Anchor the absolute resize handle to the cell's right edge.
-                  resizing && "relative overflow-hidden"
+                  resizing && "relative overflow-hidden",
                 )}
               >
                 {header.isPlaceholder ? null : (
@@ -122,7 +122,7 @@ export const DataTableHeader = React.memo(function DataTableHeader({
                     ) : (
                       flexRender(
                         header.column.columnDef.header,
-                        header.getContext()
+                        header.getContext(),
                       )
                     )}
                   </DataTableColumnHeaderRoot>
@@ -211,7 +211,7 @@ const BodyRow = React.memo(function BodyRow({
 }: BodyRowProps) {
   const expandCell =
     isExpanded && expandColumnId
-      ? row.getAllCells().find((c) => c.column.id === expandColumnId)
+      ? row.getAllCells().find(c => c.column.id === expandColumnId)
       : undefined
 
   const visibleCells = row.getVisibleCells()
@@ -228,10 +228,10 @@ const BodyRow = React.memo(function BodyRow({
       data-state={isSelected ? "selected" : undefined}
       className={cn(
         isClickable && "cursor-pointer",
-        "group data-[context-menu-open]:bg-muted/50"
+        "group data-[context-menu-open]:bg-muted/50",
       )}
     >
-      {visibleCells.map((cell) => {
+      {visibleCells.map(cell => {
         const flashing =
           isRowFlashing ||
           flashingCellKeys.has(flashCellKey(row.id, cell.column.id))
@@ -256,7 +256,7 @@ const BodyRow = React.memo(function BodyRow({
               // cells so the expand control + count stay visible.
               !cell.getIsGrouped() && "truncate",
               cell.column.getIsPinned() &&
-                "bg-background group-hover:bg-muted/50 group-data-[context-menu-open]:bg-muted/50 group-data-[state=selected]:bg-muted"
+                "bg-background group-hover:bg-muted/50 group-data-[context-menu-open]:bg-muted/50 group-data-[state=selected]:bg-muted",
             )}
           >
             {renderCellContent(cell)}
@@ -358,7 +358,7 @@ export function DataTableBody<TData extends RowData>({
   React.useEffect(() => {
     registerRowScroller((index, opts) => {
       const container = containerRef.current?.closest(
-        '[data-slot="table-container"]'
+        '[data-slot="table-container"]',
       )
       const row = container?.querySelector(`[data-row-index="${index}"]`)
       const block: ScrollLogicalPosition =
@@ -374,7 +374,7 @@ export function DataTableBody<TData extends RowData>({
   // variants in sync; passive flag unlocks the browser's scroll-thread path.
   React.useEffect(() => {
     const container = containerRef.current?.closest(
-      '[data-slot="table-container"]'
+      '[data-slot="table-container"]',
     ) as HTMLDivElement
     if (!container) return
     if (!onScroll && !onScrolledTop && !onScrolledBottom) return
@@ -398,20 +398,20 @@ export function DataTableBody<TData extends RowData>({
       if (!row) return
       onRowClick(
         row.original,
-        event as unknown as React.MouseEvent<HTMLElement>
+        event as unknown as React.MouseEvent<HTMLElement>,
       )
     },
-    [onRowClick, table]
+    [onRowClick, table],
   )
 
   // Hoist expand-column lookup above the row map (was O(rows × cols) per render).
   // `columns` is in deps because the table reference is too stable on its own.
   const expandColumnId = React.useMemo(
     () =>
-      table.getAllColumns().find((col) => col.columnDef.meta?.expandedContent)
+      table.getAllColumns().find(col => col.columnDef.meta?.expandedContent)
         ?.id,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `columns` is an intentional invalidation key; the TanStack table instance is stable across column swaps
-    [table, columns]
+    [table, columns],
   )
 
   const { columnVisibility, columnOrder, columnPinning, columnSizing } =
@@ -431,7 +431,7 @@ export function DataTableBody<TData extends RowData>({
       columnPinning,
       columnSizing,
       resizing,
-    ]
+    ],
   )
 
   // Precompute every column's rendered width once (flex + header-fit rules),
@@ -446,7 +446,7 @@ export function DataTableBody<TData extends RowData>({
           isFlex: flexColumnIds.has(col.id),
           columnSizing,
           headerMinWidths,
-        })
+        }),
       )
     }
     return widths
@@ -470,14 +470,14 @@ export function DataTableBody<TData extends RowData>({
     () =>
       table
         .getVisibleLeafColumns()
-        .map((c) => {
+        .map(c => {
           const pinned = c.getIsPinned()
           const base = pinned ? `${c.id}:${pinned}` : c.id
           return resizing ? `${base}:${columnWidths.get(c.id) ?? "flex"}` : base
         })
         .join(","),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [table, columns, columnWidths, resizing]
+    [table, columns, columnWidths, resizing],
   )
 
   const isClickable = !!onRowClick
@@ -486,7 +486,7 @@ export function DataTableBody<TData extends RowData>({
   // prop OR a nested `<DataTableRowContextMenuSlot>` child (prop wins).
   const resolvedRenderRowContextMenu = useResolvedRowContextMenuRenderer(
     renderRowContextMenu,
-    children
+    children,
   )
 
   // Composable path: group rows render only when `<DataTableGroupedRows>` is
@@ -495,7 +495,7 @@ export function DataTableBody<TData extends RowData>({
   // and no renderer prop — compose the component, or don't.
   const groupedRowsSlot = React.useMemo(
     () => resolveGroupedRowsSlot(children),
-    [children]
+    [children],
   )
 
   // The table's own inline sizing captured before resizing overrides it, so a
@@ -513,7 +513,7 @@ export function DataTableBody<TData extends RowData>({
   // pin overlaying the first data column.
   React.useLayoutEffect(() => {
     const tableEl = containerRef.current?.closest<HTMLTableElement>(
-      '[data-slot="table"]'
+      '[data-slot="table"]',
     )
     if (!tableEl) return
 
@@ -605,11 +605,10 @@ export function DataTableBody<TData extends RowData>({
                 flashingCellKeys={flashingCellKeys}
                 renderRowContextMenu={
                   resolvedRenderRowContextMenu as
-                    | ((row: unknown) => React.ReactNode)
-                    | undefined
+                    ((row: unknown) => React.ReactNode) | undefined
                 }
               />
-            )
+            ),
           )
         : null}
 
@@ -667,7 +666,7 @@ export function DataTableEmptyBody({
     () =>
       isGlobalFilterActive(tableState.globalFilter) ||
       (tableState.columnFilters && tableState.columnFilters.length > 0),
-    [tableState.globalFilter, tableState.columnFilters]
+    [tableState.globalFilter, tableState.columnFilters],
   )
 
   // Early return after hooks - this prevents rendering when not needed

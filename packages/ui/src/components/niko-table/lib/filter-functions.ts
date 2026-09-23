@@ -62,7 +62,7 @@ export const extendedFilter: AnyFilterFn = (
   row,
   columnId,
   filterValue,
-  _addMeta
+  _addMeta,
 ) => {
   // If no filter value, show all rows
   if (!filterValue) return true
@@ -77,7 +77,7 @@ export const extendedFilter: AnyFilterFn = (
     return applyFilterOperator(
       row.getValue(columnId),
       filter.operator,
-      filter.value
+      filter.value,
     )
   }
 
@@ -105,14 +105,14 @@ export const extendedFilter: AnyFilterFn = (
     // Case-insensitive comparison for strings
     if (typeof cellValue === "string") {
       const cellLower = cellValue.toLowerCase()
-      return filterValue.some((val) =>
+      return filterValue.some(val =>
         typeof val === "string"
           ? val.toLowerCase() === cellLower
-          : String(val) === cellValue
+          : String(val) === cellValue,
       )
     }
     // For non-string types, convert to string for comparison
-    return filterValue.some((val) => String(val) === String(cellValue))
+    return filterValue.some(val => String(val) === String(cellValue))
   }
 
   // Fallback to default string contains behavior for simple values
@@ -154,7 +154,7 @@ export const globalFilter: AnyFilterFn = (
   row,
   _columnId,
   filterValue,
-  _addMeta
+  _addMeta,
 ) => {
   // If no filter value, show all rows
   if (!filterValue) return true
@@ -175,7 +175,7 @@ export const globalFilter: AnyFilterFn = (
         return applyFilterOperator(
           cellValue as string | number | boolean | null | undefined,
           filter.operator,
-          filter.value as string | number | boolean | null | undefined
+          filter.value as string | number | boolean | null | undefined,
         )
       })
     } else if (filterValue.joinOperator === JOIN_OPERATORS.MIXED) {
@@ -187,7 +187,7 @@ export const globalFilter: AnyFilterFn = (
         return applyFilterOperator(
           cellValue as string | number | boolean | null | undefined,
           filter.operator,
-          filter.value as string | number | boolean | null | undefined
+          filter.value as string | number | boolean | null | undefined,
         )
       }
 
@@ -217,19 +217,19 @@ export const globalFilter: AnyFilterFn = (
       orGroups.push(currentAndGroup)
 
       // Evaluate each OR group (AND logic within each group)
-      const groupResults = orGroups.map((andGroup) => {
+      const groupResults = orGroups.map(andGroup => {
         return andGroup.every((filter: ExtendedColumnFilter<RowData>) => {
           const cellValue = row.getValue(filter.id)
           return applyFilterOperator(
             cellValue as string | number | boolean | null | undefined,
             filter.operator,
-            filter.value as string | number | boolean | null | undefined
+            filter.value as string | number | boolean | null | undefined,
           )
         })
       })
 
       // OR all group results together
-      return groupResults.some((result) => result)
+      return groupResults.some(result => result)
     }
 
     // Default to AND logic for other cases
@@ -238,7 +238,7 @@ export const globalFilter: AnyFilterFn = (
       return applyFilterOperator(
         cellValue as string | number | boolean | null | undefined,
         filter.operator,
-        filter.value as string | number | boolean | null | undefined
+        filter.value as string | number | boolean | null | undefined,
       )
     })
   }
@@ -255,7 +255,7 @@ export const globalFilter: AnyFilterFn = (
   if (searchValue === "") return true
 
   // Search across all columns that have filtering enabled
-  return row.getAllCells().some((cell) => {
+  return row.getAllCells().some(cell => {
     const column = cell.column
 
     // Skip columns that have filtering disabled
@@ -285,7 +285,7 @@ export const globalFilter: AnyFilterFn = (
 function applyFilterOperator(
   cellValue: string | number | boolean | null | undefined,
   operator: FilterOperator,
-  filterValue: string | number | boolean | null | undefined | string[]
+  filterValue: string | number | boolean | null | undefined | string[],
 ): boolean {
   // Handle null/undefined cell values
   if (cellValue == null) {
@@ -461,14 +461,14 @@ function applyFilterOperator(
         // Handle case-insensitive string comparison
         if (typeof cellValue === "string") {
           const cellLower = cellValue.toLowerCase()
-          return filterValue.some((val) =>
+          return filterValue.some(val =>
             typeof val === "string"
               ? val.toLowerCase() === cellLower
-              : val === cellValue
+              : val === cellValue,
           )
         }
         // For non-string types, convert to string for comparison
-        return filterValue.some((val) => String(val) === String(cellValue))
+        return filterValue.some(val => String(val) === String(cellValue))
       }
       return false
 
@@ -477,14 +477,14 @@ function applyFilterOperator(
         // Handle case-insensitive string comparison
         if (typeof cellValue === "string") {
           const cellLower = cellValue.toLowerCase()
-          return !filterValue.some((val) =>
+          return !filterValue.some(val =>
             typeof val === "string"
               ? val.toLowerCase() === cellLower
-              : val === cellValue
+              : val === cellValue,
           )
         }
         // For non-string types, convert to string for comparison
-        return !filterValue.some((val) => String(val) === String(cellValue))
+        return !filterValue.some(val => String(val) === String(cellValue))
       }
       return true
 
@@ -494,13 +494,13 @@ function applyFilterOperator(
       // (safer than silently passing every row).
       if (process.env.NODE_ENV !== "production") {
         throw new Error(
-          "FILTER_OPERATORS.RELATIVE is not yet implemented. Either remove the 'Is relative to today' option from the date filter UI or implement this case."
+          "FILTER_OPERATORS.RELATIVE is not yet implemented. Either remove the 'Is relative to today' option from the date filter UI or implement this case.",
         )
       }
       if (!hasLoggedRelativeFilterWarning) {
         hasLoggedRelativeFilterWarning = true
         console.error(
-          "FILTER_OPERATORS.RELATIVE is not yet implemented — returning no matches in production to avoid silently passing all rows."
+          "FILTER_OPERATORS.RELATIVE is not yet implemented — returning no matches in production to avoid silently passing all rows.",
         )
       }
       return false
@@ -526,7 +526,7 @@ export const numberRangeFilter: AnyFilterFn = (
   columnId,
   filterValue,
 
-  addMeta
+  addMeta,
 ) => {
   if (!filterValue) return true
 
@@ -540,7 +540,7 @@ export const numberRangeFilter: AnyFilterFn = (
     return applyFilterOperator(
       row.getValue(columnId),
       filter.operator,
-      filter.value
+      filter.value,
     )
   }
 
@@ -568,7 +568,7 @@ export const dateRangeFilter: AnyFilterFn = (
   columnId,
   filterValue,
 
-  addMeta
+  addMeta,
 ) => {
   if (!filterValue) return true
 
@@ -582,7 +582,7 @@ export const dateRangeFilter: AnyFilterFn = (
     return applyFilterOperator(
       row.getValue(columnId),
       filter.operator,
-      filter.value
+      filter.value,
     )
   }
 
@@ -640,7 +640,7 @@ export const dateRangeFilter: AnyFilterFn = (
  */
 export const createFilterValue = <TData = RowData>(
   operator: FilterOperator,
-  value: string | number | boolean | null | undefined | string[]
+  value: string | number | boolean | null | undefined | string[],
 ): ExtendedColumnFilter<TData> => {
   return {
     id: "" as Extract<keyof TData, string>, // Will be set by the column

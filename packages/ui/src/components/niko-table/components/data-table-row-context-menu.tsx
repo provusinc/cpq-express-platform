@@ -68,13 +68,13 @@ export function DataTableRowContextMenu({
   const anchoredTrigger = open
     ? React.cloneElement(
         trigger as React.ReactElement<{ "data-context-menu-open"?: string }>,
-        { "data-context-menu-open": "" }
+        { "data-context-menu-open": "" },
       )
     : trigger
 
   return (
     <ContextMenu onOpenChange={setOpen}>
-      <ContextMenuTrigger render={anchoredTrigger} />
+      <ContextMenuTrigger>{anchoredTrigger}</ContextMenuTrigger>
       <ContextMenuContent className={className}>
         <DataTableRowMenuScope row={row} surface="context">
           {children}

@@ -18,11 +18,10 @@ import { Button } from "@workspace/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 export interface TableColumnActionsProps {
   children: React.ReactNode
@@ -77,30 +76,26 @@ export function TableColumnActions({
 }: TableColumnActionsProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          (trigger as React.ReactElement | undefined) ?? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "size-7 transition-opacity group-hover:opacity-100 dark:text-muted-foreground",
-                isActive ? "text-primary opacity-100" : "opacity-0",
-                className
-              )}
-            >
-              <MoreVertical className="size-4" />
-              <span className="sr-only">{label}</span>
-            </Button>
-          )
-        }
-      />
+      <DropdownMenuTrigger>
+        {trigger ?? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "size-7 transition-opacity group-hover:opacity-100 dark:text-muted-foreground",
+              isActive ? "text-primary opacity-100" : "opacity-0",
+              className,
+            )}
+          >
+            <MoreVertical className="size-4" />
+            <span className="sr-only">{label}</span>
+          </Button>
+        )}
+      </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-48">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            {label}
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          {label}
+        </DropdownMenuLabel>
         {children}
       </DropdownMenuContent>
     </DropdownMenu>

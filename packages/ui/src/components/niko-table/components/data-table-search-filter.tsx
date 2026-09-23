@@ -49,7 +49,7 @@ type DataTableSearchFilterProps<TData extends RowData> = Omit<
  * />
  */
 export function DataTableSearchFilter<TData extends RowData>(
-  props: DataTableSearchFilterProps<TData>
+  props: DataTableSearchFilterProps<TData>,
 ) {
   const { table } = useDataTable<TData>()
   return <TableSearchFilter table={table} {...props} />

@@ -14,7 +14,7 @@
 import * as React from "react"
 import { Input } from "@workspace/ui/components/input"
 import { Button } from "@workspace/ui/components/button"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import { Search, X } from "lucide-react"
 
 import type { DataTableInstance } from "../types"
@@ -45,8 +45,6 @@ export interface TableSearchFilterProps<TData extends RowData> {
    * @default 0
    */
   debounceMs?: number
-  /** Accessible name of the input. @default "Search table" */
-  "aria-label"?: string
 }
 
 export function TableSearchFilter<TData extends RowData>({
@@ -57,7 +55,6 @@ export function TableSearchFilter<TData extends RowData>({
   onChange,
   value,
   debounceMs = 0,
-  "aria-label": ariaLabel = "Search table",
 }: TableSearchFilterProps<TData>) {
   // Determine if we're in controlled mode
   const isControlled = value !== undefined
@@ -82,7 +79,7 @@ export function TableSearchFilter<TData extends RowData>({
   // Stable timeout ref — debounce state lives outside the React tree
   // so input renders aren't gated on it.
   const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null
+    null,
   )
 
   React.useEffect(() => {
@@ -141,7 +138,7 @@ export function TableSearchFilter<TData extends RowData>({
         onChange?.(newValue)
       }, debounceMs)
     },
-    [table, onChange, debounceEnabled, debounceMs]
+    [table, onChange, debounceEnabled, debounceMs],
   )
 
   const hasValue = currentValue.length > 0
@@ -160,7 +157,7 @@ export function TableSearchFilter<TData extends RowData>({
         value={currentValue}
         onChange={handleChange}
         className="pr-9 pl-9"
-        aria-label={ariaLabel}
+        aria-label="Search table"
       />
       {hasValue && showClearButton && (
         <Button

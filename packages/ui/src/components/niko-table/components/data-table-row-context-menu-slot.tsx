@@ -46,7 +46,7 @@ export interface DataTableRowContextMenuSlotProps<TData extends RowData> {
  * </DataTableVirtualizedBody>
  */
 export function DataTableRowContextMenuSlot<TData extends RowData>(
-  _props: DataTableRowContextMenuSlotProps<TData>
+  _props: DataTableRowContextMenuSlotProps<TData>,
 ): null {
   return null
 }
@@ -60,12 +60,12 @@ DataTableRowContextMenuSlot.displayName = "DataTableRowContextMenuSlot"
  */
 export function resolveRowContextMenuRenderer<TData extends RowData>(
   prop: ((row: TData) => React.ReactNode) | undefined,
-  children: React.ReactNode
+  children: React.ReactNode,
 ): ((row: TData) => React.ReactNode) | undefined {
   if (prop) return prop
 
   let slotProps: DataTableRowContextMenuSlotProps<TData> | undefined
-  React.Children.forEach(children, (child) => {
+  React.Children.forEach(children, child => {
     if (!React.isValidElement(child)) return
     // Match by displayName — reference equality breaks across re-exports / HMR.
     const type = child.type as { displayName?: string }
@@ -97,7 +97,7 @@ export function resolveRowContextMenuRenderer<TData extends RowData>(
  */
 export function useResolvedRowContextMenuRenderer<TData extends RowData>(
   prop: ((row: TData) => React.ReactNode) | undefined,
-  children: React.ReactNode
+  children: React.ReactNode,
 ): ((row: TData) => React.ReactNode) | undefined {
   const resolved = resolveRowContextMenuRenderer(prop, children)
   const latestRef = React.useRef(resolved)
@@ -106,6 +106,6 @@ export function useResolvedRowContextMenuRenderer<TData extends RowData>(
   const hasMenu = !!resolved
   return React.useMemo(
     () => (hasMenu ? (row: TData) => latestRef.current?.(row) : undefined),
-    [hasMenu]
+    [hasMenu],
   )
 }

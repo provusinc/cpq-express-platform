@@ -18,7 +18,7 @@
  * so both bodies can import it without pulling the opt-in marker package.
  */
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import { DEFAULT_MAX_COLUMN_SIZE, DEFAULT_MIN_COLUMN_SIZE } from "./constants"
 
 import type { RowData } from "@tanstack/react-table"
@@ -59,15 +59,15 @@ function widestTextWidth(el: Element): number {
  */
 function autosizeColumn<TData extends RowData>(
   header: DataTableHeader<TData, unknown>,
-  handle: Element
+  handle: Element,
 ) {
   const root = handle.closest('[data-slot="table"]')
   if (!root) return
   const cells = root.querySelectorAll<HTMLElement>(
-    `[data-col-id="${CSS.escape(header.column.id)}"]`
+    `[data-col-id="${CSS.escape(header.column.id)}"]`,
   )
   let content = 0
-  cells.forEach((c) => {
+  cells.forEach(c => {
     const isHeader = c.getAttribute("data-slot") === "table-head"
     const chrome = isHeader ? AUTOSIZE_HEADER_CHROME : AUTOSIZE_CELL_PADDING
     content = Math.max(content, widestTextWidth(c) + chrome)
@@ -76,11 +76,11 @@ function autosizeColumn<TData extends RowData>(
   const def = header.column.columnDef
   const width = Math.min(
     Math.max(Math.ceil(content), def.minSize ?? DEFAULT_MIN_COLUMN_SIZE),
-    def.maxSize ?? DEFAULT_MAX_COLUMN_SIZE
+    def.maxSize ?? DEFAULT_MAX_COLUMN_SIZE,
   )
   header
     .getContext()
-    .table.setColumnSizing((prev) => ({ ...prev, [header.column.id]: width }))
+    .table.setColumnSizing(prev => ({ ...prev, [header.column.id]: width }))
 }
 
 /**
@@ -104,7 +104,7 @@ export interface DataTableColumnResizeHandleProps<TData extends RowData> {
    * on release.
    */
   setResizePreview?: (
-    info: { resizingColumnId: string | null; deltaOffset: number } | null
+    info: { resizingColumnId: string | null; deltaOffset: number } | null,
   ) => void
 }
 
@@ -132,14 +132,14 @@ export function DataTableColumnResizeHandle<TData extends RowData>({
   const ariaValueNow = Math.round(
     hasExplicitWidth
       ? header.column.getSize()
-      : (focusedWidth ?? header.column.getSize())
+      : (focusedWidth ?? header.column.getSize()),
   )
 
   // `fallbackWidth` seeds the first nudge for a flex column (no `columnSizing`
   // entry yet) from its rendered width so the arrow key doesn't jump it to the
   // declared `size`. Non-flex columns fall back to `getSize()` as before.
   const nudge = (delta: number, fallbackWidth?: number) => {
-    header.getContext().table.setColumnSizing((prev) => {
+    header.getContext().table.setColumnSizing(prev => {
       const current =
         prev[header.column.id] ?? fallbackWidth ?? header.column.getSize()
       const next = Math.min(Math.max(current + delta, min), max)
@@ -159,7 +159,7 @@ export function DataTableColumnResizeHandle<TData extends RowData>({
   // an explicit width on release (which releases it from flex).
   const startFlexResize = (
     startClientX: number,
-    handleEl: HTMLElement | null
+    handleEl: HTMLElement | null,
   ) => {
     const thEl = handleEl?.closest<HTMLElement>("[data-col-id]")
     if (!thEl || !setResizePreview) return
@@ -185,11 +185,11 @@ export function DataTableColumnResizeHandle<TData extends RowData>({
     const onUp = (ev: PointerEvent) => {
       const next = Math.min(
         Math.max(startWidth + (ev.clientX - startClientX), min),
-        max
+        max,
       )
       header
         .getContext()
-        .table.setColumnSizing((prev) => ({ ...prev, [id]: next }))
+        .table.setColumnSizing(prev => ({ ...prev, [id]: next }))
       teardown()
     }
     const onCancel = () => teardown()
@@ -210,34 +210,34 @@ export function DataTableColumnResizeHandle<TData extends RowData>({
       // `maxSize` (fill ignores it), so keep the ARIA range valid.
       aria-valuemax={Math.max(max, ariaValueNow)}
       tabIndex={0}
-      onFocus={(e) => {
+      onFocus={e => {
         const width = e.currentTarget
           .closest("[data-col-id]")
           ?.getBoundingClientRect().width
         setFocusedWidth(width ?? null)
       }}
       onBlur={() => setFocusedWidth(null)}
-      onMouseDown={(e) => {
+      onMouseDown={e => {
         // Keep column-DnD header listeners from treating a resize drag as a
         // reorder start (handle lives inside the sortable `<th>`).
         e.stopPropagation()
         // Flex columns resize via the pointer-based custom drag below.
         if (!isFlex) resize(e)
       }}
-      onTouchStart={(e) => {
+      onTouchStart={e => {
         e.stopPropagation()
         if (!isFlex) resize(e)
       }}
-      onDoubleClick={(e) => autosizeColumn(header, e.currentTarget)}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => {
+      onDoubleClick={e => autosizeColumn(header, e.currentTarget)}
+      onClick={e => e.stopPropagation()}
+      onPointerDown={e => {
         e.stopPropagation()
         if (isFlex) {
           e.preventDefault()
           startFlexResize(e.clientX, e.currentTarget)
         }
       }}
-      onKeyDown={(e) => {
+      onKeyDown={e => {
         const step = e.shiftKey
           ? KEYBOARD_RESIZE_STEP_LARGE
           : KEYBOARD_RESIZE_STEP
@@ -267,7 +267,7 @@ export function DataTableColumnResizeHandle<TData extends RowData>({
           "my-1.5 w-px rounded bg-border opacity-0 transition-all",
           "group-hover/resize:my-0 group-hover/resize:w-0.5 group-hover/resize:bg-primary group-hover/resize:opacity-100",
           "group-focus-visible/resize:my-0 group-focus-visible/resize:w-0.5 group-focus-visible/resize:bg-primary group-focus-visible/resize:opacity-100",
-          isResizing && "my-0 w-0.5 bg-primary opacity-100"
+          isResizing && "my-0 w-0.5 bg-primary opacity-100",
         )}
       />
     </div>

@@ -12,7 +12,7 @@
  * https://github.com/Semkoo/niko-table-registry
  */
 import React from "react"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import { useDerivedColumnTitle } from "../hooks/use-derived-column-title"
 
 import type { DataTableColumn } from "../types"
@@ -41,7 +41,7 @@ export function TableColumnTitle<TData extends RowData, TValue>({
         // width (a nowrap flex child otherwise keeps full content width and
         // spills into the neighbouring header cell on narrow columns).
         "min-w-0 truncate py-0.5 text-sm font-semibold transition-colors",
-        className
+        className,
       )}
     >
       {children ?? derivedTitle}

@@ -1,6 +1,6 @@
 export function formatDate(
   date: Date | string | number | undefined,
-  opts: Intl.DateTimeFormatOptions = {}
+  opts: Intl.DateTimeFormatOptions = {},
 ) {
   if (!date) return ""
 
@@ -35,7 +35,7 @@ export function formatLabel(value: string): string {
   return value
     .replace(/[-_]/g, " ")
     .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
 }
 
@@ -76,7 +76,7 @@ export function daysAgo(days: number): Date {
  */
 export function formatQueryString(
   urlParams: Record<string, unknown>,
-  urlKeys: Record<string, string>
+  urlKeys: Record<string, string>,
 ): string {
   const parts: string[] = []
 
@@ -152,7 +152,7 @@ export function formatQueryString(
     "filters" in urlParams.globalFilter
   ) {
     parts.push(
-      `${urlKeys.globalFilter}=${formatJson(urlParams.globalFilter, true)}`
+      `${urlKeys.globalFilter}=${formatJson(urlParams.globalFilter, true)}`,
     )
   }
   if (
@@ -162,7 +162,7 @@ export function formatQueryString(
     Object.keys(urlParams.columnVisibility).length > 0
   ) {
     parts.push(
-      `${urlKeys.columnVisibility}=${formatJson(urlParams.columnVisibility)}`
+      `${urlKeys.columnVisibility}=${formatJson(urlParams.columnVisibility)}`,
     )
   }
   if (
@@ -171,7 +171,7 @@ export function formatQueryString(
     urlParams.inlineFilters.length > 0
   ) {
     parts.push(
-      `${urlKeys.inlineFilters}=${formatJson(urlParams.inlineFilters)}`
+      `${urlKeys.inlineFilters}=${formatJson(urlParams.inlineFilters)}`,
     )
   }
   if (urlParams.filterMode && urlParams.filterMode !== "standard") {

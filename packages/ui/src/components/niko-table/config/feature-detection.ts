@@ -111,7 +111,7 @@ const COMPONENT_FEATURES: Record<string, FeatureRequirements> = {
  */
 export function detectFeaturesFromChildren(
   children: ReactNode,
-  columns?: Array<{ header?: unknown; enableColumnFilter?: boolean }>
+  columns?: Array<{ header?: unknown; enableColumnFilter?: boolean }>,
 ): FeatureRequirements {
   // Skip cache when `columns` provided — column content drives detection and
   // changes frequently, would return stale results.
@@ -144,7 +144,7 @@ export function detectFeaturesFromChildren(
 
           if (componentFeatures) {
             // Merge requirements (any component requiring a feature enables it)
-            Object.keys(componentFeatures).forEach((key) => {
+            Object.keys(componentFeatures).forEach(key => {
               const featureKey = key as keyof FeatureRequirements
               if (componentFeatures[featureKey]) {
                 ;(requirements as Record<string, unknown>)[featureKey] = true
@@ -211,7 +211,7 @@ export function detectFeaturesFromChildren(
                 : undefined
 
               if (componentFeatures) {
-                Object.keys(componentFeatures).forEach((key) => {
+                Object.keys(componentFeatures).forEach(key => {
                   const featureKey = key as keyof FeatureRequirements
                   if (componentFeatures[featureKey]) {
                     ;(requirements as Record<string, unknown>)[featureKey] =
@@ -226,7 +226,7 @@ export function detectFeaturesFromChildren(
               element.props as PropsWithChildren<unknown>
             if (propsWithChildren?.children) {
               Children.toArray(propsWithChildren.children).forEach(
-                checkElementForFeatures
+                checkElementForFeatures,
               )
             }
           }
@@ -263,7 +263,7 @@ export function detectFeaturesFromChildren(
  */
 export function registerComponentFeatures(
   displayName: string,
-  features: FeatureRequirements
+  features: FeatureRequirements,
 ) {
   COMPONENT_FEATURES[displayName] = features
 }

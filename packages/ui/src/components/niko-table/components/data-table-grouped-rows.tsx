@@ -83,7 +83,7 @@ export function useDataTableGroupRow<
   if (!ctx) {
     throw new Error(
       "useDataTableGroupRow must be used inside <DataTableGroupedRows>. " +
-        "Nest your group-row component as its child."
+        "Nest your group-row component as its child.",
     )
   }
   return ctx as DataTableGroupRowContextValue<TData>
@@ -142,7 +142,7 @@ export interface DataTableGroupedRowsProps<TData extends RowData = RowData> {
  * </DataTableBody>
  */
 export function DataTableGroupedRows<TData extends RowData = RowData>(
-  _props: DataTableGroupedRowsProps<TData>
+  _props: DataTableGroupedRowsProps<TData>,
 ): null {
   return null
 }
@@ -155,10 +155,10 @@ DataTableGroupedRows.displayName = "DataTableGroupedRows"
  * both break reference equality.
  */
 export function resolveGroupedRowsSlot<TData extends RowData = RowData>(
-  children: React.ReactNode
+  children: React.ReactNode,
 ): DataTableGroupedRowsProps<TData> | undefined {
   let found: DataTableGroupedRowsProps<TData> | undefined
-  React.Children.forEach(children, (child) => {
+  React.Children.forEach(children, child => {
     if (!React.isValidElement(child)) return
     const type = child.type as { displayName?: string }
     if (

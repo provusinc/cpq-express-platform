@@ -12,7 +12,7 @@
  * https://github.com/Semkoo/niko-table-registry
  */
 import React from "react"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 // ============================================================================
 // Context for Empty State
@@ -29,7 +29,7 @@ function useDataTableEmptyState() {
   const context = React.useContext(DataTableEmptyStateContext)
   if (!context) {
     throw new Error(
-      "Empty state components must be used within DataTableEmptyState"
+      "Empty state components must be used within DataTableEmptyState",
     )
   }
   return context
@@ -61,7 +61,7 @@ export function DataTableEmptyState({
       <div
         className={cn(
           "flex flex-col items-center justify-center gap-3 py-4",
-          className
+          className,
         )}
       >
         {children}
@@ -130,7 +130,7 @@ export const DataTableEmptyMessage = React.memo(function DataTableEmptyMessage({
     <div
       className={cn(
         "flex flex-col items-center gap-1 text-center text-muted-foreground",
-        className
+        className,
       )}
     >
       {children}
@@ -170,13 +170,13 @@ export const DataTableEmptyFilteredMessage = React.memo(
       <div
         className={cn(
           "flex flex-col items-center gap-1 text-center text-muted-foreground",
-          className
+          className,
         )}
       >
         {children}
       </div>
     )
-  }
+  },
 )
 
 DataTableEmptyFilteredMessage.displayName = "DataTableEmptyFilteredMessage"
@@ -268,7 +268,7 @@ export const DataTableEmptyDescription = React.memo(
         {children}
       </p>
     )
-  }
+  },
 )
 
 DataTableEmptyDescription.displayName = "DataTableEmptyDescription"

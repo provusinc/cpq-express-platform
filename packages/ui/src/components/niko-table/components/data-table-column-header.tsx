@@ -14,7 +14,7 @@
 import React from "react"
 import type { RowData } from "@tanstack/react-table"
 
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 
 import type { DataTableColumn } from "../types"
 // ============================================================================
@@ -30,21 +30,20 @@ const TableColumnHeaderContext = React.createContext<
 >(undefined)
 
 export function useColumnHeaderContext<TData extends RowData, TValue>(
-  required: true
+  required: true,
 ): TableColumnHeaderContextValue<TData, TValue>
 export function useColumnHeaderContext<TData extends RowData, TValue>(
-  required: false
+  required: false,
 ): TableColumnHeaderContextValue<TData, TValue> | undefined
 export function useColumnHeaderContext<TData extends RowData, TValue>(
-  required = true
+  required = true,
 ) {
   const context = React.useContext(TableColumnHeaderContext) as
-    | TableColumnHeaderContextValue<TData, TValue>
-    | undefined
+    TableColumnHeaderContextValue<TData, TValue> | undefined
 
   if (required && !context) {
     throw new Error(
-      "useColumnHeaderContext must be used within DataTableColumnHeaderRoot"
+      "useColumnHeaderContext must be used within DataTableColumnHeaderRoot",
     )
   }
   return context
@@ -72,7 +71,7 @@ export function DataTableColumnHeaderRoot<TData extends RowData, TValue>({
         RowData,
         unknown
       >,
-    [column]
+    [column],
   )
   return (
     <TableColumnHeaderContext.Provider value={contextValue}>
@@ -102,7 +101,7 @@ export function DataTableColumnHeader({
         // `truncate` engages. Without it, a narrow (resized/auto-fit) column's
         // label overflows into the next header cell instead of ellipsizing.
         "group flex w-full min-w-0 items-center justify-between gap-1",
-        className
+        className,
       )}
       {...props}
     >

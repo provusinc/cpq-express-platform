@@ -24,7 +24,7 @@ type DataTableViewDndMenuProps<TData extends RowData> = Omit<
 >
 
 export function DataTableViewDndMenu<TData extends RowData>(
-  props: DataTableViewDndMenuProps<TData>
+  props: DataTableViewDndMenuProps<TData>,
 ) {
   const { table } = useDataTable<TData>()
   return <TableViewDndMenu table={table} {...props} />

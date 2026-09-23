@@ -30,7 +30,7 @@ import type { DataTableColumn } from "../types"
 export function useDerivedColumnTitle<TData extends RowData, TValue = unknown>(
   column: DataTableColumn<TData, TValue> | undefined,
   accessorKey: string,
-  title?: string
+  title?: string,
 ): string {
   return React.useMemo(() => {
     if (title) return title

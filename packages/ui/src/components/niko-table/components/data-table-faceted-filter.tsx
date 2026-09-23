@@ -131,7 +131,7 @@ function useFacetedOptions<TData extends RowData>({
       showCounts,
       dynamicCounts,
       limitToFilteredRows,
-    }
+    },
   )
   const resolvedMetaGenerated = needsFallbackGeneration
     ? perColumnGenerated
@@ -168,7 +168,7 @@ function useFacetedOptions<TData extends RowData>({
           showCounts,
           autoOptionsFormat,
           formatOptionLabel,
-        }
+        },
       )
     }
 
@@ -191,7 +191,7 @@ function useFacetedOptions<TData extends RowData>({
         showCounts,
         autoOptionsFormat,
         formatOptionLabel,
-      }
+      },
     )
   }, [
     column,
@@ -271,13 +271,13 @@ export function DataTableFacetedFilter<
       dynamicCounts,
       limitToFilteredRows: resolvedLimitToFilteredRows,
       title,
-    }
+    },
   )
 
   // Early return if column not found
   if (!column) {
     console.warn(
-      `Column with accessorKey "${accessorKey}" not found in table columns`
+      `Column with accessorKey "${accessorKey}" not found in table columns`,
     )
     return null
   }
@@ -325,7 +325,7 @@ export function DataTableFacetedFilterContent<
       dynamicCounts,
       limitToFilteredRows: resolvedLimitToFilteredRows,
       title,
-    }
+    },
   )
 
   // Use the shared hook for filter logic

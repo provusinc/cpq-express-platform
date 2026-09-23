@@ -20,7 +20,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -30,7 +29,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@workspace/ui/components/tooltip"
-import { cn } from "cn"
+import { cn } from "@workspace/ui/lib/utils"
 import { useDataTable } from "../core/data-table-context"
 
 import { SORT_ICONS, SORT_LABELS } from "../config/data-table"
@@ -102,7 +101,7 @@ export function TableColumnSortOptions<TData extends RowData, TValue>({
 
   const handleSort = (
     direction: "asc" | "desc" | false,
-    e: React.MouseEvent
+    e: React.MouseEvent,
   ) => {
     // Keyboard activation synthesizes a click whose `shiftKey` is false, so the
     // window-level ref is what carries Shift for Enter/Space; the event's own
@@ -126,40 +125,30 @@ export function TableColumnSortOptions<TData extends RowData, TValue>({
   return (
     <>
       {withSeparator && <DropdownMenuSeparator />}
-      <DropdownMenuGroup>
-        <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <span>Column Sort</span>
-            {showSortBadge && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span className="flex size-4 cursor-help items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground" />
-                  }
-                >
-                  {sortIndex + 1}
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  Sort priority (order in which columns are sorted)
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-          <Tooltip>
-            <TooltipTrigger
-              render={<CircleHelp className="size-3.5 cursor-help" />}
-            ></TooltipTrigger>
-            <TooltipContent side="right">
-              TIP: Hold &apos;shift&apos; key to enable multi sort
-            </TooltipContent>
-          </Tooltip>
-        </DropdownMenuLabel>
-      </DropdownMenuGroup>
+      <DropdownMenuLabel className="flex items-center justify-between text-xs font-normal text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>Column Sort</span>
+          {showSortBadge && (
+            <Tooltip>
+              <TooltipTrigger render={<span className="flex size-4 cursor-help items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground" />}>{sortIndex + 1}</TooltipTrigger>
+              <TooltipContent side="right">
+                Sort priority (order in which columns are sorted)
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+        <Tooltip>
+          <TooltipTrigger render={<CircleHelp className="size-3.5 cursor-help" />}></TooltipTrigger>
+          <TooltipContent side="right">
+            TIP: Hold &apos;shift&apos; key to enable multi sort
+          </TooltipContent>
+        </Tooltip>
+      </DropdownMenuLabel>
       <DropdownMenuItem
-        onClick={(e) => handleSort("asc", e)}
+        onClick={e => handleSort("asc", e)}
         className={cn(
           "flex items-center",
-          sortState === "asc" && "bg-accent text-accent-foreground"
+          sortState === "asc" && "bg-accent text-accent-foreground",
         )}
       >
         <icons.asc className="mr-2 size-4 text-muted-foreground/70" />
@@ -167,10 +156,10 @@ export function TableColumnSortOptions<TData extends RowData, TValue>({
         {sortState === "asc" && <Check className="ml-2 size-4" />}
       </DropdownMenuItem>
       <DropdownMenuItem
-        onClick={(e) => handleSort("desc", e)}
+        onClick={e => handleSort("desc", e)}
         className={cn(
           "flex items-center",
-          sortState === "desc" && "bg-accent text-accent-foreground"
+          sortState === "desc" && "bg-accent text-accent-foreground",
         )}
       >
         <icons.desc className="mr-2 size-4 text-muted-foreground/70" />
@@ -239,29 +228,18 @@ export function TableColumnSortMenu<TData extends RowData, TValue>({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "size-7 transition-opacity dark:text-muted-foreground",
-              sortState && "text-primary",
-              className
-            )}
-          />
-        }
-      >
-        <div className="relative flex items-center justify-center">
-          <SortIcon className="size-4" />
-          {showSortBadge && (
-            <span className="absolute -top-1 -right-2 flex size-3 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">
-              {sortIndex + 1}
-            </span>
-          )}
-        </div>
-        <span className="sr-only">Sort column</span>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className={cn(
+                      "size-7 transition-opacity dark:text-muted-foreground",
+                      sortState && "text-primary",
+                      className,
+                    )} />}><div className="relative flex items-center justify-center">
+                      <SortIcon className="size-4" />
+                      {showSortBadge && (
+                        <span className="absolute -top-1 -right-2 flex size-3 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">
+                          {sortIndex + 1}
+                        </span>
+                      )}
+                    </div><span className="sr-only">Sort column</span></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <TableColumnSortOptions
           column={column}

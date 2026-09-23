@@ -36,9 +36,9 @@ export function getDefaultFilterOperator(filterVariant: FilterVariant) {
 }
 
 export function getValidFilters<TData>(
-  filters: ExtendedColumnFilter<TData>[]
+  filters: ExtendedColumnFilter<TData>[],
 ): ExtendedColumnFilter<TData>[] {
-  return filters.filter((filter) => {
+  return filters.filter(filter => {
     // isEmpty and isNotEmpty don't need values
     if (
       filter.operator === FILTER_OPERATORS.EMPTY ||
@@ -53,7 +53,7 @@ export function getValidFilters<TData>(
       return (
         filter.value.length > 0 &&
         filter.value.every(
-          (val) => val !== "" && val !== null && val !== undefined
+          val => val !== "" && val !== null && val !== undefined,
         )
       )
     }
@@ -81,7 +81,7 @@ const EQUALITY_OPERATORS = new Set<FilterOperator>([
  * nor trigger OR routing while the user is still picking a value.
  */
 function isPendingEqualityFilter<TData>(
-  filter: ExtendedColumnFilter<TData>
+  filter: ExtendedColumnFilter<TData>,
 ): boolean {
   return (
     EQUALITY_OPERATORS.has(filter.operator) &&
@@ -107,7 +107,7 @@ function isPendingEqualityFilter<TData>(
  * untouched (and continues to route through `globalFilter`).
  */
 function collapseSameColumnEqualityFilters<TData>(
-  filters: ExtendedColumnFilter<TData>[]
+  filters: ExtendedColumnFilter<TData>[],
 ): ExtendedColumnFilter<TData>[] {
   const groups = new Map<string, ExtendedColumnFilter<TData>[]>()
   const indicesById = new Map<string, number[]>()
@@ -127,7 +127,7 @@ function collapseSameColumnEqualityFilters<TData>(
     const group = groups.get(filter.id) ?? []
     // Pending rows (no value yet) pass through untouched — merging them would
     // leak "" into the IN values or make the row vanish from the menu.
-    const mergeable = group.filter((member) => !isPendingEqualityFilter(member))
+    const mergeable = group.filter(member => !isPendingEqualityFilter(member))
     // Only collapse a contiguous run of the column's filters — nothing from
     // another column interleaved. Merging across an interleaved filter would
     // cross an AND/OR clause boundary and change the boolean grouping the
@@ -145,7 +145,7 @@ function collapseSameColumnEqualityFilters<TData>(
     const collapsible =
       contiguous &&
       mergeable.length > 1 &&
-      group.every((member) => EQUALITY_OPERATORS.has(member.operator))
+      group.every(member => EQUALITY_OPERATORS.has(member.operator))
 
     if (!collapsible || isPendingEqualityFilter(filter)) {
       result.push(filter)
@@ -194,7 +194,7 @@ function collapseSameColumnEqualityFilters<TData>(
  * nothing is expandable.
  */
 export function expandMergedEqualityFilters<TData>(
-  filters: ExtendedColumnFilter<TData>[]
+  filters: ExtendedColumnFilter<TData>[],
 ): ExtendedColumnFilter<TData>[] {
   const isExpandable = (filter: ExtendedColumnFilter<TData>) =>
     filter.operator === FILTER_OPERATORS.IN &&
@@ -249,7 +249,7 @@ export function expandMergedEqualityFilters<TData>(
  * ```
  */
 export function processFiltersForLogic<TData>(
-  inputFilters: ExtendedColumnFilter<TData>[]
+  inputFilters: ExtendedColumnFilter<TData>[],
 ): {
   processedFilters: ExtendedColumnFilter<TData>[]
   hasOrFilters: boolean
@@ -266,15 +266,15 @@ export function processFiltersForLogic<TData>(
   // decisions — a merged IN entry plus a just-added empty row must not
   // re-route the set to globalFilter (which would blank the faceted dropdown
   // mid-edit).
-  const activeFilters = filters.filter((f) => !isPendingEqualityFilter(f))
+  const activeFilters = filters.filter(f => !isPendingEqualityFilter(f))
 
   // Check for explicit OR operators
   const hasOrFilters = activeFilters.some(
-    (filter, index) => index > 0 && filter.joinOperator === JOIN_OPERATORS.OR
+    (filter, index) => index > 0 && filter.joinOperator === JOIN_OPERATORS.OR,
   )
 
   // Check for multiple filters on the same column (UX: should use OR logic)
-  const columnIds = activeFilters.map((f) => f.id)
+  const columnIds = activeFilters.map(f => f.id)
   const hasSameColumnFilters = columnIds.length !== new Set(columnIds).size
 
   // Process filters: convert same-column AND to OR for better UX
@@ -284,7 +284,7 @@ export function processFiltersForLogic<TData>(
         // convert AND to OR for better UX (same column filters should use OR logic)
         const previousFilters = filters.slice(0, index)
         const hasSameColumnBefore = previousFilters.some(
-          (f) => f.id === filter.id
+          f => f.id === filter.id,
         )
         if (hasSameColumnBefore && filter.joinOperator === JOIN_OPERATORS.AND) {
           return { ...filter, joinOperator: JOIN_OPERATORS.OR }

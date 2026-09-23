@@ -53,6 +53,7 @@ export default async function OrganizationLayout({
       organization={toShell(current.organization)}
       organizations={mine.map((m) => toShell(m.organization))}
       isAdmin={current.membership.role === "admin"}
+      isApprover={current.membership.isApprover}
       labels={labels}
       user={{
         name: session.user.name,

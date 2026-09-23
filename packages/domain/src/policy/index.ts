@@ -267,6 +267,12 @@ export interface QuotePermissions {
    * when it can. The editor shows it as the read-only notice.
    */
   editDenial: { reason: DenialReason; message: string } | null
+  /**
+   * Why the viewer can't submit the Quote, or `null` when they can. The
+   * header shows a disabled Submit with this message when only the Quote's
+   * state stands in the way (`total_zero`, `total_negative`, …) for its Owner.
+   */
+  submitDenial: { reason: DenialReason; message: string } | null
 }
 
 /**
@@ -281,10 +287,11 @@ export function quotePermissions(
   const allowed = (action: QuoteAction) =>
     can(actor, action, quote, settings).allowed
   const edit = can(actor, "quote.edit", quote)
+  const submit = can(actor, "quote.submit", quote)
   return {
     canEdit: edit.allowed,
     canDelete: allowed("quote.delete"),
-    canSubmit: allowed("quote.submit"),
+    canSubmit: submit.allowed,
     canApprove: allowed("quote.approve"),
     canReject: allowed("quote.reject"),
     canRecall: allowed("quote.recall"),
@@ -293,5 +300,8 @@ export function quotePermissions(
     editDenial: edit.allowed
       ? null
       : { reason: edit.reason, message: edit.message },
+    submitDenial: submit.allowed
+      ? null
+      : { reason: submit.reason, message: submit.message },
   }
 }

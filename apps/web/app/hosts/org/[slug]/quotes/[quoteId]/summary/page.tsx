@@ -1,10 +1,18 @@
-import { QuoteTabPlaceholder } from "@/components/quotes/quote-tab-placeholder"
+import { SummaryTab } from "@/components/summary/summary-tab"
+import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
-export default function QuoteSummaryPage() {
+type Params = Promise<{ slug: string; quoteId: string }>
+
+/**
+ * The Quote editor's Summary tab. The layout has already checked the
+ * Quote exists.
+ */
+export default async function QuoteSummaryPage({ params }: { params: Params }) {
+  const { quoteId } = await params
+  prefetch(trpc.quote.approvalHistory.queryOptions({ id: quoteId }))
   return (
-    <QuoteTabPlaceholder
-      title="The Summary"
-      description="Subtotal, Quote Discount, Total, Margin and approval history."
-    />
+    <HydrateClient>
+      <SummaryTab quoteId={quoteId} />
+    </HydrateClient>
   )
 }

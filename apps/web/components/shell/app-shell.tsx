@@ -30,6 +30,7 @@ export function AppShell({
   organization: ShellOrganization
   organizations: ShellOrganization[]
   isAdmin: boolean
+  isApprover: boolean
   user: ShellUser
   pickerUrl: string
   signedOutUrl: string

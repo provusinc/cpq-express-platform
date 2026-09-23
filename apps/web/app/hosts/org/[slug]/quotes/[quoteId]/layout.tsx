@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
+import { ApprovalActions } from "@/components/approval/approval-actions"
 import { QuoteHeader } from "@/components/quotes/quote-header"
 import { QuoteTabs } from "@/components/quotes/quote-tabs"
 import { getCaller, HydrateClient, prefetch, trpc } from "@/trpc/server"
@@ -46,7 +47,10 @@ export default async function QuoteLayout({
   prefetch(trpc.quote.byId.queryOptions({ id: quoteId }))
   return (
     <HydrateClient>
-      <QuoteHeader quoteId={quoteId} />
+      <QuoteHeader
+        quoteId={quoteId}
+        actions={<ApprovalActions quoteId={quoteId} />}
+      />
       <QuoteTabs quoteId={quoteId} />
       {children}
     </HydrateClient>

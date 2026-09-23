@@ -446,7 +446,17 @@ describe("quotePermissions", () => {
       canMarkSent: false,
       canRecordCustomerOutcome: false,
       editDenial: null,
+      submitDenial: null,
     })
+  })
+
+  it("explains why the Owner can't submit", () => {
+    const zero = quotePermissions(member, { ...quote(member), total: "0" })
+    expect(zero.canSubmit).toBe(false)
+    expect(zero.submitDenial?.reason).toBe("total_zero")
+    expect(quotePermissions(admin, quote(member)).submitDenial?.reason).toBe(
+      "owner_only"
+    )
   })
 
   it("explains why a locked Quote can't be edited", () => {

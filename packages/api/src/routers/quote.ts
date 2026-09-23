@@ -42,6 +42,7 @@ import {
 import { quoteCommand, quoteFacts } from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
+import { quoteApprovalProcedures } from "./quote-approval"
 import { quoteScheduleProcedures } from "./quote-schedule"
 
 const { accounts, lineItems, phases, quotes, users } = schema
@@ -512,4 +513,7 @@ export const quoteRouter = createTRPCRouter({
         }
       })
     ),
+
+  /** Submit, approve, reject, recall and the approval reads (./quote-approval.ts). */
+  ...quoteApprovalProcedures,
 })

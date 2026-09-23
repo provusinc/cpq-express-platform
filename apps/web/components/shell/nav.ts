@@ -1,5 +1,6 @@
 import {
   Building2Icon,
+  ClipboardCheckIcon,
   FileTextIcon,
   PackageIcon,
   PackagePlusIcon,
@@ -19,6 +20,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Shown only to Admins (the page checks the Role again). */
   adminOnly?: boolean
+  /** Shown only to Approvers (the page and API check again). */
+  approverOnly?: boolean
   /**
    * The domain term the entry lists: its label is the term's plural Label
    * Override, and a hidden term (Products, Add-ons) hides the entry.
@@ -32,6 +35,12 @@ export interface NavItem {
  */
 export const NAV_ITEMS: NavItem[] = [
   { label: "Quotes", href: "/quotes", icon: FileTextIcon },
+  {
+    label: "Awaiting my approval",
+    href: "/approvals",
+    icon: ClipboardCheckIcon,
+    approverOnly: true,
+  },
   { label: "Accounts", href: "/accounts", icon: Building2Icon },
   { label: "Products", href: "/products", icon: PackageIcon, term: "product" },
   {

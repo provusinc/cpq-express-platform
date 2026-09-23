@@ -27,6 +27,7 @@ export function AppSidebar({
   organization,
   organizations,
   isAdmin,
+  isApprover,
   user,
   pickerUrl,
   signedOutUrl,
@@ -34,6 +35,7 @@ export function AppSidebar({
   organization: ShellOrganization
   organizations: ShellOrganization[]
   isAdmin: boolean
+  isApprover: boolean
   user: ShellUser
   pickerUrl: string
   signedOutUrl: string
@@ -51,7 +53,12 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <NavMenu items={labelNavItems(NAV_ITEMS, labels)} />
+            <NavMenu
+              items={labelNavItems(
+                NAV_ITEMS.filter((item) => !item.approverOnly || isApprover),
+                labels
+              )}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
         {isAdmin && (

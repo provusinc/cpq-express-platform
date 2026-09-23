@@ -96,6 +96,15 @@ export const MILESTONE_TYPES = [
 ] as const
 export type MilestoneType = (typeof MILESTONE_TYPES)[number]
 
+/** Milestone type names for UI copy. */
+export const MILESTONE_TYPE_LABELS: Record<MilestoneType, string> = {
+  milestone: "Milestone",
+  deadline: "Deadline",
+  review: "Review",
+  payment_due: "Payment due",
+  custom: "Custom",
+}
+
 /**
  * Domain terms an Organization may rename with a Label Override. Code and API
  * always use these canonical terms; only UI copy changes.

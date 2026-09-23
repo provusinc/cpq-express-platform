@@ -12,7 +12,8 @@
  * - effort:  largest-remainder whole-unit distribution
  * - allocations: planner cells, caps, default layout, effort resize, diff
  * - schedule: Quote date change (shift / clamp), Line Item start change
- * - phases:  Phase tree rules (depth ≤ 3, no cycles)
+ * - phases:  Phase tree rules (depth ≤ 3, no cycles), grid order, rollups
+ * - milestones: Milestone colours and limits
  * - organizations: slug rules (format, reserved), currency codes
  * - members: Membership rules (the last-Admin guard)
  * - settings: Organization settings (Hours Per Day, Label Overrides, logo)
@@ -29,6 +30,7 @@ export * from "./effort"
 export * from "./allocations"
 export * from "./schedule"
 export * from "./phases"
+export * from "./milestones"
 export * from "./organizations"
 export * from "./members"
 export * from "./settings"

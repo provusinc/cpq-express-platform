@@ -15,7 +15,8 @@
  *      `priceQuote`, so the Summary moves immediately); `optimisticQuote`
  *      patches the cached `quote.byId` (header fields);
  *   2. on success the command's `EditorResult` (`lines`, `deletedLineIds`,
- *      `phases`, `deletedPhaseIds`, `totals`) is merged into the editor
+ *      `phases`, `deletedPhaseIds`, `milestones`, `deletedMilestoneIds`,
+ *      `totals`) is merged into the editor
  *      cache (`mergeEditorResult`) and the totals into
  *      `quote.byId` — server values always win;
  *   3. on error both caches roll back and a toast shows the server's
@@ -52,6 +53,7 @@ import { useTRPC } from "@/trpc/react"
 export type QuoteEditor = RouterOutputs["quote"]["editor"]
 export type EditorLine = QuoteEditor["lines"][number]
 export type EditorPhase = QuoteEditor["phases"][number]
+export type EditorMilestone = QuoteEditor["milestones"][number]
 export type EditorTotals = QuoteEditor["totals"]
 type Quote = RouterOutputs["quote"]["byId"]
 
@@ -61,6 +63,8 @@ export interface EditorResultLike {
   deletedLineIds?: string[]
   phases?: EditorPhase[]
   deletedPhaseIds?: string[]
+  milestones?: EditorMilestone[]
+  deletedMilestoneIds?: string[]
   totals?: EditorTotals
 }
 
@@ -100,8 +104,13 @@ function mergeRows<T extends { id: string; sequence: number }>(
   return [...byId.values()].sort(byOrder)
 }
 
+/** Milestones by date, then id (the editor's order). */
+const byDate = (a: EditorMilestone, b: EditorMilestone) =>
+  a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1
+
 /**
- * `editor` with a command's result merged in: returned lines and Phases
+ * `editor` with a command's result merged in: returned lines, Phases and
+ * Milestones
  * replace (or join) the cached ones, deleted ones leave, totals are
  * replaced.
  */
@@ -113,6 +122,14 @@ export function mergeEditorResult(
     ...editor,
     lines: mergeRows(editor.lines, result.lines, result.deletedLineIds),
     phases: mergeRows(editor.phases, result.phases, result.deletedPhaseIds),
+    milestones: (() => {
+      const gone = new Set(result.deletedMilestoneIds ?? [])
+      const byId = new Map(
+        editor.milestones.filter((m) => !gone.has(m.id)).map((m) => [m.id, m])
+      )
+      for (const m of result.milestones ?? []) byId.set(m.id, m)
+      return [...byId.values()].sort(byDate)
+    })(),
     totals: result.totals ?? editor.totals,
   }
 }

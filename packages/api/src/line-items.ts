@@ -9,7 +9,8 @@
  * dates) returns an `EditorResult`:
  *
  *   { quoteId, lines: LineItemView[], deletedLineIds: string[],
- *     phases: PhaseView[], deletedPhaseIds: string[], totals }
+ *     phases: PhaseView[], deletedPhaseIds: string[],
+ *     milestones: MilestoneView[], deletedMilestoneIds: string[], totals }
  *
  * - `lines`: the inserted or changed Line Items as now stored, with their
  *   recomputed `lineTotal` / `lineMarginPct` and their Allocations
@@ -19,12 +20,13 @@
  * - `deletedLineIds`: Line Items the command removed;
  * - `phases` / `deletedPhaseIds`: the inserted or changed Phases (a move
  *   returns every sibling it renumbered) and the removed ones;
+ * - `milestones` / `deletedMilestoneIds`: the same for Milestones;
  * - `totals`: the Quote's new Subtotal, Quote Discount, Total, cost and
  *   Margin (`QuoteTotalsRow`), always recomputed by the server.
  *
  * The client merges it into the `quote.editor` cache (`useQuoteCommand` in
  * the web app). Build it with `editorResult(cmd, { lineIds, deletedLineIds,
- * phaseIds, deletedPhaseIds })` at the end of a `quoteCommand` body: it
+ * phaseIds, deletedPhaseIds, milestoneIds, deletedMilestoneIds })` at the end of a `quoteCommand` body: it
  * reprices the Quote and picks the named rows. Later tickets extend the
  * shape additively rather than inventing another.
  *
@@ -65,6 +67,7 @@ const {
   allocations,
   catalogItems,
   lineItems,
+  milestones,
   phases,
   quotes,
   resourceRoles,
@@ -74,6 +77,14 @@ const {
 type LineItemRow = typeof lineItems.$inferSelect
 type AllocationRow = typeof allocations.$inferSelect
 type PhaseRow = typeof phases.$inferSelect
+type MilestoneRow = typeof milestones.$inferSelect
+
+/** A Milestone as the editor reads it. */
+export type MilestoneView = Omit<MilestoneRow, "organizationId" | "createdAt">
+
+export function toMilestoneView(row: MilestoneRow): MilestoneView {
+  return omit(row, "organizationId", "createdAt")
+}
 
 /** A Phase as the editor reads it. */
 export type PhaseView = Pick<PhaseRow, "id" | "parentId" | "name" | "sequence">
@@ -109,6 +120,8 @@ export interface EditorResult {
   deletedLineIds: string[]
   phases: PhaseView[]
   deletedPhaseIds: string[]
+  milestones: MilestoneView[]
+  deletedMilestoneIds: string[]
   totals: QuoteTotalsRow
 }
 
@@ -196,11 +209,15 @@ export async function editorResult(
     deletedLineIds = [],
     phaseIds = [],
     deletedPhaseIds = [],
+    milestoneIds = [],
+    deletedMilestoneIds = [],
   }: {
     lineIds?: readonly string[]
     deletedLineIds?: readonly string[]
     phaseIds?: readonly string[]
     deletedPhaseIds?: readonly string[]
+    milestoneIds?: readonly string[]
+    deletedMilestoneIds?: readonly string[]
   }
 ): Promise<EditorResult> {
   const { totals, lines } = await cmd.reprice()
@@ -214,6 +231,9 @@ export async function editorResult(
         orderBy: [asc(phases.sequence), asc(phases.id)],
       })
     : []
+  const milestoneRows = milestoneIds.length
+    ? await quoteMilestones(cmd.scope, cmd.quote.id, milestoneIds)
+    : []
   return {
     quoteId: cmd.quote.id,
     lines: await lineItemViews(
@@ -223,6 +243,8 @@ export async function editorResult(
     deletedLineIds: [...deletedLineIds],
     phases: phaseRows.map(toPhaseView),
     deletedPhaseIds: [...deletedPhaseIds],
+    milestones: milestoneRows.map(toMilestoneView),
+    deletedMilestoneIds: [...deletedMilestoneIds],
     totals,
   }
 }
@@ -232,6 +254,20 @@ export function quotePhases(scope: OrganizationScope, quoteId: string) {
   return scope.findMany(phases, {
     where: eq(phases.quoteId, quoteId),
     orderBy: [asc(phases.sequence), asc(phases.id)],
+  })
+}
+
+/** The Quote's Milestones by date (only `ids`, when given). */
+export function quoteMilestones(
+  scope: OrganizationScope,
+  quoteId: string,
+  ids?: readonly string[]
+) {
+  return scope.findMany(milestones, {
+    where: ids
+      ? and(eq(milestones.quoteId, quoteId), inArray(milestones.id, [...ids]))
+      : eq(milestones.quoteId, quoteId),
+    orderBy: [asc(milestones.date), asc(milestones.id)],
   })
 }
 

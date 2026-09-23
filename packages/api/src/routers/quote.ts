@@ -32,7 +32,13 @@ import {
   percentInput,
   requiredText,
 } from "../inputs"
-import { editorResult, lineItemViews, toPhaseView } from "../line-items"
+import {
+  editorResult,
+  lineItemViews,
+  quoteMilestones,
+  toMilestoneView,
+  toPhaseView,
+} from "../line-items"
 import { quoteCommand, quoteFacts } from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
@@ -396,9 +402,9 @@ export const quoteRouter = createTRPCRouter({
     }),
 
   /**
-   * What the Quote editor's grid and Summary show: the Phases, every Line
-   * Item in grid order (sequence, then id) and the Quote's server-computed
-   * totals. Every member may read it. Editor commands return the same
+   * What the Quote editor's grid, Timeline and Summary show: the Phases,
+   * every Line Item (sequence, then id), the Milestones (by date) and the
+   * Quote's server-computed totals. Every member may read it. Editor commands return the same
    * pieces (`EditorResult`), which the client merges into this query.
    */
   editor: organizationProcedure
@@ -406,7 +412,7 @@ export const quoteRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const quote = await ctx.scope.findById(quotes, input.id)
       if (!quote) throw notFound("Quote")
-      const [phaseRows, lineRows] = await Promise.all([
+      const [phaseRows, lineRows, milestoneRows] = await Promise.all([
         ctx.scope.findMany(phases, {
           where: eq(phases.quoteId, quote.id),
           orderBy: [asc(phases.sequence), asc(phases.id)],
@@ -415,11 +421,13 @@ export const quoteRouter = createTRPCRouter({
           where: eq(lineItems.quoteId, quote.id),
           orderBy: [asc(lineItems.sequence), asc(lineItems.id)],
         }),
+        quoteMilestones(ctx.scope, quote.id),
       ])
       return {
         quoteId: quote.id,
         phases: phaseRows.map(toPhaseView),
         lines: await lineItemViews(ctx.scope, lineRows),
+        milestones: milestoneRows.map(toMilestoneView),
         totals: {
           currencyCode: quote.currencyCode,
           discountKind: quote.discountKind,

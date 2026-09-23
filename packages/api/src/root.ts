@@ -7,6 +7,7 @@ import { healthRouter } from "./routers/health"
 import { invitationRouter } from "./routers/invitation"
 import { lineItemRouter } from "./routers/line-item"
 import { membershipRouter } from "./routers/membership"
+import { milestoneRouter } from "./routers/milestone"
 import { organizationRouter } from "./routers/organization"
 import { phaseRouter } from "./routers/phase"
 import { platformRouter } from "./routers/platform"
@@ -31,6 +32,7 @@ export const appRouter = createTRPCRouter({
   invitation: invitationRouter,
   lineItem: lineItemRouter,
   membership: membershipRouter,
+  milestone: milestoneRouter,
   organization: organizationRouter,
   phase: phaseRouter,
   platform: platformRouter,

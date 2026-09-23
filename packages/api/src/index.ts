@@ -35,7 +35,12 @@ export { openQuoteDocument } from "./routers/quote-document"
 export type { OpenQuoteDocumentResult } from "./routers/quote-document"
 export type { OrganizationSettings } from "./settings"
 export type { QuoteCommand, QuoteRow } from "./quotes"
-export type { EditorResult, LineItemView, PhaseView } from "./line-items"
+export type {
+  EditorResult,
+  LineItemView,
+  MilestoneView,
+  PhaseView,
+} from "./line-items"
 export { LINE_ITEM_BATCH_MAX } from "./routers/line-item"
 export { ALLOCATION_BATCH_MAX } from "./routers/allocation"
 export { PHASE_NAME_MAX } from "./routers/phase"

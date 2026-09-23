@@ -20,6 +20,7 @@
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/domain": "workspace:*",
+    "@workspace/storage": "workspace:*",
     "superjson": "^2.2.6",
     "zod": "^4.4.3"
   },

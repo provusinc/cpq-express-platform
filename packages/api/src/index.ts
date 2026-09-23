@@ -15,6 +15,8 @@ export type {
   ResourceRoleImportValues,
   RowResult,
 } from "./catalog-import"
+export { getCompany, getLabels, getOrganizationSettings } from "./settings"
+export type { OrganizationSettings } from "./settings"
 
 /** `RouterInputs["health"]["check"]` */
 export type RouterInputs = inferRouterInputs<AppRouter>

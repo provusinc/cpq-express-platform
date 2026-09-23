@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 
 import { NoAccess } from "@/components/organizations/no-access"
 import { AppShell } from "@/components/shell/app-shell"
+import { getLabels } from "@/components/shell/get-labels"
 import { appUrl, currentPath, organizationUrl, signInUrl } from "@/lib/urls"
 import { getCaller } from "@/trpc/server"
 
@@ -37,7 +38,10 @@ export default async function OrganizationLayout({
     return <NoAccess email={session.user.email} pickerUrl={appUrl()} />
   }
 
-  const mine = await caller.organization.listMine()
+  const [mine, labels] = await Promise.all([
+    caller.organization.listMine(),
+    getLabels(),
+  ])
   const toShell = (o: { slug: string; name: string }) => ({
     slug: o.slug,
     name: o.name,
@@ -49,6 +53,7 @@ export default async function OrganizationLayout({
       organization={toShell(current.organization)}
       organizations={mine.map((m) => toShell(m.organization))}
       isAdmin={current.membership.role === "admin"}
+      labels={labels}
       user={{
         name: session.user.name,
         email: session.user.email,

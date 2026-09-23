@@ -24,6 +24,7 @@
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/domain": "workspace:*",
+    "@workspace/storage": "workspace:*",
     "@workspace/ui": "workspace:*",
     "lucide-react": "^1.47.0",
     "next": "16.3.3",

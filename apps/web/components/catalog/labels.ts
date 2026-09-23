@@ -1,16 +1,7 @@
-import type { BillingUnit, CatalogItemKind } from "@workspace/domain/enums"
+import type { BillingUnit } from "@workspace/domain/enums"
 
-/**
- * Display names for Catalog Item kinds. Label Overrides (Settings) will
- * replace these per Organization later.
- */
-export const KIND_LABELS: Record<
-  CatalogItemKind,
-  { singular: string; plural: string }
-> = {
-  product: { singular: "Product", plural: "Products" },
-  add_on: { singular: "Add-on", plural: "Add-ons" },
-}
+// Catalog Item kind names come from the Organization's Label Overrides:
+// `useLabels()[kind]` (components/shell/labels.tsx).
 
 export const BILLING_UNIT_LABELS: Record<BillingUnit, string> = {
   each: "Each",

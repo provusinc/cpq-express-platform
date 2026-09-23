@@ -16,7 +16,8 @@ import {
   SidebarRail,
 } from "@workspace/ui/components/sidebar"
 
-import { ADMIN_NAV_ITEMS, NAV_ITEMS } from "./nav"
+import { useLabels } from "./labels"
+import { ADMIN_NAV_ITEMS, labelNavItems, NAV_ITEMS } from "./nav"
 import type { NavItem } from "./nav"
 import { OrganizationSwitcher } from "./organization-switcher"
 import type { ShellOrganization, ShellUser } from "./types"
@@ -37,6 +38,7 @@ export function AppSidebar({
   pickerUrl: string
   signedOutUrl: string
 }) {
+  const labels = useLabels()
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -49,7 +51,7 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <NavMenu items={NAV_ITEMS} />
+            <NavMenu items={labelNavItems(NAV_ITEMS, labels)} />
           </SidebarGroupContent>
         </SidebarGroup>
         {isAdmin && (

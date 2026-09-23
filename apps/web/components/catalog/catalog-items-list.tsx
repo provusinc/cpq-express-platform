@@ -60,7 +60,9 @@ import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 import { CatalogItemDialog } from "./catalog-item-dialog"
-import { BILLING_UNIT_LABELS, KIND_LABELS, STATUS_OPTIONS } from "./labels"
+import { useLabels } from "@/components/shell/labels"
+
+import { BILLING_UNIT_LABELS, STATUS_OPTIONS } from "./labels"
 import { initialCatalogItemListInput } from "./list-input"
 import type { CatalogItemListInput } from "./list-input"
 import { PriceRangeFilter } from "./price-range-filter"
@@ -85,7 +87,7 @@ export function CatalogItemsList({
 }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
-  const label = KIND_LABELS[kind]
+  const label = useLabels()[kind]
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())

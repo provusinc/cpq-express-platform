@@ -28,6 +28,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Textarea } from "@workspace/ui/components/textarea"
 
+import { useLabels } from "@/components/shell/labels"
 import { isMoneyInput, trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -74,6 +75,7 @@ export function ResourceRoleDialog({
   role?: ResourceRole | null
 }) {
   const trpc = useTRPC()
+  const label = useLabels().resource_role
   const queryClient = useQueryClient()
   const form = useForm<RoleValues>({
     resolver: zodResolver(roleSchema),
@@ -84,7 +86,9 @@ export function ResourceRoleDialog({
   }, [open, role, form])
 
   const onSuccess = async () => {
-    toast.success(role ? "Resource Role saved." : "Resource Role created.")
+    toast.success(
+      role ? `${label.singular} saved.` : `${label.singular} created.`
+    )
     await queryClient.invalidateQueries(trpc.resourceRole.pathFilter())
     onOpenChange(false)
   }
@@ -127,10 +131,10 @@ export function ResourceRoleDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {role ? "Edit Resource Role" : "New Resource Role"}
+            {role ? `Edit ${label.singular}` : `New ${label.singular}`}
           </DialogTitle>
           <DialogDescription>
-            Resource Roles are always billed by the Hour.
+            {label.plural} are always billed by the Hour.
           </DialogDescription>
         </DialogHeader>
         <form id="resource-role-form" onSubmit={onSubmit}>
@@ -171,7 +175,7 @@ export function ResourceRoleDialog({
             Cancel
           </Button>
           <Button type="submit" form="resource-role-form" disabled={pending}>
-            {pending ? "Saving…" : role ? "Save" : "Create Resource Role"}
+            {pending ? "Saving…" : role ? "Save" : `Create ${label.singular}`}
           </Button>
         </DialogFooter>
       </DialogContent>

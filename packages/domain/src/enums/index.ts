@@ -28,6 +28,17 @@ export const QUOTE_STATUSES = [
 ] as const
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 
+/** How a Quote Status is written in UI copy. */
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  draft: "Draft",
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  rejected: "Rejected",
+  pending_customer_approval: "Pending Customer Approval",
+  customer_approved: "Customer Approved",
+  customer_rejected: "Customer Rejected",
+}
+
 /**
  * One recorded lifecycle action (an Approval Step). Each is also the event that
  * drives the Quote Status machine (`@workspace/domain/status`).
@@ -76,3 +87,15 @@ export const MILESTONE_TYPES = [
   "custom",
 ] as const
 export type MilestoneType = (typeof MILESTONE_TYPES)[number]
+
+/**
+ * Domain terms an Organization may rename with a Label Override. Code and API
+ * always use these canonical terms; only UI copy changes.
+ */
+export const LABEL_TERMS = [
+  "resource_role",
+  "product",
+  "add_on",
+  "phase",
+] as const
+export type LabelTerm = (typeof LABEL_TERMS)[number]

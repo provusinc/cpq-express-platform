@@ -9,6 +9,9 @@ import {
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
+import type { LabelTerm } from "@workspace/domain/enums"
+import type { Labels } from "@workspace/domain/settings"
+
 export interface NavItem {
   label: string
   /** Public path on the Organization's subdomain. */
@@ -16,6 +19,11 @@ export interface NavItem {
   icon: LucideIcon
   /** Shown only to Admins (the page checks the Role again). */
   adminOnly?: boolean
+  /**
+   * The domain term the entry lists: its label is the term's plural Label
+   * Override, and a hidden term (Products, Add-ons) hides the entry.
+   */
+  term?: LabelTerm
 }
 
 /**
@@ -25,9 +33,19 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { label: "Quotes", href: "/quotes", icon: FileTextIcon },
   { label: "Accounts", href: "/accounts", icon: Building2Icon },
-  { label: "Products", href: "/products", icon: PackageIcon },
-  { label: "Add-ons", href: "/add-ons", icon: PackagePlusIcon },
-  { label: "Resource Roles", href: "/resource-roles", icon: UserCogIcon },
+  { label: "Products", href: "/products", icon: PackageIcon, term: "product" },
+  {
+    label: "Add-ons",
+    href: "/add-ons",
+    icon: PackagePlusIcon,
+    term: "add_on",
+  },
+  {
+    label: "Resource Roles",
+    href: "/resource-roles",
+    icon: UserCogIcon,
+    term: "resource_role",
+  },
 ]
 
 /** The Admin-only entries at the bottom of the sidebar. */
@@ -35,3 +53,12 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: "Members", href: "/members", icon: UsersIcon, adminOnly: true },
   { label: "Settings", href: "/settings", icon: SettingsIcon, adminOnly: true },
 ]
+
+/** `items` as the Organization sees them: relabelled, hidden terms left out. */
+export function labelNavItems(items: NavItem[], labels: Labels): NavItem[] {
+  return items.flatMap((item) => {
+    if (!item.term) return [item]
+    const label = labels[item.term]
+    return label.enabled ? [{ ...item, label: label.plural }] : []
+  })
+}

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     "@workspace/domain",
     "@workspace/auth",
     "@workspace/documents",
+    "@workspace/storage",
   ],
   // Organization subdomains ({slug}.localtest.me) must reach the dev server.
   allowedDevOrigins: [env.ROOT_DOMAIN, `*.${env.ROOT_DOMAIN}`],

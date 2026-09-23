@@ -29,6 +29,11 @@
  *   await organizationCaller(db, { organization, user, mailer }).invitation.create(…)
  *   const token = tokenFromEmail(mailer.outbox[0]!)
  *
+ * Object storage: every caller gets an in-memory store (default: a fresh one
+ * per caller). Pass your own `storage: createMemoryStorage()` to inspect
+ * `storage.objects`, and simulate a browser's presigned upload with
+ * `storage.put(key, bytes, { contentType })`.
+ *
  * Organization-tier procedures: `organizationCaller(db, { organization, user })`
  * calls as `user` on `organization`'s subdomain. Every such procedure that
  * takes a record id also gets an `expectIsolated` test (`./isolation`).
@@ -39,13 +44,15 @@ import type { Db } from "@workspace/db"
 import type { SessionUser } from "@workspace/auth"
 import { createMemoryMailer } from "@workspace/auth/mailer"
 import type { EmailMessage, Mailer } from "@workspace/auth/mailer"
+import { createMemoryStorage } from "@workspace/storage"
+import type { ObjectStorage } from "@workspace/storage"
 
 import { ORGANIZATION_SLUG_HEADER } from "../headers"
 import { createCaller } from "../root"
 import { createTRPCContext } from "../trpc"
 import { toSessionUser } from "./fixtures"
 
-export { createMemoryMailer }
+export { createMemoryMailer, createMemoryStorage }
 export {
   createAccount,
   createCatalogItem,
@@ -105,6 +112,8 @@ export interface TestCallerOptions {
   headers?: HeadersInit
   /** Where email goes; defaults to a fresh `createMemoryMailer()`. */
   mailer?: Mailer
+  /** Object storage; defaults to a fresh `createMemoryStorage()`. */
+  storage?: ObjectStorage
 }
 
 /** The `app.` base URL test callers use for links in emails. */
@@ -132,6 +141,7 @@ export function createTestCaller(db: Db, opts: TestCallerOptions = {}) {
       headers,
       session,
       mailer: opts.mailer ?? createMemoryMailer(),
+      storage: opts.storage ?? createMemoryStorage(),
       appUrl: TEST_APP_URL,
     })
   )
@@ -151,14 +161,16 @@ export function organizationCaller(
     user,
     headers,
     mailer,
+    storage,
   }: {
     organization: { slug: string }
     user?: SessionUser
     headers?: HeadersInit
     mailer?: Mailer
+    storage?: ObjectStorage
   }
 ) {
   const merged = new Headers(headers)
   merged.set(ORGANIZATION_SLUG_HEADER, organization.slug)
-  return createTestCaller(db, { user, headers: merged, mailer })
+  return createTestCaller(db, { user, headers: merged, mailer, storage })
 }

@@ -42,6 +42,8 @@ import { and, eq, organizationScope, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 import { can } from "@workspace/domain/policy"
 import type { Actor, OrganizationAction } from "@workspace/domain/policy"
+import { createS3Storage } from "@workspace/storage"
+import type { ObjectStorage } from "@workspace/storage"
 
 import { inUseDetails } from "./errors"
 import { ORGANIZATION_SLUG_HEADER } from "./headers"
@@ -66,11 +68,17 @@ export interface CreateContextOptions {
    * accept links). Defaults to APP_URL.
    */
   appUrl?: string
+  /**
+   * Object storage (logos, Quote Documents). Defaults to the S3-compatible
+   * store from the S3_* env; the test harness passes an in-memory one.
+   */
+  storage?: ObjectStorage
 }
 
 // Process-wide defaults, created on first use.
 let smtpMailer: Mailer | undefined
 let defaultAppUrl: string | undefined
+let s3Storage: ObjectStorage | undefined
 
 /**
  * Builds the per-request context. The Organization is resolved lazily by
@@ -87,6 +95,7 @@ export async function createTRPCContext(opts: CreateContextOptions) {
     session,
     mailer: opts.mailer ?? (smtpMailer ??= createSmtpMailer()),
     appUrl: opts.appUrl ?? (defaultAppUrl ??= authEnv().APP_URL),
+    storage: opts.storage ?? (s3Storage ??= createS3Storage()),
   }
 }
 

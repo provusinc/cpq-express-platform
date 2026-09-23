@@ -3,10 +3,14 @@ import type { Metadata } from "next"
 import { CsvImportButton } from "@/components/catalog/csv-import-dialog"
 import { INITIAL_RESOURCE_ROLE_LIST_INPUT } from "@/components/resource-roles/list-input"
 import { ResourceRolesList } from "@/components/resource-roles/resource-roles-list"
+import { getLabels } from "@/components/shell/get-labels"
 import { organizationAccess } from "@/lib/organization-access"
 import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 
-export const metadata: Metadata = { title: "Resource Roles · CPQ Express" }
+export async function generateMetadata(): Promise<Metadata> {
+  const { resource_role } = await getLabels()
+  return { title: `${resource_role.plural} · CPQ Express` }
+}
 
 export default async function ResourceRolesPage() {
   const access = await organizationAccess("catalog.manage")

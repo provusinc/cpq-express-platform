@@ -54,6 +54,7 @@ import { STATUS_OPTIONS } from "@/components/catalog/labels"
 import { PriceRangeFilter } from "@/components/catalog/price-range-filter"
 import { ConfirmDialog } from "@/components/shell/confirm-dialog"
 import { FilterSelect } from "@/components/shell/filter-select"
+import { useLabels } from "@/components/shell/labels"
 import { ListPagination } from "@/components/shell/list-pagination"
 import { PageHeader } from "@/components/shell/page-header"
 import { formatMoney } from "@/lib/money"
@@ -83,6 +84,7 @@ export function ResourceRolesList({
 }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
+  const label = useLabels().resource_role
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())
@@ -138,7 +140,7 @@ export function ResourceRolesList({
   const remove = useMutation(
     trpc.resourceRole.delete.mutationOptions({
       onSuccess: async () => {
-        toast.success("Resource Role deleted.")
+        toast.success(`${label.singular} deleted.`)
         setDeleting(null)
         await invalidate()
       },
@@ -159,14 +161,14 @@ export function ResourceRolesList({
   return (
     <>
       <PageHeader
-        title="Resource Roles"
+        title={label.plural}
         description="Labour sold by the hour, with bill and cost rates."
       >
         {canManage && toolbar}
         {canManage && (
           <Button onClick={() => setDialog({ role: null })}>
             <PlusIcon data-icon="inline-start" />
-            New Resource Role
+            New {label.singular}
           </Button>
         )}
       </PageHeader>
@@ -177,7 +179,7 @@ export function ResourceRolesList({
             <SearchIcon />
           </InputGroupAddon>
           <InputGroupInput
-            aria-label="Search Resource Roles"
+            aria-label={`Search ${label.plural}`}
             placeholder="Search name or description"
             value={search}
             onChange={(e) => {
@@ -234,14 +236,14 @@ export function ResourceRolesList({
               <UserCogIcon />
             </EmptyMedia>
             <EmptyTitle>
-              {filtered ? "No Resource Roles match" : "No Resource Roles yet"}
+              {filtered ? `No ${label.plural} match` : `No ${label.plural} yet`}
             </EmptyTitle>
             <EmptyDescription>
               {filtered
                 ? "Try another search or clear the filters."
                 : canManage
-                  ? "Create your first Resource Role or import a CSV."
-                  : "An Admin adds Resource Roles here."}
+                  ? `Create your first ${label.singular} or import a CSV.`
+                  : `An Admin adds ${label.plural} here.`}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -364,7 +366,7 @@ export function ResourceRolesList({
             open={deleting !== null}
             onOpenChange={(open) => !open && setDeleting(null)}
             title={`Delete “${deleting?.name ?? ""}”?`}
-            description="Only Resource Roles never used on a Quote can be deleted; deactivate it to stop it being added instead."
+            description={`Only ${label.plural} never used on a Quote can be deleted; deactivate it to stop it being added instead.`}
             pending={remove.isPending}
             onConfirm={() => deleting && remove.mutate({ id: deleting.id })}
           />

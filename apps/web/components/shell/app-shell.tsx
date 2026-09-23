@@ -8,7 +8,10 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 
+import type { Labels } from "@workspace/domain/settings"
+
 import { AppSidebar } from "./app-sidebar"
+import { LabelsProvider } from "./labels"
 import type { ShellOrganization, ShellUser } from "./types"
 
 /**
@@ -18,9 +21,12 @@ import type { ShellOrganization, ShellUser } from "./types"
  */
 export function AppShell({
   children,
+  labels,
   ...sidebar
 }: {
   children: React.ReactNode
+  /** The Organization's labels, for `useLabels()` anywhere in the page. */
+  labels: Labels
   organization: ShellOrganization
   organizations: ShellOrganization[]
   isAdmin: boolean
@@ -29,22 +35,24 @@ export function AppShell({
   signedOutUrl: string
 }) {
   return (
-    <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar {...sidebar} />
-        <SidebarInset>
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <span className="truncate text-sm text-muted-foreground">
-              {sidebar.organization.name}
-            </span>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-            {children}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
+    <LabelsProvider labels={labels}>
+      <TooltipProvider>
+        <SidebarProvider>
+          <AppSidebar {...sidebar} />
+          <SidebarInset>
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <span className="truncate text-sm text-muted-foreground">
+                {sidebar.organization.name}
+              </span>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+              {children}
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </TooltipProvider>
+    </LabelsProvider>
   )
 }

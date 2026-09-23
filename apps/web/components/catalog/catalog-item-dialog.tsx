@@ -39,7 +39,7 @@ import { isMoneyInput, trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-import { KIND_LABELS } from "./labels"
+import { useLabels } from "@/components/shell/labels"
 
 type CatalogItem = RouterOutputs["catalogItem"]["byId"]
 
@@ -102,7 +102,8 @@ export function CatalogItemDialog({
     if (open) form.reset(toValues(item))
   }, [open, item, form])
 
-  const label = KIND_LABELS[kind]
+  const labels = useLabels()
+  const label = labels[kind]
   const onSuccess = async () => {
     toast.success(
       item ? `${label.singular} saved.` : `${label.singular} created.`
@@ -165,8 +166,8 @@ export function CatalogItemDialog({
           </DialogTitle>
           <DialogDescription>
             {kind === "product"
-              ? "Products are always billed Each."
-              : "Add-ons are billed Each or by the Hour."}{" "}
+              ? `${label.plural} are always billed Each.`
+              : `${label.plural} are billed Each or by the Hour.`}{" "}
             Price changes never alter existing Quotes.
           </DialogDescription>
         </DialogHeader>

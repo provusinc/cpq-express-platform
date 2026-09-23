@@ -37,6 +37,7 @@ import {
 } from "@workspace/ui/components/table"
 
 import { parseCsvRecords } from "@/lib/csv"
+import { useLabels } from "@/components/shell/labels"
 import { trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -92,8 +93,11 @@ function CsvImportDialog({
     target.type === "catalogItems"
       ? CATALOG_ITEM_TEMPLATE
       : RESOURCE_ROLE_TEMPLATE
+  const labels = useLabels()
   const noun =
-    target.type === "catalogItems" ? "Catalog Items" : "Resource Roles"
+    target.type === "catalogItems"
+      ? "Catalog Items"
+      : labels.resource_role.plural
 
   const [fileName, setFileName] = useState<string | null>(null)
   const [records, setRecords] = useState<Record<string, string>[]>([])
@@ -164,7 +168,7 @@ function CsvImportDialog({
           row: r.row,
           name: r.values?.name ?? rows[i]?.Name ?? "",
           summary: r.values
-            ? `${r.values.kind === "product" ? "Product" : "Add-on"} · ${trimMoney(r.values.price)} / ${r.values.billingUnit === "hour" ? "hour" : "each"}`
+            ? `${labels[r.values.kind].singular} · ${trimMoney(r.values.price)} / ${r.values.billingUnit === "hour" ? "hour" : "each"}`
             : "",
           errors: r.errors,
         }))

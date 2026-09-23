@@ -15,6 +15,7 @@
  * - phases:  Phase tree rules (depth ≤ 3, no cycles)
  * - organizations: slug rules (format, reserved), currency codes
  * - members: Membership rules (the last-Admin guard)
+ * - settings: Organization settings (Hours Per Day, Label Overrides, logo)
  */
 export * from "./enums"
 export * from "./money"
@@ -28,3 +29,4 @@ export * from "./schedule"
 export * from "./phases"
 export * from "./organizations"
 export * from "./members"
+export * from "./settings"

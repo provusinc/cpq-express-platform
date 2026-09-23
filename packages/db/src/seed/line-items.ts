@@ -74,7 +74,11 @@ export const SEED_LINE_ITEMS: Record<
   "Healthcare – Records migration": {
     lines: [
       { kind: "product", source: "Database Migration Service" },
-      { kind: "resource_role", source: "Database Administrator", quantity: "200" },
+      {
+        kind: "resource_role",
+        source: "Database Administrator",
+        quantity: "200",
+      },
       { kind: "resource_role", source: "Data Analyst" },
     ],
   },
@@ -87,13 +91,150 @@ export const SEED_LINE_ITEMS: Record<
   "Acme Corp – Analytics add-on": {
     lines: [
       { kind: "resource_role", source: "Data Analyst", quantity: "160" },
-      { kind: "add_on", source: "Data Analytics Dashboard Prep", quantity: "3" },
+      {
+        kind: "add_on",
+        source: "Data Analytics Dashboard Prep",
+        quantity: "3",
+      },
+    ],
+  },
+  "Global Mfg – Predictive maintenance": {
+    lines: [
+      { kind: "resource_role", source: "DevOps Engineer", quantity: "600" },
+      { kind: "resource_role", source: "Data Analyst", quantity: "300" },
+    ],
+  },
+  "Retail – Loyalty app": {
+    lines: [
+      { kind: "resource_role", source: "UX Designer", quantity: "200" },
+      { kind: "resource_role", source: "Software Engineer", quantity: "480" },
+      { kind: "add_on", source: "Quality Assurance Testing", quantity: "80" },
+    ],
+  },
+  "Healthcare – Patient portal": {
+    lines: [
+      { kind: "resource_role", source: "Software Engineer", quantity: "400" },
+      { kind: "resource_role", source: "QA Engineer", quantity: "160" },
+    ],
+    discount: { kind: "percent", value: "8" },
+  },
+  "TechStart – Cloud migration": {
+    lines: [
+      { kind: "resource_role", source: "DevOps Engineer", quantity: "320" },
+      { kind: "product", source: "DevOps Consulting Service", quantity: "3" },
+    ],
+  },
+  "Acme Corp – Data warehouse": {
+    lines: [
+      {
+        kind: "resource_role",
+        source: "Database Administrator",
+        quantity: "240",
+      },
+      { kind: "resource_role", source: "Data Analyst", quantity: "240" },
+    ],
+  },
+  "Global Mfg – Quality dashboards": {
+    lines: [
+      { kind: "resource_role", source: "Data Analyst", quantity: "120" },
+      {
+        kind: "add_on",
+        source: "Data Analytics Dashboard Prep",
+        quantity: "4",
+      },
+    ],
+  },
+  "Retail – POS integration": {
+    lines: [
+      { kind: "resource_role", source: "Software Engineer", quantity: "320" },
+      { kind: "product", source: "Senior Developer Service", quantity: "4" },
+    ],
+  },
+  "Acme Corp – Integration sprint": {
+    lines: [
+      {
+        kind: "product",
+        source: "Agile Product Management Sprint",
+        quantity: "2",
+      },
+      { kind: "resource_role", source: "Software Engineer", quantity: "160" },
+    ],
+    discount: { kind: "percent", value: "15" },
+  },
+  "Healthcare – Compliance audit": {
+    lines: [
+      { kind: "product", source: "Cybersecurity Audit Package", quantity: "2" },
+      {
+        kind: "resource_role",
+        source: "Software Engineer",
+        quantity: "120",
+        unitPrice: "128.00",
+        notes: "Matched a competitor's rate",
+      },
+    ],
+  },
+  "TechStart – Pen test": {
+    lines: [
+      { kind: "product", source: "Cybersecurity Audit Package" },
+      {
+        kind: "add_on",
+        source: "Cybersecurity Vulnerability Scan",
+        quantity: "3",
+      },
+    ],
+  },
+  "TechStart – Mobile MVP": {
+    lines: [
+      {
+        kind: "resource_role",
+        source: "Software Engineer",
+        quantity: "640",
+        unitPrice: "132.00",
+        notes: "Startup discount",
+      },
+      { kind: "resource_role", source: "UX Designer", quantity: "120" },
+    ],
+  },
+  "Acme Corp – Support renewal": {
+    lines: [
+      { kind: "product", source: "Premium Support Plan", quantity: "12" },
+      { kind: "product", source: "Basic Support Package", quantity: "12" },
+    ],
+  },
+  "Retail – Analytics add-on": {
+    lines: [{ kind: "resource_role", source: "Data Analyst", quantity: "80" }],
+  },
+  "Global Mfg – Line automation phase 2": {
+    lines: [
+      { kind: "resource_role", source: "DevOps Engineer", quantity: "400" },
+      { kind: "resource_role", source: "Project Manager", quantity: "80" },
+    ],
+  },
+  "Retail – Store pilot rollout": {
+    lines: [
+      { kind: "resource_role", source: "UX Designer", quantity: "80" },
+      { kind: "product", source: "UI/UX Design Package", quantity: "2" },
+    ],
+  },
+  "Healthcare – Records migration phase 2": {
+    lines: [
+      { kind: "product", source: "Database Migration Service" },
+      {
+        kind: "resource_role",
+        source: "Software Engineer",
+        quantity: "160",
+        unitPrice: "125.00",
+      },
     ],
   },
   "TechStart – Security review": {
     lines: [
       { kind: "product", source: "Cybersecurity Audit Package" },
-      { kind: "add_on", source: "Cybersecurity Vulnerability Scan", quantity: "2" },
+      {
+        kind: "add_on",
+        source: "Cybersecurity Vulnerability Scan",
+        quantity: "2",
+      },
     ],
   },
 }
@@ -117,7 +258,10 @@ export async function seedLineItems(db: Db, organization: Organization) {
       .from(users)
       .where(eq(users.email, seedQuote.owner))
     const [quote] = await scope.findMany(quotes, {
-      where: and(eq(quotes.ownerId, owner!.id), eq(quotes.name, seedQuote.name)),
+      where: and(
+        eq(quotes.ownerId, owner!.id),
+        eq(quotes.name, seedQuote.name)
+      ),
       limit: 1,
     })
     if (!quote) throw new Error(`Seed Line Items: missing “${seedQuote.name}”.`)
@@ -173,7 +317,8 @@ async function findSource(db: Db, organizationId: string, line: SeedLine) {
           eq(resourceRoles.name, line.source)
         )
       )
-    if (!role) throw new Error(`Seed Line Items: no Resource Role “${line.source}”.`)
+    if (!role)
+      throw new Error(`Seed Line Items: no Resource Role “${line.source}”.`)
     return {
       id: role.id,
       name: role.name,
@@ -193,6 +338,7 @@ async function findSource(db: Db, organizationId: string, line: SeedLine) {
         eq(catalogItems.name, line.source)
       )
     )
-  if (!item) throw new Error(`Seed Line Items: no ${line.kind} “${line.source}”.`)
+  if (!item)
+    throw new Error(`Seed Line Items: no ${line.kind} “${line.source}”.`)
   return item
 }

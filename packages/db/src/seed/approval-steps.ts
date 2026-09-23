@@ -13,8 +13,9 @@ type Actor = "owner" | "approver@acme.test"
 
 /**
  * Each seeded status's approval history, oldest first, with how many days
- * ago each step happened. The Approver never decides their own Quote, so
- * the Approver-owned Customer Approved Quote has no history.
+ * ago each step happened (plus the Quote's `historyDaysAgo`). The Approver
+ * never decides their own Quote, so the Approver-owned Customer Approved
+ * Quote has no history (`noHistory`).
  */
 const HISTORIES: Partial<
   Record<
@@ -57,6 +58,17 @@ const HISTORIES: Partial<
     { action: "submit", by: "owner", daysAgo: 12 },
     { action: "approve", by: "approver@acme.test", daysAgo: 11 },
     { action: "mark_sent", by: "owner", daysAgo: 10 },
+  ],
+  customer_approved: [
+    { action: "submit", by: "owner", daysAgo: 30 },
+    { action: "approve", by: "approver@acme.test", daysAgo: 29 },
+    { action: "mark_sent", by: "owner", daysAgo: 28 },
+    {
+      action: "customer_approved",
+      by: "owner",
+      daysAgo: 20,
+      comment: "Signed.",
+    },
   ],
   customer_rejected: [
     { action: "submit", by: "owner", daysAgo: 30 },
@@ -107,7 +119,9 @@ export async function seedApprovalSteps(db: Db, organization: Organization) {
         )
       )
     let status: QuoteStatus = "draft"
-    for (const step of HISTORIES[seeded.status] ?? []) {
+    const history = seeded.noHistory ? [] : (HISTORIES[seeded.status] ?? [])
+    const shift = seeded.historyDaysAgo ?? 0
+    for (const step of history) {
       const to = nextStatus(status, step.action)
       if (!to) {
         throw new Error(
@@ -122,7 +136,7 @@ export async function seedApprovalSteps(db: Db, organization: Organization) {
         toStatus: to,
         actorId: step.by === "owner" ? quote.ownerId : approver.id,
         comment: step.comment ?? null,
-        createdAt: new Date(now - step.daysAgo * DAY_MS),
+        createdAt: new Date(now - (step.daysAgo + shift) * DAY_MS),
       })
       status = to
     }

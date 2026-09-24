@@ -1,6 +1,7 @@
 "use client"
 
 import { useSuspenseQuery } from "@tanstack/react-query"
+import { ChartColumnIcon, TableIcon } from "lucide-react"
 import { useState } from "react"
 import {
   Bar,
@@ -14,13 +15,7 @@ import {
 
 import type { FinancialGranularity } from "@workspace/domain/financials"
 import { Decimal } from "@workspace/domain/money"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
+import { Card, CardContent, CardHeader } from "@workspace/ui/components/card"
 import {
   type ChartConfig,
   ChartContainer,
@@ -38,6 +33,10 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@workspace/ui/components/toggle-group"
 
 import { QUOTE_POLL_MS } from "@/components/quotes/autosave"
 import { useLabels } from "@/components/shell/labels"
@@ -68,24 +67,18 @@ const config = {
   headcount: { label: "Headcount (FTE)", theme: SERIES.three },
 } satisfies ChartConfig
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="figure text-2xl leading-tight font-semibold">
-        {value}
-      </span>
-    </div>
-  )
-}
+type Mode = "chart" | "table"
 
 /**
  * The Quote editor's Financials tab (`quote.financials`): cash inflow
  * (revenue after the Quote Discount), cost, utilization (headcount in
  * full-time equivalents) and a combined revenue / cost / margin view, by
  * month, quarter or year, prorated by calendar-day overlap (see the
- * domain's `financials` area). Money shares one axis; headcount has its
- * own chart, never a second axis. A table repeats every number.
+ * domain's `financials` area). One card: the view tabs, the granularity
+ * and a Chart | Table toggle in its header; the table replaces the chart
+ * in place with the same numbers. Money shares one axis; headcount has its
+ * own chart, never a second axis. The Quote's totals are in the header,
+ * so there are no stat tiles (only the peak headcount, on Utilization).
  */
 export function FinancialsTab({ quoteId }: { quoteId: string }) {
   const trpc = useTRPC()
@@ -97,6 +90,7 @@ export function FinancialsTab({ quoteId }: { quoteId: string }) {
   }).data
   const [granularity, setGranularity] = useState<FinancialGranularity>("month")
   const [view, setView] = useState<View>("cash")
+  const [mode, setMode] = useState<Mode>("chart")
   const currency = data.currencyCode
   const money = (amount: string) => formatMoney(amount, currency)
   const { buckets, totals } = data[granularity]
@@ -110,6 +104,81 @@ export function FinancialsTab({ quoteId }: { quoteId: string }) {
   const moneyTooltip = tooltipRow(config, (v) =>
     formatMoney(String(v), currency)
   )
+  const discount = (amount: string) =>
+    new Decimal(amount).isZero() ? "—" : `−${money(amount)}`
+  const hours = (amount: string) =>
+    Number(new Decimal(amount).toFixed(1)).toLocaleString("en", {
+      minimumFractionDigits: 1,
+    })
+  /** The table's columns per view: the numbers its chart draws. */
+  const columns: Record<
+    View,
+    {
+      label: string
+      bucket: (b: (typeof buckets)[number]) => string
+      total: (t: typeof totals) => string
+    }[]
+  > = {
+    cash: [
+      {
+        label: "Revenue",
+        bucket: (b) => money(b.grossRevenue),
+        total: (t) => money(t.grossRevenue),
+      },
+      {
+        label: "Discount",
+        bucket: (b) => discount(b.discount),
+        total: (t) => discount(t.discount),
+      },
+      {
+        label: "Cash inflow",
+        bucket: (b) => money(b.revenue),
+        total: (t) => money(t.revenue),
+      },
+    ],
+    cost: [
+      {
+        label: "Hours",
+        bucket: (b) => hours(b.hours),
+        total: (t) => hours(t.hours),
+      },
+      {
+        label: "Cost",
+        bucket: (b) => money(b.cost),
+        total: (t) => money(t.cost),
+      },
+    ],
+    utilization: [
+      {
+        label: "Hours",
+        bucket: (b) => hours(b.hours),
+        total: (t) => hours(t.hours),
+      },
+      {
+        label: "Headcount (FTE)",
+        bucket: (b) => new Decimal(b.headcount).toFixed(2),
+        total: () => "",
+      },
+    ],
+    combined: [
+      {
+        label: "Cash inflow",
+        bucket: (b) => money(b.revenue),
+        total: (t) => money(t.revenue),
+      },
+      {
+        label: "Cost",
+        bucket: (b) => money(b.cost),
+        total: (t) => money(t.cost),
+      },
+      {
+        label: "Margin",
+        bucket: (b) => money(b.margin),
+        total: (t) => money(t.margin),
+      },
+    ],
+  }
+  const viewLabel = VIEWS.find((v) => v.value === view)!.label
   const hasLines =
     !new Decimal(totals.grossRevenue).isZero() ||
     !new Decimal(totals.cost).isZero() ||
@@ -137,45 +206,58 @@ export function FinancialsTab({ quoteId }: { quoteId: string }) {
   )
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <Card className="gap-0 pt-0">
+      <CardHeader className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b py-2 [.border-b]:pb-2">
         <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-          <TabsList>
+          <TabsList variant="line" aria-label="View" className="h-9">
             {VIEWS.map((v) => (
-              <TabsTrigger key={v.value} value={v.value}>
+              <TabsTrigger key={v.value} value={v.value} className="px-2.5">
                 {v.label}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-        <Tabs
-          value={granularity}
-          onValueChange={(v) => setGranularity(v as FinancialGranularity)}
-        >
-          <TabsList aria-label="Granularity">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <ToggleGroup
+            multiple={false}
+            value={[granularity]}
+            onValueChange={(value) =>
+              value[0] && setGranularity(value[0] as FinancialGranularity)
+            }
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="Granularity"
+          >
             {GRANULARITIES.map((g) => (
-              <TabsTrigger key={g.value} value={g.value}>
+              <ToggleGroupItem key={g.value} value={g.value} className="px-3">
                 {g.label}
-              </TabsTrigger>
+              </ToggleGroupItem>
             ))}
-          </TabsList>
-        </Tabs>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Cash inflow" value={money(totals.revenue)} />
-        <Stat label="Cost" value={money(totals.cost)} />
-        <Stat label="Margin" value={money(totals.margin)} />
-        <Stat
-          label="Peak headcount"
-          value={`${new Decimal(totals.peakHeadcount).toFixed(1)} FTE`}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{VIEWS.find((v) => v.value === view)!.label}</CardTitle>
-          <CardDescription>
+          </ToggleGroup>
+          <ToggleGroup
+            multiple={false}
+            value={[mode]}
+            onValueChange={(value) => value[0] && setMode(value[0] as Mode)}
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="Show as"
+          >
+            <ToggleGroupItem value="chart" className="px-2.5">
+              <ChartColumnIcon data-icon="inline-start" />
+              Chart
+            </ToggleGroupItem>
+            <ToggleGroupItem value="table" className="px-2.5">
+              <TableIcon data-icon="inline-start" />
+              Table
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 pt-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <p className="text-sm text-muted-foreground">
             {view === "cash" &&
               "Revenue after the Quote Discount (spread in proportion to revenue), prorated by calendar days."}
             {view === "cost" &&
@@ -184,177 +266,143 @@ export function FinancialsTab({ quoteId }: { quoteId: string }) {
               `${labels.resource_role.singular} hours as full-time equivalents at ${data.hoursPerDay} hours a working day (${new Decimal(totals.hours).toFixed(0)} hours in all).`}
             {view === "combined" &&
               "Cash inflow and cost side by side, with the margin between them."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!hasLines ? (
-            <p className="text-sm text-muted-foreground">
-              Add Line Items to see the Quote&apos;s profile over time.
+          </p>
+          {view === "utilization" && hasLines && (
+            <p className="flex items-baseline gap-1.5 text-sm whitespace-nowrap">
+              <span className="text-xs text-muted-foreground">
+                Peak headcount
+              </span>
+              <span className="figure text-base font-semibold">
+                {new Decimal(totals.peakHeadcount).toFixed(1)}
+              </span>
+              <span className="text-xs text-muted-foreground">FTE</span>
             </p>
-          ) : (
-            <ChartContainer
-              config={config}
-              className="aspect-auto h-72 w-full"
-              aria-label={`${VIEWS.find((v) => v.value === view)!.label} by ${granularity}`}
-            >
-              {view === "utilization" ? (
-                <BarChart data={rows} accessibilityLayer>
-                  {axes}
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    width={40}
-                    allowDecimals
-                  />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        formatter={tooltipRow(
-                          config,
-                          (v) => `${v.toFixed(2)} FTE`
-                        )}
-                      />
-                    }
-                  />
-                  <Bar
-                    isAnimationActive={false}
-                    maxBarSize={56}
-                    dataKey="headcount"
-                    fill="var(--color-headcount)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              ) : view === "combined" ? (
-                <ComposedChart data={rows} accessibilityLayer barGap={2}>
-                  {axes}
-                  {moneyAxis}
-                  <ChartTooltip
-                    content={<ChartTooltipContent formatter={moneyTooltip} />}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar
-                    isAnimationActive={false}
-                    maxBarSize={56}
-                    dataKey="revenue"
-                    fill="var(--color-revenue)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    isAnimationActive={false}
-                    maxBarSize={56}
-                    dataKey="cost"
-                    fill="var(--color-cost)"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Line
-                    isAnimationActive={false}
-                    dataKey="margin"
-                    type="monotone"
-                    stroke="var(--color-margin)"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                  />
-                </ComposedChart>
-              ) : (
-                <BarChart data={rows} accessibilityLayer>
-                  {axes}
-                  {moneyAxis}
-                  <ChartTooltip
-                    content={<ChartTooltipContent formatter={moneyTooltip} />}
-                  />
-                  <Bar
-                    isAnimationActive={false}
-                    maxBarSize={56}
-                    dataKey={view === "cash" ? "revenue" : "cost"}
-                    fill={
-                      view === "cash"
-                        ? "var(--color-revenue)"
-                        : "var(--color-cost)"
-                    }
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              )}
-            </ChartContainer>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>By {granularity}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
+        </div>
+        {!hasLines ? (
+          <p className="text-sm text-muted-foreground">
+            Add Line Items to see the Quote&apos;s profile over time.
+          </p>
+        ) : mode === "table" ? (
+          <Table aria-label={`${viewLabel} by ${granularity}`}>
             <TableHeader>
               <TableRow>
                 <TableHead>Period</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Discount</TableHead>
-                <TableHead className="text-right">Cash inflow</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">Margin</TableHead>
-                <TableHead className="text-right">Hours</TableHead>
-                <TableHead className="text-right">Headcount</TableHead>
+                {columns[view].map((c) => (
+                  <TableHead key={c.label} className="w-40 text-right">
+                    {c.label}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {buckets.map((b) => (
                 <TableRow key={b.periodStart}>
                   <TableCell className="font-medium">{b.label}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {money(b.grossRevenue)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {new Decimal(b.discount).isZero()
-                      ? "—"
-                      : `−${money(b.discount)}`}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {money(b.revenue)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {money(b.cost)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {money(b.margin)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {new Decimal(b.hours).toFixed(1)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {new Decimal(b.headcount).toFixed(2)}
-                  </TableCell>
+                  {columns[view].map((c) => (
+                    <TableCell key={c.label} className="text-right">
+                      {c.bucket(b)}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
               <TableRow className="font-medium">
                 <TableCell>Total</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {money(totals.grossRevenue)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {new Decimal(totals.discount).isZero()
-                    ? "—"
-                    : `−${money(totals.discount)}`}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {money(totals.revenue)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {money(totals.cost)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {money(totals.margin)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {new Decimal(totals.hours).toFixed(1)}
-                </TableCell>
-                <TableCell />
+                {columns[view].map((c) => (
+                  <TableCell key={c.label} className="text-right">
+                    {c.total(totals)}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-    </div>
+        ) : (
+          <ChartContainer
+            config={config}
+            className="aspect-auto h-80 w-full"
+            aria-label={`${viewLabel} by ${granularity}`}
+          >
+            {view === "utilization" ? (
+              <BarChart data={rows} accessibilityLayer>
+                {axes}
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={40}
+                  allowDecimals
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={tooltipRow(
+                        config,
+                        (v) => `${v.toFixed(2)} FTE`
+                      )}
+                    />
+                  }
+                />
+                <Bar
+                  isAnimationActive={false}
+                  maxBarSize={56}
+                  dataKey="headcount"
+                  fill="var(--color-headcount)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            ) : view === "combined" ? (
+              <ComposedChart data={rows} accessibilityLayer barGap={2}>
+                {axes}
+                {moneyAxis}
+                <ChartTooltip
+                  content={<ChartTooltipContent formatter={moneyTooltip} />}
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar
+                  isAnimationActive={false}
+                  maxBarSize={56}
+                  dataKey="revenue"
+                  fill="var(--color-revenue)"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  isAnimationActive={false}
+                  maxBarSize={56}
+                  dataKey="cost"
+                  fill="var(--color-cost)"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Line
+                  isAnimationActive={false}
+                  dataKey="margin"
+                  type="monotone"
+                  stroke="var(--color-margin)"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                />
+              </ComposedChart>
+            ) : (
+              <BarChart data={rows} accessibilityLayer>
+                {axes}
+                {moneyAxis}
+                <ChartTooltip
+                  content={<ChartTooltipContent formatter={moneyTooltip} />}
+                />
+                <Bar
+                  isAnimationActive={false}
+                  maxBarSize={56}
+                  dataKey={view === "cash" ? "revenue" : "cost"}
+                  fill={
+                    view === "cash"
+                      ? "var(--color-revenue)"
+                      : "var(--color-cost)"
+                  }
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            )}
+          </ChartContainer>
+        )}
+      </CardContent>
+    </Card>
   )
 }

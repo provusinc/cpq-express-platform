@@ -17,10 +17,11 @@ import {
   plannerPeriods,
   plannerRows,
   rangeOf,
+  selectionCaption,
   shownAllocations,
   sumAmounts,
 } from "./planner"
-import type { PlannerLine } from "./planner"
+import type { CellPos, PlannerLine } from "./planner"
 
 const line = (overrides: Partial<PlannerLine> = {}): PlannerLine => ({
   id: "a",
@@ -287,6 +288,36 @@ describe("selection and fill", () => {
       right: 1,
     })
     expect(movePos({ row: 0, col: 0 }, -1, 5, 3, 3)).toEqual({ row: 0, col: 2 })
+  })
+
+  it("names what a selection covers", () => {
+    const weeks = plannerPeriods("weeks", "2026-10-19", "2026-11-06")
+    const names = ["Project Manager", "Architect"]
+    const caption = (anchor: CellPos, focus: CellPos = anchor) =>
+      selectionCaption({
+        range: rangeOf(anchor, focus),
+        rowNames: names,
+        periods: weeks,
+        periodType: "week",
+        rolesWord: "Resource Roles",
+        phase: "Discovery",
+      })
+    expect(caption({ row: 0, col: 0 })).toBe(
+      "Project Manager · W43 · Oct 19 · Discovery"
+    )
+    expect(caption({ row: 0, col: 0 }, { row: 1, col: 2 })).toBe(
+      "2 Resource Roles · W43 – W45 · Discovery"
+    )
+    const months = plannerPeriods("months", "2026-10-01", "2026-12-31")
+    expect(
+      selectionCaption({
+        range: { top: 1, bottom: 1, left: 0, right: 2 },
+        rowNames: names,
+        periods: months,
+        periodType: "month",
+        rolesWord: "Resource Roles",
+      })
+    ).toBe("Architect · Oct 2026 – Dec 2026")
   })
 
   it("fills every cell of a range", () => {

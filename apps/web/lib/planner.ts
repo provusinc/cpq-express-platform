@@ -425,6 +425,43 @@ export function inRange(range: CellRange | null, row: number, col: number) {
   )
 }
 
+/**
+ * What a selection covers, as the Planner's action bar names it: the role
+ * (or "3 Resource Roles"), the period (or "W43 – W45" / "Oct 2026 – Dec
+ * 2026") and, when given, the Phase of the focused period —
+ * "Project Manager · W43 · Oct 19 · Discovery".
+ */
+export function selectionCaption({
+  range,
+  rowNames,
+  periods,
+  periodType,
+  rolesWord,
+  phase,
+}: {
+  range: CellRange
+  rowNames: readonly string[]
+  periods: readonly PlannerPeriod[]
+  periodType: PeriodType
+  /** The plural of the Resource Role term, for a multi-row selection. */
+  rolesWord: string
+  phase?: string | null
+}): string {
+  const rows = range.bottom - range.top + 1
+  const first = periods[range.left]
+  const last = periods[range.right]
+  const who = rows === 1 ? (rowNames[range.top] ?? "") : `${rows} ${rolesWord}`
+  const when =
+    !first || !last
+      ? ""
+      : range.left === range.right
+        ? first.title
+        : periodType === "week"
+          ? `${first.label} – ${last.label}`
+          : `${first.title} – ${last.title}`
+  return [who, when, phase].filter(Boolean).join(" · ")
+}
+
 /** `pos` moved by (dRow, dCol), kept inside a rows × cols grid. */
 export function movePos(
   pos: CellPos,

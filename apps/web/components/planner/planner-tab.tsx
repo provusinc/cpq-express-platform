@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import {
   CalendarRangeIcon,
   EraserIcon,
+  KeyboardIcon,
   PaintBucketIcon,
   PlusIcon,
 } from "lucide-react"
@@ -15,8 +16,14 @@ import type { PeriodType } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Kbd, KbdGroup } from "@workspace/ui/components/kbd"
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@workspace/ui/components/popover"
 import { Separator } from "@workspace/ui/components/separator"
-import { cn } from "@workspace/ui/lib/utils"
 
 import { AddItemsSheet } from "@/components/line-items/add-items-sheet"
 import { useLineItemCommands } from "@/components/line-items/commands"
@@ -36,8 +43,8 @@ import {
 } from "@/components/shell/empty"
 import { useLabels } from "@/components/shell/labels"
 import { useHydrated } from "@/components/shell/use-hydrated"
-import { formatDate, todayIsoDate } from "@/lib/format"
-import { formatMoney, trimMoney, wholeMoney } from "@/lib/money"
+import { todayIsoDate } from "@/lib/format"
+import { wholeMoney } from "@/lib/money"
 import { phaseOptions } from "@/lib/phase-tree"
 import {
   amountsByPeriod,
@@ -52,6 +59,7 @@ import {
   plannerPeriods,
   plannerRows,
   rangeOf,
+  selectionCaption,
   shownAllocations,
   sumAmounts,
 } from "@/lib/planner"
@@ -60,7 +68,6 @@ import type {
   CellEdit,
   CellPos,
   CellRange,
-  PlannerPeriod,
 } from "@/lib/planner"
 import { useTRPC } from "@/trpc/react"
 
@@ -81,12 +88,12 @@ const count = (n: number, [one, many]: [string, string]) =>
 
 /**
  * The Quote editor's Resource Planner tab: a header strip (title, a quiet
- * summary, the save state, Add Resource Role), then the hourly Resource
+ * summary, the save state, the keyboard shortcuts, Add Resource Role),
+ * the selection bar (what is selected and its hours, presets, a custom
+ * amount, fill/clear row), then the grid at full width: the hourly Resource
  * Role Line Items by period (the Quote's bucket within its dates), grouped
  * by Phase and edited like a spreadsheet — every gesture one
- * `allocation.setRange` command, applied optimistically — beside the
- * sticky inspector for the selected cell (its role and period, the value,
- * fill/clear row, presets for the selection, the keys). Read-only when the
+ * `allocation.setRange` command, applied optimistically. Read-only when the
  * viewer can't edit the Quote. The Quote's figures stay in the header.
  */
 export function PlannerTab({ quoteId }: { quoteId: string }) {
@@ -249,7 +256,6 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
     )
   }
 
-  const focusPeriod = current ? periods[current.focus.col] : undefined
   const focusPhaseId = current
     ? (bandAt(bands, current.focus.col)?.phaseId ?? null)
     : null
@@ -267,6 +273,7 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <QuoteSaveIndicator quoteId={quoteId} />
+          <KeysPopover readOnly={readOnly} />
           {!readOnly && (
             <Button variant="outline" onClick={openAdd}>
               <PlusIcon data-icon="inline-start" />
@@ -275,101 +282,101 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
           )}
         </div>
       </div>
-      <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <PlannerGrid
-            rows={rows}
-            lineRows={lineRows}
-            lineValues={lineValues}
-            periods={periods}
-            periodType={periodType}
-            readOnly={readOnly}
-            selection={current}
-            onSelectionChange={setSelection}
-            onEdit={(cells) => onEdit(cells)}
-            onToggle={toggle}
-            bands={bands}
-            capacity={capacity}
-            currentCol={currentCol}
-            phaseTints={phaseTints}
-            roleTerm={roleTerm}
-          />
-          {lineRows.some((r) => r.implied) && (
-            <p className="text-xs text-muted-foreground">
-              Italic values are the default layout until you edit the row.
-            </p>
-          )}
-        </div>
-        <Inspector
-          key={selectedLine?.id ?? "none"}
-          line={selectedLine}
-          detail={selectedLine ? detailOf(selectedLine) : ""}
-          period={focusPeriod}
-          periodPhase={
-            focusPhaseId ? (phaseNames.get(focusPhaseId) ?? null) : null
-          }
-          value={
-            current && selectedLine
-              ? lineValues
-                  .get(selectedLine.id)
-                  ?.get(periodStarts[current.focus.col]!)
-              : undefined
-          }
-          range={range}
-          rangeHours={
-            range
-              ? sumAmounts(
-                  fillRange(
-                    range,
-                    lineRows.map((r) => r.id),
-                    periodStarts,
-                    null
-                  ).map((c) => lineValues.get(c.lineItemId)?.get(c.periodStart))
-                )
-              : "0"
-          }
-          periodType={periodType}
-          currency={currency}
-          readOnly={readOnly}
-          roleLabel={roleTerm.singular}
-          onFillRow={(line, amount) =>
-            onEdit(
-              periodStarts.map((periodStart) => ({
-                lineItemId: line.id,
-                periodStart,
-                amount,
-              }))
-            )
-          }
-          onClearRow={(line) =>
-            onEdit(
-              [...(lineValues.get(line.id)?.keys() ?? [])].map(
-                (periodStart) => ({
-                  lineItemId: line.id,
-                  periodStart,
-                  amount: null,
-                })
-              ),
-              `${line.name} cleared.`
-            )
-          }
-          onFillSelection={(amount) => {
-            if (!range) return
-            const size =
-              (range.bottom - range.top + 1) * (range.right - range.left + 1)
-            onEdit(
-              fillRange(
+      <SelectionBar
+        caption={
+          range
+            ? selectionCaption({
                 range,
-                lineRows.map((r) => r.id),
-                periodStarts,
-                amount
-              ),
-              amount === null && size > 1 ? "Selection cleared." : undefined
-            )
-          }}
-          parse={(text) => parseAmount(text, periodType)}
-        />
-      </div>
+                rowNames: lineRows.map((r) => r.name),
+                periods,
+                periodType,
+                rolesWord: roleTerm.plural,
+                phase: focusPhaseId
+                  ? (phaseNames.get(focusPhaseId) ?? null)
+                  : null,
+              })
+            : null
+        }
+        line={range && range.top === range.bottom ? selectedLine : undefined}
+        value={
+          current && selectedLine
+            ? lineValues
+                .get(selectedLine.id)
+                ?.get(periodStarts[current.focus.col]!)
+            : undefined
+        }
+        range={range}
+        rangeHours={
+          range
+            ? sumAmounts(
+                fillRange(
+                  range,
+                  lineRows.map((r) => r.id),
+                  periodStarts,
+                  null
+                ).map((c) => lineValues.get(c.lineItemId)?.get(c.periodStart))
+              )
+            : "0"
+        }
+        periodType={periodType}
+        readOnly={readOnly}
+        onFillRow={(line, amount) =>
+          onEdit(
+            periodStarts.map((periodStart) => ({
+              lineItemId: line.id,
+              periodStart,
+              amount,
+            }))
+          )
+        }
+        onClearRow={(line) =>
+          onEdit(
+            [...(lineValues.get(line.id)?.keys() ?? [])].map((periodStart) => ({
+              lineItemId: line.id,
+              periodStart,
+              amount: null,
+            })),
+            `${line.name} cleared.`
+          )
+        }
+        onFillSelection={(amount) => {
+          if (!range) return
+          const size =
+            (range.bottom - range.top + 1) * (range.right - range.left + 1)
+          onEdit(
+            fillRange(
+              range,
+              lineRows.map((r) => r.id),
+              periodStarts,
+              amount
+            ),
+            amount === null && size > 1 ? "Selection cleared." : undefined
+          )
+        }}
+        parse={(text) => parseAmount(text, periodType)}
+      />
+      <PlannerGrid
+        rows={rows}
+        lineRows={lineRows}
+        lineValues={lineValues}
+        periods={periods}
+        periodType={periodType}
+        readOnly={readOnly}
+        selection={current}
+        onSelectionChange={setSelection}
+        onEdit={(cells) => onEdit(cells)}
+        onToggle={toggle}
+        bands={bands}
+        capacity={capacity}
+        currentCol={currentCol}
+        phaseTints={phaseTints}
+        roleTerm={roleTerm}
+      />
+      {lineRows.some((r) => r.implied) && (
+        <p className="-mt-1 text-xs text-muted-foreground">
+          Italic values are the default layout until you edit the row.
+        </p>
+      )}
       {addSheet}
     </div>
   )
@@ -419,39 +426,34 @@ function AddRolesSheet({
 }
 
 /**
- * The selected cell: its role (with location and rate) and period (with
- * its Phase), the value large (or the selection's size and hours), then
- * fill / clear the row, presets and a custom amount for the selection (one
- * command each), and the keyboard legend.
+ * The slim bar above the grid, its height always reserved (so the grid
+ * doesn't move under the pointer): with a selection it names it (role,
+ * period, Phase) with its hours, then — for an editor — presets and a
+ * custom amount for the selection, and Fill this row / Clear row for a
+ * one-row selection, each one `allocation.setRange`; without one a hint.
  */
-function Inspector({
+function SelectionBar({
+  caption,
   line,
-  detail,
-  period,
-  periodPhase,
   value,
   range,
   rangeHours,
   periodType,
-  currency,
   readOnly,
-  roleLabel,
   onFillRow,
   onClearRow,
   onFillSelection,
   parse,
 }: {
+  caption: string | null
+  /** The selected row, when the selection is in one row. */
   line: EditorLine | undefined
-  detail: string
-  period: PlannerPeriod | undefined
-  periodPhase: string | null
+  /** The focused cell's amount. */
   value: string | undefined
   range: CellRange | null
   rangeHours: string
   periodType: PeriodType
-  currency: string
   readOnly: boolean
-  roleLabel: string
   onFillRow: (line: EditorLine, amount: string | null) => void
   onClearRow: (line: EditorLine) => void
   onFillSelection: (amount: string | null) => void
@@ -462,133 +464,62 @@ function Inspector({
     ? (range.bottom - range.top + 1) * (range.right - range.left + 1)
     : 0
   const shown = formatAmount(value)
-  const unit = PER_PERIOD[periodType]
 
   return (
-    <aside
-      aria-label="Selected cell"
-      className="flex w-full shrink-0 flex-col rounded-lg border bg-card text-sm xl:sticky xl:top-28 xl:w-72"
+    <div
+      role="toolbar"
+      aria-label="Selection"
+      className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm"
     >
-      {!line || !period ? (
-        <p className="p-4 text-muted-foreground">
-          Select a cell to see its {roleLabel} and period, and to fill it.
-        </p>
+      {!caption ? (
+        <span className="text-muted-foreground">
+          {readOnly
+            ? "Select cells to see their hours."
+            : "Select a cell, or drag across a range, to set its hours."}
+        </span>
       ) : (
         <>
-          <section className="flex flex-col gap-3 p-4">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground">Selected</span>
-              <span
-                className="truncate text-base font-medium"
-                title={line.name}
-              >
-                {line.name}
-              </span>
-              {detail && (
-                <span className="truncate text-xs text-muted-foreground">
-                  {detail}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs text-muted-foreground">Period</span>
-              <span className="tabular-nums">
-                {period.title}
-                {periodPhase && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {periodPhase}
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1.5" role="status">
-              {cells > 1 ? (
-                <>
-                  <span className="figure text-3xl leading-none font-semibold">
-                    {formatAmount(rangeHours) || "0"}
-                  </span>
-                  <span className="text-muted-foreground">
-                    hrs in {cells} cells
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span
-                    className={cn(
-                      "figure text-3xl leading-none font-semibold",
-                      !shown && "text-muted-foreground"
-                    )}
-                  >
-                    {shown || "0"}
-                  </span>
-                  <span className="text-muted-foreground">{unit}</span>
-                </>
-              )}
-            </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt className="text-muted-foreground">Dates</dt>
-              <dd className="text-right">
-                {formatDate(line.startDate)} – {formatDate(line.endDate)}
-              </dd>
-              <dt className="text-muted-foreground">Effort</dt>
-              <dd className="text-right tabular-nums">
-                {formatAmount(line.quantity) || "0"} h ·{" "}
-                {formatMoney(line.lineTotal, currency)} ·{" "}
-                {trimMoney(line.lineMarginPct)}% margin
-              </dd>
-            </dl>
-          </section>
+          <span className="flex min-w-0 items-baseline gap-2" role="status">
+            <span className="truncate font-medium" title={caption}>
+              {caption}
+            </span>
+            <span aria-hidden className="text-muted-foreground/60">
+              —
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-muted-foreground tabular-nums">
+              <span className="figure text-base font-semibold text-foreground">
+                {cells > 1 ? formatAmount(rangeHours) || "0" : shown || "0"}
+              </span>{" "}
+              {cells > 1 ? `hrs in ${cells} cells` : PER_PERIOD[periodType]}
+            </span>
+          </span>
           {!readOnly && (
             <>
-              <Separator />
-              <section className="flex flex-col gap-2 p-4">
-                <span className="text-xs text-muted-foreground">
-                  Quick actions
+              <Separator orientation="vertical" className="h-5 max-md:hidden" />
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-xs text-muted-foreground">
+                  Set to
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="justify-start"
-                  disabled={!shown}
-                  onClick={() => onFillRow(line, shown)}
-                >
-                  <PaintBucketIcon data-icon="inline-start" />
-                  Fill this row with {shown || "…"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="justify-start"
-                  disabled={Number(line.quantity) === 0}
-                  onClick={() => onClearRow(line)}
-                >
-                  <EraserIcon data-icon="inline-start" />
-                  Clear row
-                </Button>
-              </section>
-              <Separator />
-              <section className="flex flex-col gap-2 p-4">
-                <span className="text-xs text-muted-foreground">
-                  Set {cells === 1 ? "this cell" : `${cells} cells`} to
-                </span>
-                <div className="grid grid-cols-6 gap-1">
-                  {bucketPresets(periodType).map((hours) => (
-                    <Button
-                      key={hours}
-                      variant="secondary"
-                      size="xs"
-                      className="px-0 tabular-nums"
-                      onClick={() =>
-                        onFillSelection(hours === 0 ? null : String(hours))
-                      }
-                    >
-                      {hours}
-                    </Button>
-                  ))}
-                </div>
+                {bucketPresets(periodType).map((hours) => (
+                  <Button
+                    key={hours}
+                    variant="outline"
+                    size="xs"
+                    className="min-w-8 bg-background tabular-nums"
+                    aria-label={
+                      hours === 0
+                        ? "Clear the selection"
+                        : `Set the selection to ${hours} hours`
+                    }
+                    onClick={() =>
+                      onFillSelection(hours === 0 ? null : String(hours))
+                    }
+                  >
+                    {hours}
+                  </Button>
+                ))}
                 <form
-                  className="flex items-center gap-2"
+                  className="ml-1 flex items-center gap-1"
                   onSubmit={(e) => {
                     e.preventDefault()
                     const amount = parse(custom)
@@ -598,28 +529,77 @@ function Inspector({
                   <Input
                     aria-label="Hours for every selected cell"
                     inputMode="decimal"
-                    placeholder="Other hours"
+                    placeholder="Other"
                     value={custom}
                     onChange={(e) => setCustom(e.target.value)}
-                    className="h-7 flex-1 text-right tabular-nums"
+                    className="h-6 w-16 bg-background px-2 text-right text-xs tabular-nums"
                   />
                   <Button
                     type="submit"
-                    size="sm"
+                    size="xs"
                     variant="outline"
+                    className="bg-background"
                     disabled={!custom.trim()}
                   >
                     Fill
                   </Button>
                 </form>
-              </section>
+              </div>
+              {line && (
+                <>
+                  <Separator
+                    orientation="vertical"
+                    className="h-5 max-md:hidden"
+                  />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      disabled={!shown}
+                      onClick={() => onFillRow(line, shown)}
+                    >
+                      <PaintBucketIcon data-icon="inline-start" />
+                      Fill row with {shown || "…"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      disabled={Number(line.quantity) === 0}
+                      onClick={() => onClearRow(line)}
+                    >
+                      <EraserIcon data-icon="inline-start" />
+                      Clear row
+                    </Button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </>
       )}
-      <Separator />
-      <KeysLegend readOnly={readOnly} />
-    </aside>
+    </div>
+  )
+}
+
+/** "Keyboard shortcuts": the grid's keys (shadcn `Kbd`) in a popover. */
+function KeysPopover({ readOnly }: { readOnly: boolean }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant="ghost" size="xs" className="text-muted-foreground" />
+        }
+      >
+        <KeyboardIcon data-icon="inline-start" />
+        Keyboard shortcuts
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64">
+        <PopoverHeader>
+          <PopoverTitle>Keyboard shortcuts</PopoverTitle>
+        </PopoverHeader>
+        <KeysLegend readOnly={readOnly} />
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -659,16 +639,13 @@ function KeysLegend({ readOnly }: { readOnly: boolean }) {
     )
   }
   return (
-    <section className="flex flex-col gap-2 p-4">
-      <span className="text-xs text-muted-foreground">Keys</span>
-      <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
-        {keys.map(([keysNode, label]) => (
-          <div key={label} className="contents">
-            <dt>{keysNode}</dt>
-            <dd className="text-muted-foreground">{label}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
+    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs">
+      {keys.map(([keysNode, label]) => (
+        <div key={label} className="contents">
+          <dt>{keysNode}</dt>
+          <dd className="text-muted-foreground">{label}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

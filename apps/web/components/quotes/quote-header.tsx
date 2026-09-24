@@ -2,6 +2,7 @@
 
 import { CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
+import { useState } from "react"
 
 import { QUOTE_STATUS_LABELS } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
@@ -37,7 +38,7 @@ import { useQuote } from "./use-quote"
 import type { Quote } from "./use-quote"
 
 /**
- * The metrics row's id (a stable element: the figures inside re-render once
+ * The metrics strip's id (a stable element: the figures inside re-render once
  * hydrated): the tab bar shows a compact Total once it scrolls away.
  */
 export const QUOTE_METRICS_ID = "quote-metrics"
@@ -93,31 +94,35 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
 }
 
 /**
- * The Quote editor's header: the Account's monogram, the Name and
- * Description (edited in place), a meta line (status, Account, Owner,
- * Valid Until), then the metrics row — Total, Margin %, Effort (with the
- * Time Period) and Duration (with the Quote dates editor) — with the
- * actions at its right (`QuoteHeaderActions`). A read-only notice explains
- * when the viewer can't edit. Every figure appears once: the tab bar only
- * repeats Total and Margin once this row has scrolled away.
+ * The Quote editor's header, kept compact: the Account's monogram beside
+ * the Name (edited in place) with the meta line under it (status, Account,
+ * Owner, Valid Until) and the Description as one muted line when there is
+ * one (else "Add a description" in the "…" menu), the actions at the right
+ * (`QuoteHeaderActions`); then the metrics strip — Total, Margin %, Effort
+ * (with the Time Period) and Duration (with the Quote dates editor). A
+ * read-only notice explains when the viewer can't edit. Every figure
+ * appears once: the tab bar only repeats Total and Margin once the strip
+ * has scrolled away.
  */
 export function QuoteHeader({ quoteId }: { quoteId: string }) {
   const quote = useQuote(quoteId)
   const { rename, setDescription } = useHeaderCommands(quoteId)
   const canEdit = quote.permissions.canEdit
+  const [addingDescription, setAddingDescription] = useState(false)
+  const showDescription = Boolean(quote.description) || addingDescription
 
   return (
-    <header className="flex flex-col gap-6 pt-1">
-      <div className="flex items-start gap-4">
+    <header className="flex flex-col gap-3">
+      <div className="flex items-start gap-3">
         <Avatar
-          className="mt-0.5 size-14 rounded-xl after:rounded-xl max-sm:hidden"
+          className="mt-0.5 size-10 rounded-lg after:rounded-lg max-sm:hidden"
           aria-hidden
         >
-          <AvatarFallback className="rounded-xl bg-accent text-lg font-semibold tracking-wide text-accent-foreground">
+          <AvatarFallback className="rounded-lg bg-accent text-sm font-semibold tracking-wide text-accent-foreground">
             {initials(quote.account.name)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="-ml-2">
             <InlineText
               label="Name"
@@ -125,39 +130,47 @@ export function QuoteHeader({ quoteId }: { quoteId: string }) {
               required
               maxLength={QUOTE_NAME_MAX}
               disabled={!canEdit}
-              className="text-2xl leading-tight font-semibold tracking-[-0.015em]"
+              className="py-0 text-xl leading-7 font-semibold tracking-[-0.015em]"
               onSave={(name) => name && rename.mutate({ id: quote.id, name })}
             />
           </div>
           <MetaLine quote={quote} />
-          <div className="-ml-2 max-w-[80ch]">
-            <InlineText
-              label="Description"
-              value={quote.description}
-              multiline
-              maxLength={2000}
-              disabled={!canEdit}
-              placeholder={canEdit ? "Add a description" : "No description"}
-              className="resize-none py-0.5 text-sm text-muted-foreground"
-              onSave={(description) =>
-                setDescription.mutate({ id: quote.id, description })
-              }
-            />
-          </div>
+          {showDescription && (
+            <div className="-ml-2 max-w-[80ch]">
+              <InlineText
+                label="Description"
+                value={quote.description}
+                multiline
+                maxLength={2000}
+                disabled={!canEdit}
+                autoFocus={addingDescription && !quote.description}
+                placeholder="Add a description"
+                className="h-6 resize-none overflow-hidden py-0.5 text-sm text-muted-foreground focus:field-sizing-content focus:h-auto"
+                onSave={(description) => {
+                  setAddingDescription(false)
+                  setDescription.mutate({ id: quote.id, description })
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <div className="shrink-0">
+          <QuoteHeaderActions
+            quote={quote}
+            onAddDescription={
+              canEdit && !showDescription
+                ? () => setAddingDescription(true)
+                : undefined
+            }
+          />
         </div>
       </div>
-      <div
-        id={QUOTE_METRICS_ID}
-        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border-t pt-5"
-      >
+      <div id={QUOTE_METRICS_ID}>
         <WithQuoteFigures quoteId={quoteId}>
           {(figures) => (
             <QuoteMetrics quote={quote} figures={figures} canEdit={canEdit} />
           )}
         </WithQuoteFigures>
-        <div className="ml-auto">
-          <QuoteHeaderActions quote={quote} />
-        </div>
       </div>
       <ReadOnlyNotice quote={quote} />
     </header>
@@ -168,7 +181,7 @@ export function QuoteHeader({ quoteId }: { quoteId: string }) {
 function MetaLine({ quote }: { quote: Quote }) {
   const owner = quote.owner.name ?? quote.owner.email
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
       <QuoteStatusBadge status={quote.status} className="shrink-0" />
       <Dot />
       <Link
@@ -223,11 +236,13 @@ const TONE_INK = {
 } as const
 
 /**
- * The headline figures, divided by hairlines: Total (and the Quote
- * Discount it is after, which opens the discount editor), Margin % (success at or above the low-margin line,
- * warning below it, danger negative; the amount under it), Effort in hours
- * (with the Time Period it is planned in) and Duration in weeks (with the
- * Quote dates, which open the dates editor).
+ * The headline figures as one strip, divided by hairlines, each a figure
+ * with its label and a detail line beside it: Total (and the Quote
+ * Discount it is after, which opens the discount editor), Margin % (success
+ * at or above the low-margin line, warning below it, danger negative; the
+ * amount under it), Effort in hours (with the Time Period it is planned
+ * in) and Duration in weeks (with the Quote dates, which open the dates
+ * editor).
  */
 function QuoteMetrics({
   quote,
@@ -244,7 +259,7 @@ function QuoteMetrics({
   return (
     <dl
       aria-label="Quote figures"
-      className="grid grid-cols-2 gap-y-4 lg:flex lg:flex-wrap"
+      className="flex flex-wrap items-center gap-y-3"
     >
       <Metric
         label="Total"
@@ -300,6 +315,7 @@ function QuoteMetrics({
   )
 }
 
+/** A figure with its label above its detail line, both to its right. */
 function Metric({
   label,
   sub,
@@ -310,12 +326,14 @@ function Metric({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 pr-6 even:border-l even:pl-6 lg:border-l lg:pl-6 lg:first:border-l-0 lg:first:pl-0 xl:pr-7 xl:pl-7 xl:first:pl-0">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="figure text-[1.875rem] leading-none font-semibold">
+    <div className="grid min-w-0 grid-cols-[auto_auto] grid-rows-[auto_auto] items-center gap-x-2.5 border-l px-5 first:border-l-0 first:pl-0">
+      <dt className="col-start-2 row-start-1 text-xs leading-4 text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="figure col-start-1 row-span-2 row-start-1 text-2xl leading-none font-semibold">
         {children}
       </dd>
-      <dd className="flex min-h-5 items-center text-xs whitespace-nowrap text-muted-foreground">
+      <dd className="col-start-2 row-start-2 flex h-5 items-center text-xs whitespace-nowrap text-muted-foreground">
         {sub}
       </dd>
     </div>
@@ -324,7 +342,7 @@ function Metric({
 
 function Unit({ children }: { children: React.ReactNode }) {
   return (
-    <span className="ml-0.5 font-sans text-base font-medium text-muted-foreground">
+    <span className="ml-0.5 font-sans text-sm font-medium text-muted-foreground">
       {children}
     </span>
   )

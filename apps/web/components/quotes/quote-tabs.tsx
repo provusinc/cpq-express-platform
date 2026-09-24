@@ -13,13 +13,13 @@ import { QUOTE_TABS } from "./tabs"
 import { useQuote } from "./use-quote"
 
 const INDEX = "overview"
-/** The shell header's height (`h-13`) plus this bar's (`h-12`). */
-const STUCK_OFFSET_PX = 52 + 48
+/** The shell header's height (`h-13`) plus this bar's (`h-11`). */
+const STUCK_OFFSET_PX = 52 + 44
 
 /**
  * The Quote editor's sticky bar, just under the shell header: the tab bar
  * (one link per tab route, the current one underlined) and, at its right,
- * the save state. Once the header's metrics row has scrolled under it,
+ * the save state. Once the header's metrics strip has scrolled under it,
  * Total and Margin % join it, so they stay in view on every tab without
  * ever showing twice.
  */
@@ -28,12 +28,12 @@ export function QuoteTabs({ quoteId }: { quoteId: string }) {
   const metricsHidden = useMetricsHidden()
   const canEdit = useQuote(quoteId).permissions.canEdit
   return (
-    <div className="sticky top-13 z-20 -mx-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b bg-background/90 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/75 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky top-13 z-20 -mx-4 -mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-1 border-b bg-background/90 px-4 backdrop-blur-md supports-backdrop-filter:bg-background/75 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
       <Tabs value={segment} className="-mb-px max-w-full min-w-0">
         <TabsList
           variant="line"
           aria-label="Quote"
-          className="no-scrollbar h-12! max-w-full justify-start gap-0 overflow-x-auto p-0"
+          className="no-scrollbar h-11! max-w-full justify-start gap-0 overflow-x-auto p-0"
         >
           {QUOTE_TABS.map((tab) => (
             <TabsTrigger
@@ -63,7 +63,7 @@ export function QuoteTabs({ quoteId }: { quoteId: string }) {
   )
 }
 
-/** Whether the header's metrics row has scrolled up under the sticky bars. */
+/** Whether the header's metrics strip has scrolled up under the sticky bars. */
 function useMetricsHidden() {
   const [hidden, setHidden] = useState(false)
   useEffect(() => {

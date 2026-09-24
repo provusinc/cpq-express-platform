@@ -25,6 +25,7 @@ export function InlineText({
   maxLength,
   validate,
   inputMode,
+  autoFocus,
   className,
 }: {
   value: string | null
@@ -40,6 +41,8 @@ export function InlineText({
   /** A message when the trimmed, non-blank value is invalid; null when fine. */
   validate?: (value: string) => string | null
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"]
+  /** Focus on mount (a field revealed by an "Add …" action). */
+  autoFocus?: boolean
   className?: string
 }) {
   const [draft, setDraft] = useState(value ?? "")
@@ -77,6 +80,7 @@ export function InlineText({
     placeholder,
     disabled,
     maxLength,
+    autoFocus,
     onFocus: () => setFocused(true),
     onBlur: commit,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>

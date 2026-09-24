@@ -10,6 +10,7 @@ import {
   FilePlusIcon,
   FilesIcon,
   FileTextIcon,
+  TextIcon,
   Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
@@ -91,13 +92,21 @@ export function DeleteQuoteDialog({
  * (`useLifecycleActions`) and the "…" menu with the other lifecycle actions
  * and Delete (when `canDelete`: Owner or Admin, deletable status).
  */
-export function QuoteHeaderActions({ quote }: { quote: Quote }) {
+export function QuoteHeaderActions({
+  quote,
+  onAddDescription,
+}: {
+  quote: Quote
+  /** Offered in the "…" menu when the Quote has no Description yet. */
+  onAddDescription?: () => void
+}) {
   const router = useRouter()
   const lifecycle = useLifecycleActions(quote.id)
   const [cloning, setCloning] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const canDelete = quote.permissions.canDelete
-  const hasMenu = lifecycle.secondary.length > 0 || canDelete
+  const hasMenu =
+    lifecycle.secondary.length > 0 || canDelete || Boolean(onAddDescription)
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button variant="outline" onClick={() => setCloning(true)}>
@@ -116,6 +125,16 @@ export function QuoteHeaderActions({ quote }: { quote: Quote }) {
             <EllipsisIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
+            {onAddDescription && (
+              <DropdownMenuItem onClick={onAddDescription}>
+                <TextIcon />
+                Add a description
+              </DropdownMenuItem>
+            )}
+            {onAddDescription &&
+              (lifecycle.secondary.length > 0 || canDelete) && (
+                <DropdownMenuSeparator />
+              )}
             {lifecycle.secondary.map((action) => {
               const Icon = action.icon
               return (

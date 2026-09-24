@@ -1,0 +1,9 @@
+{
+  "extends": "@workspace/typescript-config/internal-package.json",
+  "compilerOptions": {
+    "lib": ["es2022"],
+    "types": []
+  },
+  "include": ["src", "*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@workspace/auth",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./next": "./src/next.ts",
+    "./react": "./src/react.ts",
+    "./env": "./src/env.ts",
+    "./mailer": "./src/mailer.ts"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,tsx,js}\"",
+    "typecheck": "tsc --noEmit",
+    "with-env": "dotenv -e ../../.env --",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@types/nodemailer": "^8.0.2",
+    "@workspace/eslint-config": "workspace:*",
+    "@workspace/typescript-config": "workspace:*",
+    "eslint": "^9.39.4",
+    "next": "16.3.3",
+    "react": "19.2.4",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "^1.11.3",
+    "@t3-oss/env-core": "^0.13.11",
+    "@workspace/db": "workspace:*",
+    "next-auth": "5.0.0-beta.32",
+    "nodemailer": "^8.0.11",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "next": "^16",
+    "react": "^19"
+  }
+}

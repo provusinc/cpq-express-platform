@@ -1,0 +1,16 @@
+{
+  "extends": "@workspace/typescript-config/internal-package.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src",
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

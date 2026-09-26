@@ -28,7 +28,7 @@ import { Input } from "@workspace/ui/components/input"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-type Contact = RouterOutputs["account"]["byId"]["contacts"][number]
+type Contact = RouterOutputs["customer"]["byId"]["contacts"][number]
 
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Enter a name.").max(200),
@@ -46,16 +46,16 @@ const TEXT_FIELDS = [
   { name: "phone", label: "Phone", type: "tel" },
 ] as const
 
-/** Add a Contact to an Account, or edit one (`contact`). */
+/** Add a Contact to a Customer, or edit one (`contact`). */
 export function ContactDialog({
   open,
   onOpenChange,
-  accountId,
+  customerId,
   contact,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  accountId: string
+  customerId: string
   contact?: Contact | null
 }) {
   const trpc = useTRPC()
@@ -84,7 +84,7 @@ export function ContactDialog({
 
   const onSuccess = async () => {
     toast.success(contact ? "Contact saved." : "Contact added.")
-    await queryClient.invalidateQueries(trpc.account.pathFilter())
+    await queryClient.invalidateQueries(trpc.customer.pathFilter())
     onOpenChange(false)
   }
   const onError = (e: unknown) => toast.error(errorMessage(e))
@@ -100,7 +100,7 @@ export function ContactDialog({
   const onSubmit = form.handleSubmit(async ({ isPrimary, ...values }) => {
     if (!contact) {
       // Unticked → let the API decide (the first Contact becomes primary).
-      create.mutate({ accountId, ...values, ...(isPrimary && { isPrimary }) })
+      create.mutate({ customerId, ...values, ...(isPrimary && { isPrimary }) })
       return
     }
     if (isPrimary && !contact.isPrimary) {
@@ -156,7 +156,7 @@ export function ContactDialog({
                       onCheckedChange={(c) => field.onChange(c === true)}
                     />
                     <FieldLabel htmlFor="contact-isPrimary">
-                      Primary Contact for this Account
+                      Primary Contact for this Customer
                     </FieldLabel>
                   </Field>
                 )}

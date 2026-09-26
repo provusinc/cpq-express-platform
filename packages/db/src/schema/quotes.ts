@@ -13,7 +13,7 @@ import { DISCOUNT_KINDS, TIME_PERIODS } from "@workspace/domain/enums"
 
 import { timestamps } from "../columns"
 import { organizationReference, organizationTable } from "../organization-table"
-import { accounts } from "./accounts"
+import { customers } from "./customers"
 import { users } from "./auth"
 import { quoteStatusEnum } from "./enums"
 
@@ -29,16 +29,16 @@ export const timePeriodEnum = pgEnum("time_period", TIME_PERIODS)
 export const discountKindEnum = pgEnum("discount_kind", DISCOUNT_KINDS)
 
 /**
- * A priced engagement offered to one Account (glossary: Quote).
+ * A priced engagement offered to one Customer (glossary: Quote).
  *
  * - `ownerId` is the Quote Owner: the User who created it, fixed for life
  *   (never transferred). It references the global `users` table, so a
  *   removed member stays the owner; the policy then treats their Role as
  *   `null`. `createdById` / `updatedById` record who created and last
  *   changed the Quote (every command sets `updatedById`).
- * - The Account is required and RESTRICTs its deletion (archive instead).
+ * - The Customer is required and RESTRICTs its deletion (archive instead).
  * - Name is required and not unique (nothing is auto-numbered); creating a
- *   second Quote with the same Name for an Account only warns.
+ *   second Quote with the same Name for a Customer only warns.
  * - `currencyCode` is the Organization's currency, snapshotted at creation.
  * - The Quote Discount is `discountKind` + `discountValue` (a percent, 10 =
  *   10 %, or an amount), both null for none; whichever was entered stays
@@ -58,7 +58,7 @@ export const quotes = organizationTable(
     updatedById: uuid()
       .notNull()
       .references(() => users.id),
-    accountId: uuid().notNull(),
+    customerId: uuid().notNull(),
     name: text().notNull(),
     description: text(),
     /** Glossary: Quote Start Date / Quote End Date (user-owned). */
@@ -80,7 +80,7 @@ export const quotes = organizationTable(
     ...timestamps(),
   },
   (t) => [
-    organizationReference(t, t.accountId, accounts).onDelete("restrict"),
+    organizationReference(t, t.customerId, customers).onDelete("restrict"),
     check("quotes_dates_ordered", sql`${t.endDate} >= ${t.startDate}`),
     check("quotes_currency_code_format", sql`${t.currencyCode} ~ '^[A-Z]{3}$'`),
     check(
@@ -96,10 +96,10 @@ export const quotes = organizationTable(
     index().on(t.organizationId, t.updatedAt),
     index().on(t.organizationId, t.status),
     index().on(t.organizationId, t.ownerId),
-    // The Account's Quotes: delete checks and the duplicate-Name warning.
-    index("quotes_organization_id_account_id_name_index").on(
+    // The Customer's Quotes: delete checks and the duplicate-Name warning.
+    index("quotes_organization_id_customer_id_name_index").on(
       t.organizationId,
-      t.accountId,
+      t.customerId,
       sql`lower(btrim(${t.name}))`
     ),
   ]

@@ -12,7 +12,7 @@ import {
 } from "../inputs"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 
-const { accounts, contacts } = schema
+const { customers, contacts } = schema
 
 const contactFields = {
   email: optionalEmail,
@@ -20,10 +20,10 @@ const contactFields = {
   title: optionalText(200),
 }
 
-/** Clears the primary flag on the Account's other Contacts. */
+/** Clears the primary flag on the Customer's other Contacts. */
 async function clearOtherPrimaries(
   scope: OrganizationScope,
-  accountId: string,
+  customerId: string,
   keepId: string
 ) {
   await scope.db
@@ -32,7 +32,7 @@ async function clearOtherPrimaries(
     .where(
       scope.where(
         contacts,
-        eq(contacts.accountId, accountId),
+        eq(contacts.customerId, customerId),
         eq(contacts.isPrimary, true),
         ne(contacts.id, keepId)
       )
@@ -40,19 +40,19 @@ async function clearOtherPrimaries(
 }
 
 /**
- * Contacts at an Account. Any member may manage them; they always belong to
- * one Account, and at most one per Account is primary.
+ * Contacts at a Customer. Any member may manage them; they always belong to
+ * one Customer, and at most one per Customer is primary.
  */
 export const contactRouter = createTRPCRouter({
   /**
-   * Adds a Contact to an Account. The Account's first Contact becomes its
+   * Adds a Contact to a Customer. The Customer's first Contact becomes its
    * primary Contact; `isPrimary: true` makes this one primary instead of
    * the current one.
    */
   create: organizationProcedure
     .input(
       z.object({
-        accountId: z.uuid(),
+        customerId: z.uuid(),
         name: requiredText(200),
         ...contactFields,
         isPrimary: z.boolean().optional(),
@@ -60,15 +60,15 @@ export const contactRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input: { isPrimary, ...values } }) =>
       ctx.scope.transaction(async (scope) => {
-        const account = await scope.findById(accounts, values.accountId)
-        if (!account) throw notFound("Account")
+        const customer = await scope.findById(customers, values.customerId)
+        if (!customer) throw notFound("Customer")
         const [existing] = await scope.findMany(contacts, {
-          where: eq(contacts.accountId, account.id),
+          where: eq(contacts.customerId, customer.id),
           limit: 1,
         })
         const primary = isPrimary ?? !existing
         const id = uuidv7()
-        if (primary) await clearOtherPrimaries(scope, account.id, id)
+        if (primary) await clearOtherPrimaries(scope, customer.id, id)
         return scope.insert(contacts, {
           ...stripUndefined(values),
           id,
@@ -96,14 +96,14 @@ export const contactRouter = createTRPCRouter({
       return updated
     }),
 
-  /** Makes this Contact its Account's primary Contact (the only one). */
+  /** Makes this Contact its Customer's primary Contact (the only one). */
   setPrimary: organizationProcedure
     .input(z.object({ id: z.uuid() }))
     .mutation(({ ctx, input }) =>
       ctx.scope.transaction(async (scope) => {
         const contact = await scope.findById(contacts, input.id)
         if (!contact) throw notFound("Contact")
-        await clearOtherPrimaries(scope, contact.accountId, contact.id)
+        await clearOtherPrimaries(scope, contact.customerId, contact.id)
         return (await scope.update(contacts, contact.id, { isPrimary: true }))!
       })
     ),

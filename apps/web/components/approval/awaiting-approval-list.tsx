@@ -50,10 +50,10 @@ const columns: DataTableColumns<AwaitingRow> = [
     ),
   },
   {
-    id: "account",
-    accessorFn: (r) => r.account.name,
+    id: "customer",
+    accessorFn: (r) => r.customer.name,
     header: ColumnTitle,
-    meta: { label: "Account" },
+    meta: { label: "Customer" },
   },
   {
     id: "owner",

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { resolveColumnLayout, toSavedLayout } from "./column-layout"
 
-const COLUMNS = ["select", "name", "account", "owner", "status", "total"]
+const COLUMNS = ["select", "name", "customer", "owner", "status", "total"]
 const opts = { fixed: ["select", "name"], defaultHidden: ["total"] }
 
 describe("resolveColumnLayout", () => {
@@ -12,7 +12,7 @@ describe("resolveColumnLayout", () => {
       visibility: {
         select: true,
         name: true,
-        account: true,
+        customer: true,
         owner: true,
         status: true,
         total: false,
@@ -24,7 +24,7 @@ describe("resolveColumnLayout", () => {
     const layout = resolveColumnLayout(
       COLUMNS,
       {
-        order: ["status", "name", "account", "owner", "total"],
+        order: ["status", "name", "customer", "owner", "total"],
         hidden: ["owner", "name"],
       },
       opts
@@ -33,7 +33,7 @@ describe("resolveColumnLayout", () => {
       "select",
       "name",
       "status",
-      "account",
+      "customer",
       "owner",
       "total",
     ])
@@ -47,7 +47,7 @@ describe("resolveColumnLayout", () => {
   it("drops unknown ids and slots new columns after their default neighbour", () => {
     const layout = resolveColumnLayout(
       COLUMNS,
-      { order: ["status", "gone", "account"], hidden: [] },
+      { order: ["status", "gone", "customer"], hidden: [] },
       opts
     )
     expect(layout.order).toEqual([
@@ -55,7 +55,7 @@ describe("resolveColumnLayout", () => {
       "name",
       "status",
       "total",
-      "account",
+      "customer",
       "owner",
     ])
   })
@@ -66,7 +66,7 @@ describe("toSavedLayout", () => {
     const layout = resolveColumnLayout(COLUMNS, null, opts)
     const saved = toSavedLayout(layout, opts.fixed)
     expect(saved).toEqual({
-      order: ["account", "owner", "status", "total"],
+      order: ["customer", "owner", "status", "total"],
       hidden: ["total"],
     })
     expect(resolveColumnLayout(COLUMNS, saved, opts)).toEqual(layout)
@@ -76,11 +76,11 @@ describe("toSavedLayout", () => {
     const layout = resolveColumnLayout(COLUMNS, null, opts)
     const reordered = {
       ...layout,
-      order: ["account", "owner", "name", "select", "total", "status"],
+      order: ["customer", "owner", "name", "select", "total", "status"],
     }
     expect(
       resolveColumnLayout(COLUMNS, toSavedLayout(reordered, opts.fixed), opts)
         .order
-    ).toEqual(["select", "name", "account", "owner", "total", "status"])
+    ).toEqual(["select", "name", "customer", "owner", "total", "status"])
   })
 })

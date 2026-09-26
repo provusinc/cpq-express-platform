@@ -88,7 +88,7 @@ function makeStyles(settings: DocumentSettings, pageHeight: number) {
       objectFit: "contain",
       marginBottom: 6,
     },
-    companyName: {
+    profileName: {
       fontFamily: "Helvetica-Bold",
       fontSize: base + 2,
       lineHeight: 1.25,
@@ -210,27 +210,27 @@ function Lines({
 }
 
 function Header({ snapshot, logo, styles, date }: Ctx) {
-  const { company, quote } = snapshot
+  const { profile, quote } = snapshot
   const locality = present(
-    company.city,
-    company.region,
-    company.postalCode
+    profile.city,
+    profile.region,
+    profile.postalCode
   ).join(", ")
   return (
     <View style={[styles.section, styles.header]}>
       <View style={styles.headerLeft}>
         {logo && <Image src={logo} style={styles.logo} />}
-        <Text style={styles.companyName}>{company.name}</Text>
+        <Text style={styles.profileName}>{profile.name}</Text>
         <Lines
           style={styles.muted}
           lines={present(
-            company.addressLine1,
-            company.addressLine2,
+            profile.addressLine1,
+            profile.addressLine2,
             locality,
-            company.country,
-            company.email,
-            company.phone,
-            company.website
+            profile.country,
+            profile.email,
+            profile.phone,
+            profile.website
           )}
         />
       </View>
@@ -254,19 +254,23 @@ function Header({ snapshot, logo, styles, date }: Ctx) {
 }
 
 function BillTo({ snapshot, styles }: Ctx) {
-  const { account, contact } = snapshot
+  const { customer, contact } = snapshot
   const locality = present(
-    account.billingCity,
-    account.billingState,
-    account.billingPostalCode
+    customer.billingCity,
+    customer.billingState,
+    customer.billingPostalCode
   ).join(", ")
   return (
     <View style={styles.section} wrap={false}>
       <Text style={styles.label}>Bill To</Text>
-      <Text style={styles.bold}>{account.name}</Text>
+      <Text style={styles.bold}>{customer.name}</Text>
       <Lines
         style={styles.muted}
-        lines={present(account.billingStreet, locality, account.billingCountry)}
+        lines={present(
+          customer.billingStreet,
+          locality,
+          customer.billingCountry
+        )}
       />
       {contact && (
         <View style={styles.paragraph}>
@@ -522,8 +526,8 @@ export function QuoteDocument({
   return (
     <Document
       title={title}
-      author={snapshot.company.name}
-      subject={`Quote for ${snapshot.account.name}`}
+      author={snapshot.profile.name}
+      subject={`Quote for ${snapshot.customer.name}`}
       creator="CPQ Express"
       producer="CPQ Express"
     >

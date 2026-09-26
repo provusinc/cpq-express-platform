@@ -5,7 +5,7 @@
  *
  * - `buildQuoteDocumentSnapshot(scope, quote)` → the plain
  *   `QuoteDocumentSnapshot` (`@workspace/documents`): Quote header and
- *   totals, Bill To (the Account and its primary Contact), company
+ *   totals, Bill To (the Customer and its primary Contact), profile
  *   information, Phases, Line Items in grid order, Milestones and labels.
  *   It never includes costs or margins.
  * - `quoteDocumentLogo(storage, logoKey)` → the logo as a `data:` URL (PNG
@@ -37,7 +37,7 @@ import type { QuoteRow } from "./quotes"
 import { getDocumentSettings, getLabels } from "./settings"
 
 const {
-  accounts,
+  customers,
   contacts,
   lineItems,
   milestones,
@@ -89,22 +89,22 @@ export async function buildQuoteDocumentSnapshot(
   }: { version?: number | null; generatedAt?: Date } = {}
 ): Promise<QuoteDocumentSnapshot> {
   const [
-    [account],
+    [customer],
     [contact],
-    [company],
+    [profile],
     [owner],
     phaseRows,
     lineRows,
     milestones,
     labels,
   ] = await Promise.all([
-    scope.findMany(accounts, {
-      where: eq(accounts.id, quote.accountId),
+    scope.findMany(customers, {
+      where: eq(customers.id, quote.customerId),
       limit: 1,
     }),
     scope.findMany(contacts, {
       where: and(
-        eq(contacts.accountId, quote.accountId),
+        eq(contacts.customerId, quote.customerId),
         eq(contacts.isPrimary, true)
       ),
       limit: 1,
@@ -163,15 +163,15 @@ export async function buildQuoteDocumentSnapshot(
       total: quote.total,
       owner: { name: owner?.name ?? null, email: owner?.email ?? "" },
     },
-    account: {
-      name: account!.name,
-      phone: account!.phone,
-      website: account!.website,
-      billingStreet: account!.billingStreet,
-      billingCity: account!.billingCity,
-      billingState: account!.billingState,
-      billingPostalCode: account!.billingPostalCode,
-      billingCountry: account!.billingCountry,
+    customer: {
+      name: customer!.name,
+      phone: customer!.phone,
+      website: customer!.website,
+      billingStreet: customer!.billingStreet,
+      billingCity: customer!.billingCity,
+      billingState: customer!.billingState,
+      billingPostalCode: customer!.billingPostalCode,
+      billingCountry: customer!.billingCountry,
     },
     contact: contact
       ? {
@@ -181,7 +181,7 @@ export async function buildQuoteDocumentSnapshot(
           phone: contact.phone,
         }
       : null,
-    company: company!,
+    profile: profile!,
     phases: phaseRows.map((p) => ({
       id: p.id,
       parentId: p.parentId,
@@ -239,7 +239,7 @@ export async function quoteDocumentPreview(
   return {
     snapshot,
     settings,
-    logo: await quoteDocumentLogo(storage, snapshot.company.logoKey),
+    logo: await quoteDocumentLogo(storage, snapshot.profile.logoKey),
   }
 }
 
@@ -339,7 +339,7 @@ export async function generateQuoteDocument(
       buildQuoteDocumentSnapshot(tx, quote, { version, generatedAt }),
       getDocumentSettings(tx),
     ])
-    const logo = await quoteDocumentLogo(storage, snapshot.company.logoKey)
+    const logo = await quoteDocumentLogo(storage, snapshot.profile.logoKey)
     const pdf = await renderQuoteDocument({ snapshot, settings, logo })
 
     const id = uuidv7()

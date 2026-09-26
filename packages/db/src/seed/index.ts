@@ -8,7 +8,7 @@
  * and run `pnpm services:up && pnpm db:migrate && pnpm db:seed`.
  *
  * Areas: tenancy (Users, Organizations, Memberships), then `acme`'s demo
- * Accounts with Contacts, Products, Add-ons and Resource Roles, and demo
+ * Customers with Contacts, Products, Add-ons and Resource Roles, and demo
  * Quotes across owners and statuses with Line Items (priced by
  * `recomputeQuoteTotals`, like every API command) and their approval
  * history (Approval Steps consistent with each status). Add later areas as further `seed<Area>(tx, …)`
@@ -20,13 +20,13 @@ import { createDb } from "../index"
 import type { Db } from "../index"
 import { seedApprovalSteps } from "./approval-steps"
 import { SEED_INVITATION, seedInvitations } from "./invitations"
-import { seedAccounts } from "./accounts"
+import { seedCustomers } from "./customers"
 import { seedCatalog } from "./catalog"
 import { seedLineItems } from "./line-items"
 import { seedQuotes } from "./quotes"
 import { seedTenancy } from "./tenancy"
 
-export { SEED_ACCOUNTS, seedAccounts } from "./accounts"
+export { SEED_CUSTOMERS, seedCustomers } from "./customers"
 export { SEED_CATALOG_ITEMS, SEED_RESOURCE_ROLES, seedCatalog } from "./catalog"
 export { SEED_QUOTES, seedQuotes } from "./quotes"
 export { SEED_LINE_ITEMS, seedLineItems } from "./line-items"
@@ -38,7 +38,7 @@ export async function seed(db: Db) {
   return db.transaction(async (tx) => {
     const organizations = await seedTenancy(tx)
     await seedInvitations(tx, organizations)
-    await seedAccounts(tx, organizations.acme)
+    await seedCustomers(tx, organizations.acme)
     await seedCatalog(tx, organizations.acme)
     await seedQuotes(tx, organizations.acme)
     await seedLineItems(tx, organizations.acme)

@@ -8,11 +8,11 @@ describe("suggestQuoteName", () => {
     ["  Globex  ", "2027-01-31", "Globex – Jan 2027"],
     [null, "2026-12-01", "Dec 2026"],
     ["", "2026-03-01", "Mar 2026"],
-  ])("%s starting %s → %s", (account, start, expected) => {
-    expect(suggestQuoteName(account, start)).toBe(expected)
+  ])("%s starting %s → %s", (customer, start, expected) => {
+    expect(suggestQuoteName(customer, start)).toBe(expected)
   })
 
-  it("keeps the month when the Account name is very long", () => {
+  it("keeps the month when the Customer name is very long", () => {
     const name = suggestQuoteName("x".repeat(300), "2026-10-05")
     expect(name).toHaveLength(QUOTE_NAME_MAX)
     expect(name.endsWith(" – Oct 2026")).toBe(true)

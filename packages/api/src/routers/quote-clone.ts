@@ -3,7 +3,7 @@
  * `quote.clone`.
  *
  * A clone is a new Draft Quote named "Copy of {name}", owned by the cloner,
- * for the source's Account or another unarchived one. It copies the header
+ * for the source's Customer or another unarchived one. It copies the header
  * (Description, dates, Valid Until, Time Period, currency), the Phase tree
  * (parents remapped), every Line Item with its Allocations, the Milestones
  * (completed reset) and the Quote Discount, then reprices with
@@ -33,7 +33,7 @@ import {
 } from "../line-items"
 import { organizationProcedure } from "../trpc"
 
-const { accounts, catalogItems, milestones, phases, quotes, resourceRoles } =
+const { customers, catalogItems, milestones, phases, quotes, resourceRoles } =
   schema
 
 type LineItemRow = typeof schema.lineItems.$inferSelect
@@ -121,9 +121,9 @@ export const quoteCloneProcedures = {
    * Clones a Quote (see the module comment) and returns the new Quote's
    * `{ id, name }`. Any member may clone any Quote they can see — every
    * member sees every Quote, and cloning changes nothing on the source, so
-   * a locked or someone else's Quote can be cloned too. `accountId` puts
-   * the clone on another Account (NOT_FOUND if not this Organization's);
-   * the target Account must not be archived (PRECONDITION_FAILED), which
+   * a locked or someone else's Quote can be cloned too. `customerId` puts
+   * the clone on another Customer (NOT_FOUND if not this Organization's);
+   * the target Customer must not be archived (PRECONDITION_FAILED), which
    * includes the source's own when none is given. `refreshRates`
    * re-snapshots every line's Base Rate from its source's current price
    * and cost (`refreshedRates`); lines whose source is inactive or gone
@@ -134,7 +134,7 @@ export const quoteCloneProcedures = {
     .input(
       z.object({
         id: z.uuid(),
-        accountId: z.uuid().optional(),
+        customerId: z.uuid().optional(),
         refreshRates: z.boolean().default(false),
       })
     )
@@ -142,20 +142,20 @@ export const quoteCloneProcedures = {
       ctx.scope.transaction(async (scope) => {
         const source = await scope.findById(quotes, input.id)
         if (!source) throw notFound("Quote")
-        const account = await scope.findById(
-          accounts,
-          input.accountId ?? source.accountId
+        const customer = await scope.findById(
+          customers,
+          input.customerId ?? source.customerId
         )
-        if (!account) throw notFound("Account")
-        if (account.archived) {
+        if (!customer) throw notFound("Customer")
+        if (customer.archived) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: `“${account.name}” is archived. Unarchive it or choose another Account.`,
+            message: `“${customer.name}” is archived. Unarchive it or choose another Customer.`,
           })
         }
 
         const quote = await scope.insert(quotes, {
-          accountId: account.id,
+          customerId: customer.id,
           name: cloneName(source.name),
           description: source.description,
           startDate: source.startDate,

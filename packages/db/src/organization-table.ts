@@ -24,10 +24,10 @@ import { organizations } from "./schema/organizations"
  *
  *   export const contacts = organizationTable(
  *     "contacts",
- *     { accountId: uuid().notNull(), name: text().notNull(), ...timestamps() },
+ *     { customerId: uuid().notNull(), name: text().notNull(), ...timestamps() },
  *     (t) => [
- *       organizationReference(t, t.accountId, accounts).onDelete("cascade"),
- *       index().on(t.organizationId, t.accountId),
+ *       organizationReference(t, t.customerId, customers).onDelete("cascade"),
+ *       index().on(t.organizationId, t.customerId),
  *     ]
  *   )
  *

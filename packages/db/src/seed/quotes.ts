@@ -3,12 +3,12 @@ import { and, eq, sql } from "drizzle-orm"
 import type { QuoteStatus, TimePeriod } from "@workspace/domain/enums"
 
 import type { Db } from "../index"
-import { accounts, quotes, users } from "../schema"
+import { customers, quotes, users } from "../schema"
 import type { Organization } from "../schema"
 
 /**
  * Demo Quotes for `acme` (their Line Items and Quote Discounts are in
- * `seed/line-items.ts`), spread across owners, Accounts, statuses and the
+ * `seed/line-items.ts`), spread across owners, Customers, statuses and the
  * last twelve months so the list's filters, the Role rules, the lock and
  * the Dashboard's charts can be tried straight away. One has a Valid Until
  * in the past (highlighted in the list); a few lapse within two weeks of
@@ -22,7 +22,7 @@ const DAY_MS = 86_400_000
 export const SEED_QUOTES: readonly {
   name: string
   description?: string
-  account: string
+  customer: string
   owner: string
   status: QuoteStatus
   startDate: string
@@ -45,7 +45,7 @@ export const SEED_QUOTES: readonly {
     name: "Acme Corp – Platform rollout",
     createdDaysAgo: 12,
     description: "Phase one: discovery, design and the first two sites.",
-    account: "Acme Corp Express CPQ Demo",
+    customer: "Acme Corp Express CPQ Demo",
     owner: "member@acme.test",
     status: "draft",
     startDate: "2026-10-01",
@@ -57,7 +57,7 @@ export const SEED_QUOTES: readonly {
     name: "TechStart – Support retainer",
     createdDaysAgo: 18,
     description: "Twelve months of premium support.",
-    account: "TechStart Express CPQ Demo",
+    customer: "TechStart Express CPQ Demo",
     owner: "member@acme.test",
     status: "pending_approval",
     startDate: "2026-11-01",
@@ -68,7 +68,7 @@ export const SEED_QUOTES: readonly {
   {
     name: "Global Mfg – Line automation",
     createdDaysAgo: 26,
-    account: "Global Mfg Express",
+    customer: "Global Mfg Express",
     owner: "manager@acme.test",
     status: "approved",
     startDate: "2026-09-01",
@@ -80,7 +80,7 @@ export const SEED_QUOTES: readonly {
     name: "Healthcare – Records migration",
     createdDaysAgo: 35,
     description: "Migrate the legacy records system.",
-    account: "Healthcare Express",
+    customer: "Healthcare Express",
     owner: "manager@acme.test",
     status: "rejected",
     startDate: "2026-10-05",
@@ -91,7 +91,7 @@ export const SEED_QUOTES: readonly {
   {
     name: "Retail – Store pilot",
     createdDaysAgo: 14,
-    account: "Retail Express",
+    customer: "Retail Express",
     owner: "admin@acme.test",
     status: "pending_customer_approval",
     startDate: "2026-10-12",
@@ -103,7 +103,7 @@ export const SEED_QUOTES: readonly {
     name: "Acme Corp – Analytics add-on",
     createdDaysAgo: 90,
     noHistory: true,
-    account: "Acme Corp Express CPQ Demo",
+    customer: "Acme Corp Express CPQ Demo",
     owner: "approver@acme.test",
     status: "customer_approved",
     startDate: "2026-07-01",
@@ -114,7 +114,7 @@ export const SEED_QUOTES: readonly {
   {
     name: "TechStart – Security review",
     createdDaysAgo: 55,
-    account: "TechStart Express CPQ Demo",
+    customer: "TechStart Express CPQ Demo",
     owner: "admin@acme.test",
     status: "customer_rejected",
     startDate: "2026-11-02",
@@ -275,7 +275,7 @@ export const SEED_QUOTES: readonly {
   ).map(
     ([
       name,
-      account,
+      customer,
       owner,
       status,
       createdDaysAgo,
@@ -283,7 +283,7 @@ export const SEED_QUOTES: readonly {
       validInDays,
     ]) => ({
       name,
-      account,
+      customer,
       owner,
       status,
       startDate: "2026-10-05",
@@ -302,7 +302,7 @@ export async function seedQuotes(db: Db, organization: Organization) {
   const now = Date.now()
   for (const seed of SEED_QUOTES) {
     const {
-      account: accountName,
+      customer: customerName,
       owner: email,
       validInDays,
       createdDaysAgo,
@@ -316,21 +316,21 @@ export async function seedQuotes(db: Db, organization: Organization) {
       validUntil: seed.validUntil,
       timePeriod: seed.timePeriod,
     }
-    const [account] = await db
-      .select({ id: accounts.id })
-      .from(accounts)
+    const [customer] = await db
+      .select({ id: customers.id })
+      .from(customers)
       .where(
         and(
-          eq(accounts.organizationId, organizationId),
-          sql`lower(btrim(${accounts.name})) = lower(btrim(${accountName}))`
+          eq(customers.organizationId, organizationId),
+          sql`lower(btrim(${customers.name})) = lower(btrim(${customerName}))`
         )
       )
     const [owner] = await db
       .select({ id: users.id })
       .from(users)
       .where(eq(users.email, email))
-    if (!account || !owner) {
-      throw new Error(`Seed Quote “${values.name}”: missing Account or owner.`)
+    if (!customer || !owner) {
+      throw new Error(`Seed Quote “${values.name}”: missing Customer or owner.`)
     }
     const row = {
       ...values,
@@ -345,7 +345,7 @@ export async function seedQuotes(db: Db, organization: Organization) {
         ? {}
         : { createdAt: new Date(now - createdDaysAgo * DAY_MS) }),
       description: values.description ?? null,
-      accountId: account.id,
+      customerId: customer.id,
       currencyCode: organization.currencyCode,
       updatedById: owner.id,
     }

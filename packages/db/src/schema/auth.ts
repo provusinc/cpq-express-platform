@@ -19,8 +19,8 @@ import { id, timestamps } from "../columns"
  *
  * Column keys follow the adapter's expected names (including the snake_case
  * OAuth token fields on `auth_accounts`); do not rename them. The adapter's
- * accounts table is `auth_accounts`, because `accounts` is the business
- * Account (glossary) in `./accounts.ts`.
+ * accounts table is `auth_accounts`: "account" is Auth.js's term for a
+ * linked login, unrelated to the business Customer (`./customers.ts`).
  */
 export const users = pgTable("users", {
   id: id(),

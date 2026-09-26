@@ -30,9 +30,9 @@ import { Input } from "@workspace/ui/components/input"
 import { errorCode, errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-type Account = RouterOutputs["account"]["byId"]
+type Customer = RouterOutputs["customer"]["byId"]
 
-const accountSchema = z.object({
+const customerSchema = z.object({
   name: z.string().trim().min(1, "Enter a name.").max(200),
   type: z.string().max(100),
   industry: z.string().max(100),
@@ -44,15 +44,16 @@ const accountSchema = z.object({
   billingPostalCode: z.string().max(20),
   billingCountry: z.string().max(100),
 })
-type AccountValues = z.infer<typeof accountSchema>
+type CustomerValues = z.infer<typeof customerSchema>
 
-const FIELDS: { name: keyof AccountValues; label: string; wide?: boolean }[] = [
-  { name: "type", label: "Type" },
-  { name: "industry", label: "Industry" },
-  { name: "website", label: "Website" },
-  { name: "phone", label: "Phone" },
-]
-const ADDRESS: { name: keyof AccountValues; label: string; wide?: boolean }[] =
+const FIELDS: { name: keyof CustomerValues; label: string; wide?: boolean }[] =
+  [
+    { name: "type", label: "Type" },
+    { name: "industry", label: "Industry" },
+    { name: "website", label: "Website" },
+    { name: "phone", label: "Phone" },
+  ]
+const ADDRESS: { name: keyof CustomerValues; label: string; wide?: boolean }[] =
   [
     { name: "billingStreet", label: "Street", wide: true },
     { name: "billingCity", label: "City" },
@@ -61,49 +62,49 @@ const ADDRESS: { name: keyof AccountValues; label: string; wide?: boolean }[] =
     { name: "billingCountry", label: "Country" },
   ]
 
-function toValues(account?: Account | null): AccountValues {
+function toValues(customer?: Customer | null): CustomerValues {
   return {
-    name: account?.name ?? "",
-    type: account?.type ?? "",
-    industry: account?.industry ?? "",
-    website: account?.website ?? "",
-    phone: account?.phone ?? "",
-    billingStreet: account?.billingStreet ?? "",
-    billingCity: account?.billingCity ?? "",
-    billingState: account?.billingState ?? "",
-    billingPostalCode: account?.billingPostalCode ?? "",
-    billingCountry: account?.billingCountry ?? "",
+    name: customer?.name ?? "",
+    type: customer?.type ?? "",
+    industry: customer?.industry ?? "",
+    website: customer?.website ?? "",
+    phone: customer?.phone ?? "",
+    billingStreet: customer?.billingStreet ?? "",
+    billingCity: customer?.billingCity ?? "",
+    billingState: customer?.billingState ?? "",
+    billingPostalCode: customer?.billingPostalCode ?? "",
+    billingCountry: customer?.billingCountry ?? "",
   }
 }
 
 /**
- * Create or edit an Account. With `account`, edits it; otherwise creates
+ * Create or edit a Customer. With `customer`, edits it; otherwise creates
  * one and calls `onCreated`. A duplicate name shows on the name field.
  */
-export function AccountDialog({
+export function CustomerDialog({
   open,
   onOpenChange,
-  account,
+  customer,
   onCreated,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  account?: Account | null
-  onCreated?: (account: { id: string; name: string }) => void
+  customer?: Customer | null
+  onCreated?: (customer: { id: string; name: string }) => void
 }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
-  const form = useForm<AccountValues>({
-    resolver: zodResolver(accountSchema),
-    defaultValues: toValues(account),
+  const form = useForm<CustomerValues>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: toValues(customer),
   })
 
   useEffect(() => {
-    if (open) form.reset(toValues(account))
-  }, [open, account, form])
+    if (open) form.reset(toValues(customer))
+  }, [open, customer, form])
 
   const onDone = async () => {
-    await queryClient.invalidateQueries(trpc.account.pathFilter())
+    await queryClient.invalidateQueries(trpc.customer.pathFilter())
     onOpenChange(false)
   }
   const onError = (error: unknown) => {
@@ -114,9 +115,9 @@ export function AccountDialog({
     }
   }
   const create = useMutation(
-    trpc.account.create.mutationOptions({
+    trpc.customer.create.mutationOptions({
       onSuccess: async (created) => {
-        toast.success(`Account “${created.name}” created.`)
+        toast.success(`Customer “${created.name}” created.`)
         await onDone()
         onCreated?.(created)
       },
@@ -124,9 +125,9 @@ export function AccountDialog({
     })
   )
   const update = useMutation(
-    trpc.account.update.mutationOptions({
+    trpc.customer.update.mutationOptions({
       onSuccess: async () => {
-        toast.success("Account saved.")
+        toast.success("Customer saved.")
         await onDone()
       },
       onError,
@@ -135,7 +136,7 @@ export function AccountDialog({
   const pending = create.isPending || update.isPending
 
   const onSubmit = form.handleSubmit((values) => {
-    if (account) update.mutate({ id: account.id, ...values })
+    if (customer) update.mutate({ id: customer.id, ...values })
     else create.mutate(values)
   })
 
@@ -144,7 +145,7 @@ export function AccountDialog({
     label,
     wide,
   }: {
-    name: keyof AccountValues
+    name: keyof CustomerValues
     label: string
     wide?: boolean
   }) => (
@@ -157,10 +158,10 @@ export function AccountDialog({
           data-invalid={fieldState.invalid}
           className={wide ? "sm:col-span-2" : undefined}
         >
-          <FieldLabel htmlFor={`account-${name}`}>{label}</FieldLabel>
+          <FieldLabel htmlFor={`customer-${name}`}>{label}</FieldLabel>
           <Input
             {...field}
-            id={`account-${name}`}
+            id={`customer-${name}`}
             aria-invalid={fieldState.invalid}
             autoComplete="off"
           />
@@ -174,13 +175,15 @@ export function AccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{account ? "Edit Account" : "New Account"}</DialogTitle>
+          <DialogTitle>
+            {customer ? "Edit Customer" : "New Customer"}
+          </DialogTitle>
           <DialogDescription>
-            Account names are unique in your Organization.
+            Customer names are unique in your Organization.
           </DialogDescription>
         </DialogHeader>
         <form
-          id="account-form"
+          id="customer-form"
           onSubmit={onSubmit}
           className="max-h-[65vh] overflow-y-auto"
         >
@@ -205,8 +208,8 @@ export function AccountDialog({
           >
             Cancel
           </Button>
-          <Button type="submit" form="account-form" disabled={pending}>
-            {pending ? "Saving…" : account ? "Save" : "Create Account"}
+          <Button type="submit" form="customer-form" disabled={pending}>
+            {pending ? "Saving…" : customer ? "Save" : "Create Customer"}
           </Button>
         </DialogFooter>
       </DialogContent>

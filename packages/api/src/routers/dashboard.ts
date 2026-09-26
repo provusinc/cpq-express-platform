@@ -31,7 +31,7 @@ import { toMoneyString } from "@workspace/domain/money"
 
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 
-const { accounts, approvalSteps, quotes, users } = schema
+const { customers, approvalSteps, quotes, users } = schema
 
 export const dashboardRouter = createTRPCRouter({
   /**
@@ -81,21 +81,21 @@ export const dashboardRouter = createTRPCRouter({
           name: quotes.name,
           currencyCode: quotes.currencyCode,
           total: quotes.total,
-          account: { id: accounts.id, name: accounts.name },
+          customer: { id: customers.id, name: customers.name },
           owner: { id: users.id, name: users.name, email: users.email },
           submittedAt: waitingSince,
         })
         .from(quotes)
         .innerJoin(
-          accounts,
+          customers,
           and(
-            eq(accounts.organizationId, quotes.organizationId),
-            eq(accounts.id, quotes.accountId)
+            eq(customers.organizationId, quotes.organizationId),
+            eq(customers.id, quotes.customerId)
           )
         )
         .innerJoin(users, eq(users.id, quotes.ownerId))
         .leftJoin(submitted, eq(submitted.quoteId, quotes.id))
-        .where(and(inQueue, ctx.scope.where(accounts)))
+        .where(and(inQueue, ctx.scope.where(customers)))
         .orderBy(asc(waitingSince), asc(quotes.id))
         .limit(DASHBOARD_LIST_LIMIT),
       ctx.scope.db.select({ total: count() }).from(quotes).where(inQueue),

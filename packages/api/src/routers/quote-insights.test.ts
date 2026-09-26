@@ -291,7 +291,7 @@ describe("quote.insights", () => {
         name: "Q5",
         status: "draft",
         currencyCode: "USD",
-        account: { id: mine[5]!.accountId },
+        customer: { id: mine[5]!.customerId },
       })
     }))
 

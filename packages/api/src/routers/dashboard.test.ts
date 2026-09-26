@@ -6,7 +6,7 @@ import { VALUE_RANGES, valueBuckets } from "@workspace/domain/dashboard"
 import type { QuoteStatus } from "@workspace/domain/enums"
 
 import {
-  createAccount,
+  createCustomer,
   createMember,
   createOrganization,
   createQuote,
@@ -27,19 +27,19 @@ async function setup(db: Db) {
   const { user: approver } = await createMember(db, organization, {
     isApprover: true,
   })
-  const account = await createAccount(db, organization, { name: "Initech" })
+  const customer = await createCustomer(db, organization, { name: "Initech" })
   const caller = organizationCaller(db, { organization, user })
   const asApprover = organizationCaller(db, { organization, user: approver })
   const quote = (
     status: QuoteStatus,
     fields: Partial<typeof schema.quotes.$inferInsert> & {
       owner?: { id: string }
-      account?: { id: string }
+      customer?: { id: string }
     } = {}
   ) =>
     createQuote(db, organization, {
       owner: fields.owner ?? user,
-      account: fields.account ?? account,
+      customer: fields.customer ?? customer,
       status,
       total: "1000",
       marginPct: "40",
@@ -59,7 +59,7 @@ async function setup(db: Db) {
     organization,
     user,
     approver,
-    account,
+    customer,
     caller,
     asApprover,
     quote,
@@ -112,7 +112,7 @@ describe("dashboard.overview", () => {
       ])
       expect(member.approvalQueue.rows[0]).toMatchObject({
         ageDays: 9,
-        account: { name: "Initech" },
+        customer: { name: "Initech" },
       })
 
       const approverView = await asApprover.dashboard.overview()

@@ -39,8 +39,8 @@ export interface QuoteDocumentSnapshot {
     total: string
     owner: { name: string | null; email: string }
   }
-  /** Bill To: the Account and its primary Contact (if any). */
-  account: {
+  /** Bill To: the Customer and its primary Contact (if any). */
+  customer: {
     name: string
     phone: string | null
     website: string | null
@@ -56,8 +56,8 @@ export interface QuoteDocumentSnapshot {
     email: string | null
     phone: string | null
   } | null
-  /** The Organization's company information (Settings → Company). */
-  company: {
+  /** The Organization profile (Settings → Organization profile). */
+  profile: {
     name: string
     email: string | null
     phone: string | null

@@ -15,6 +15,7 @@ export default async function QuoteTimelinePage({
 }) {
   const { quoteId } = await params
   prefetch(trpc.quote.editor.queryOptions({ id: quoteId }))
+  prefetch(trpc.settings.quoting.queryOptions())
   return (
     <HydrateClient>
       <TimelineTab quoteId={quoteId} />

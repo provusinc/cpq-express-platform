@@ -1,18 +1,18 @@
 import { and, eq, sql } from "drizzle-orm"
 
 import type { Db } from "../index"
-import { accounts, contacts } from "../schema"
+import { customers, contacts } from "../schema"
 import type { Organization } from "../schema"
 
 /**
- * Demo Accounts for `acme`: the five sample Accounts of the Salesforce
+ * Demo Customers for `acme`: the five sample Customers of the Salesforce
  * edition's data plan (`salesforce/data/accounts.json`), each with two
  * Contacts (the first is primary). The old data had no Contacts.
  *
- * Idempotent: Accounts are matched by name (case-insensitive, trimmed, the
- * unique key) and Contacts by (Account, email), then reset to these values.
+ * Idempotent: Customers are matched by name (case-insensitive, trimmed, the
+ * unique key) and Contacts by (Customer, email), then reset to these values.
  */
-export const SEED_ACCOUNTS = [
+export const SEED_CUSTOMERS = [
   {
     name: "Acme Corp Express CPQ Demo",
     type: "Customer - Direct",
@@ -145,26 +145,26 @@ export const SEED_ACCOUNTS = [
   },
 ] as const
 
-export async function seedAccounts(db: Db, organization: Organization) {
+export async function seedCustomers(db: Db, organization: Organization) {
   const organizationId = organization.id
-  for (const { contacts: seedContacts, ...values } of SEED_ACCOUNTS) {
+  for (const { contacts: seedContacts, ...values } of SEED_CUSTOMERS) {
     const [existing] = await db
-      .select({ id: accounts.id })
-      .from(accounts)
+      .select({ id: customers.id })
+      .from(customers)
       .where(
         and(
-          eq(accounts.organizationId, organizationId),
-          sql`lower(btrim(${accounts.name})) = lower(btrim(${values.name}))`
+          eq(customers.organizationId, organizationId),
+          sql`lower(btrim(${customers.name})) = lower(btrim(${values.name}))`
         )
       )
-    const [account] = existing
+    const [customer] = existing
       ? await db
-          .update(accounts)
+          .update(customers)
           .set({ ...values, archived: false })
-          .where(eq(accounts.id, existing.id))
+          .where(eq(customers.id, existing.id))
           .returning()
       : await db
-          .insert(accounts)
+          .insert(customers)
           .values({ ...values, organizationId })
           .returning()
 
@@ -175,7 +175,7 @@ export async function seedAccounts(db: Db, organization: Organization) {
       .where(
         and(
           eq(contacts.organizationId, organizationId),
-          eq(contacts.accountId, account!.id)
+          eq(contacts.customerId, customer!.id)
         )
       )
     for (const [index, contact] of seedContacts.entries()) {
@@ -186,7 +186,7 @@ export async function seedAccounts(db: Db, organization: Organization) {
         .where(
           and(
             eq(contacts.organizationId, organizationId),
-            eq(contacts.accountId, account!.id),
+            eq(contacts.customerId, customer!.id),
             eq(contacts.email, contact.email)
           )
         )
@@ -195,9 +195,9 @@ export async function seedAccounts(db: Db, organization: Organization) {
       } else {
         await db
           .insert(contacts)
-          .values({ ...row, organizationId, accountId: account!.id })
+          .values({ ...row, organizationId, customerId: customer!.id })
       }
     }
   }
-  return SEED_ACCOUNTS.length
+  return SEED_CUSTOMERS.length
 }

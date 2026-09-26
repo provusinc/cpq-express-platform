@@ -4,11 +4,11 @@
  * - `notFound(thing)` — the uniform NOT_FOUND for a missing (or another
  *   Organization's) record.
  * - `inUseError(details)` — CONFLICT when a delete is blocked because other
- *   records reference the target (Accounts, Catalog Items and Resource
+ *   records reference the target (Customers, Catalog Items and Resource
  *   Roles used by Quotes). The structured details reach the client as
  *   `error.data.inUse` (see the errorFormatter in `trpc.ts`):
  *
- *     { kind: "in_use", entity: "account", name: "Initech",
+ *     { kind: "in_use", entity: "customer", name: "Initech",
  *       counts: { quotes: 3 }, examples: ["Q3 renewal", "Pilot", …],
  *       suggestion: "archive" }
  *
@@ -18,7 +18,7 @@
 import { TRPCError } from "@trpc/server"
 
 /** What can be blocked from deletion by references to it. */
-export type InUseEntity = "account" | "catalog_item" | "resource_role"
+export type InUseEntity = "customer" | "catalog_item" | "resource_role"
 
 /** What references it, counted (only non-zero counts need be present). */
 export interface InUseCounts {
@@ -34,7 +34,7 @@ export interface InUseDetails {
   counts: InUseCounts
   /** A few names of referencing records (e.g. Quote names), for the message. */
   examples: string[]
-  /** The alternative to offer: archive (Accounts) or deactivate (catalog). */
+  /** The alternative to offer: archive (Customers) or deactivate (catalog). */
   suggestion: "archive" | "deactivate"
 }
 

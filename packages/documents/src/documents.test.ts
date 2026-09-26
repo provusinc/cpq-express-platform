@@ -125,7 +125,7 @@ export const sampleSnapshot: QuoteDocumentSnapshot = {
     total: "900.0000",
     owner: { name: "Ada", email: "ada@acme.test" },
   },
-  account: {
+  customer: {
     name: "Initech",
     phone: null,
     website: null,
@@ -141,7 +141,7 @@ export const sampleSnapshot: QuoteDocumentSnapshot = {
     email: "bill@initech.test",
     phone: null,
   },
-  company: {
+  profile: {
     name: "Acme",
     email: "hello@acme.test",
     phone: null,

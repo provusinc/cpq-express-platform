@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { fromLocalDay, toLocalDay } from "./format"
+import {
+  formatDateRange,
+  formatMonthDay,
+  fromLocalDay,
+  toLocalDay,
+} from "./format"
 
 describe("fromLocalDay / toLocalDay", () => {
   it.each(["2026-01-01", "2026-02-28", "2026-12-31", "2024-02-29"])(
@@ -20,5 +25,21 @@ describe("fromLocalDay / toLocalDay", () => {
     expect([date.getHours(), date.getMinutes(), date.getDate()]).toEqual([
       0, 0, 23,
     ])
+  })
+})
+
+describe("formatDateRange", () => {
+  it.each([
+    ["2026-10-05", "2026-12-31", "Oct 5 – Dec 31, 2026"],
+    ["2026-11-02", "2027-02-01", "Nov 2, 2026 – Feb 1, 2027"],
+    ["2026-10-05", "2026-10-05", "Oct 5, 2026"],
+  ])("%s … %s → %s", (start, end, text) => {
+    expect(formatDateRange(start, end)).toBe(text)
+  })
+})
+
+describe("formatMonthDay", () => {
+  it("drops the year", () => {
+    expect(formatMonthDay("2026-10-05")).toBe("Oct 5")
   })
 })

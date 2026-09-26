@@ -14,12 +14,12 @@ import { PhaseTimelineCard } from "./phase-timeline-card"
 import { ResourceRolesCard } from "./resource-roles-card"
 
 /**
- * The Quote editor's index tab: who it is for (Account and primary
+ * The Quote editor's index tab: who it is for (Customer and primary
  * Contact), who does the work (the Resource Roles by Effort), what it is
  * made of (the item-type mix with the blended rates), when (the Phases and
  * Milestones across the Quote dates), then the approval history and the
  * cost changes. The header's figures are never repeated here. Everything
- * but the Account comes from `quote.editor`, so it follows edits at once;
+ * but the Customer comes from `quote.editor`, so it follows edits at once;
  * the page prefetches every query it reads.
  */
 export function OverviewTab({ quoteId }: { quoteId: string }) {
@@ -36,7 +36,7 @@ export function OverviewTab({ quoteId }: { quoteId: string }) {
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <CustomerCard
-          account={overview.account}
+          customer={overview.customer}
           contact={overview.primaryContact}
         />
         <ResourceRolesCard

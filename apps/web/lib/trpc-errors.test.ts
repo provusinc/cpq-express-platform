@@ -49,7 +49,7 @@ describe("tRPC error helpers", () => {
 describe("inUseOf", () => {
   const inUse = {
     kind: "in_use",
-    entity: "account",
+    entity: "customer",
     name: "Initech",
     counts: { quotes: 2 },
     examples: ["A", "B"],

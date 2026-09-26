@@ -5,7 +5,7 @@ import type { Db } from "@workspace/db"
 import { Decimal } from "@workspace/domain/money"
 
 import {
-  createAccount,
+  createCustomer,
   createCatalogItem,
   createContact,
   createMember,
@@ -20,7 +20,7 @@ import {
 const { allocations } = schema
 
 /**
- * A Member's Draft Quote (Oct–Dec 2026, Months) for an Account with a
+ * A Member's Draft Quote (Oct–Dec 2026, Months) for a Customer with a
  * primary Contact, with a Product (100 / 60) on Oct 1–31 and a Resource
  * Role (150 / 100 an hour) over the whole Quote, and a 10 % Quote Discount.
  */
@@ -28,16 +28,16 @@ async function setup(db: Db) {
   const organization = await createOrganization(db)
   const { user } = await createMember(db, organization, { role: "member" })
   const caller = organizationCaller(db, { organization, user })
-  const account = await createAccount(db, organization, { name: "Initech" })
-  await createContact(db, account, { name: "Other", isPrimary: false })
-  await createContact(db, account, {
+  const customer = await createCustomer(db, organization, { name: "Initech" })
+  await createContact(db, customer, { name: "Other", isPrimary: false })
+  await createContact(db, customer, {
     name: "Peter Gibbons",
     email: "peter@initech.test",
     isPrimary: true,
   })
   const quote = await createQuote(db, organization, {
     owner: user,
-    account,
+    customer,
     validUntil: "2026-11-30",
   })
   const product = await createCatalogItem(db, organization, {
@@ -66,16 +66,16 @@ async function setup(db: Db) {
     id: quote.id,
     discount: { kind: "percent", value: "10" },
   })
-  return { organization, user, caller, account, quote, roleLine: roleLine! }
+  return { organization, user, caller, customer, quote, roleLine: roleLine! }
 }
 
 const sum = (values: string[]) =>
   values.reduce((a, v) => a.plus(v), new Decimal(0)).toFixed(4)
 
 describe("quote.overview", () => {
-  it("returns the Account with its primary Contact and the Quote's Resource Roles", () =>
+  it("returns the Customer with its primary Contact and the Quote's Resource Roles", () =>
     withTestDb(async (db) => {
-      const { caller, quote, organization, account } = await setup(db)
+      const { caller, quote, organization, customer } = await setup(db)
       // A second line of the same Resource Role lists it once.
       const [role] = await db
         .select()
@@ -88,7 +88,7 @@ describe("quote.overview", () => {
       const overview = await caller.quote.overview({ id: quote.id })
       expect(overview).toMatchObject({
         quoteId: quote.id,
-        account: { id: account.id, name: "Initech" },
+        customer: { id: customer.id, name: "Initech" },
         primaryContact: { name: "Peter Gibbons", email: "peter@initech.test" },
       })
       expect(overview.resourceRoles).toEqual([

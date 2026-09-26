@@ -69,6 +69,7 @@ import type {
   CellPos,
   CellRange,
 } from "@/lib/planner"
+import { phaseTints } from "@/lib/phase-tints"
 import { useTRPC } from "@/trpc/react"
 
 import { usePlannerCommands } from "./commands"
@@ -128,12 +129,7 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
   // Today is the viewer's, so only once hydrated (the server's may differ).
   const currentCol = hydrated ? currentPeriodIndex(periods, todayIsoDate()) : -1
   const bands = phaseBands(periods, editor.phases, editor.lines)
-  const phaseTints = new Map(
-    editor.phases
-      .filter((p) => p.parentId === null)
-      .sort((a, b) => a.sequence - b.sequence)
-      .map((p, i) => [p.id, (i % 5) + 1])
-  )
+  const tints = phaseTints(editor.phases)
   const phaseNames = new Map(editor.phases.map((p) => [p.id, p.name]))
 
   const roles = new Map(overview.resourceRoles.map((r) => [r.id, r]))
@@ -369,7 +365,7 @@ export function PlannerTab({ quoteId }: { quoteId: string }) {
         bands={bands}
         capacity={capacity}
         currentCol={currentCol}
-        phaseTints={phaseTints}
+        phaseTints={tints}
         roleTerm={roleTerm}
       />
       {lineRows.some((r) => r.implied) && (

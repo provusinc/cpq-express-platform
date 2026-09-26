@@ -21,6 +21,7 @@
   "menuColor": "default",
   "menuAccent": "subtle",
   "registries": {
-    "@niko-table": "https://niko-table.com/r/{name}.json"
+    "@niko-table": "https://niko-table.com/r/{name}.json",
+    "@reui": "https://reui.io/r/styles/{style}/{name}.json"
   }
 }

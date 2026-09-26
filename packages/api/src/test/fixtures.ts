@@ -159,34 +159,34 @@ export async function createInvitation(
   return { invitation: invitation!, token }
 }
 
-type NewAccount = Omit<typeof schema.accounts.$inferInsert, "organizationId">
+type NewCustomer = Omit<typeof schema.customers.$inferInsert, "organizationId">
 
-/** Inserts an Account in `organization` (unique name by default). */
-export async function createAccount(
+/** Inserts a Customer in `organization` (unique name by default). */
+export async function createCustomer(
   db: Db,
   organization: { id: string },
-  overrides: Partial<NewAccount> = {}
+  overrides: Partial<NewCustomer> = {}
 ) {
-  const [account] = await db
-    .insert(schema.accounts)
+  const [customer] = await db
+    .insert(schema.customers)
     .values({
-      name: `Account ${uuidv7().slice(-12)}`,
+      name: `Customer ${uuidv7().slice(-12)}`,
       ...overrides,
       organizationId: organization.id,
     })
     .returning()
-  return account!
+  return customer!
 }
 
 type NewContact = Omit<
   typeof schema.contacts.$inferInsert,
-  "organizationId" | "accountId"
+  "organizationId" | "customerId"
 >
 
-/** Inserts a Contact at `account` (not primary unless `isPrimary`). */
+/** Inserts a Contact at `customer` (not primary unless `isPrimary`). */
 export async function createContact(
   db: Db,
-  account: { id: string; organizationId: string },
+  customer: { id: string; organizationId: string },
   overrides: Partial<NewContact> = {}
 ) {
   const [contact] = await db
@@ -194,8 +194,8 @@ export async function createContact(
     .values({
       name: "Casey Contact",
       ...overrides,
-      organizationId: account.organizationId,
-      accountId: account.id,
+      organizationId: customer.organizationId,
+      customerId: customer.id,
     })
     .returning()
   return contact!
@@ -252,12 +252,12 @@ export async function createResourceRole(
 
 type NewQuote = Omit<
   typeof schema.quotes.$inferInsert,
-  "organizationId" | "ownerId" | "createdById" | "updatedById" | "accountId"
+  "organizationId" | "ownerId" | "createdById" | "updatedById" | "customerId"
 >
 
 /**
- * Inserts a Quote owned (and created) by `owner`, for `account` (a new
- * Account when omitted): Draft, Oct–Dec 2026, Months, USD, unless overridden.
+ * Inserts a Quote owned (and created) by `owner`, for `customer` (a new
+ * Customer when omitted): Draft, Oct–Dec 2026, Months, USD, unless overridden.
  *
  *   const quote = await createQuote(db, acme, { owner: member.user, status: "approved" })
  */
@@ -266,11 +266,11 @@ export async function createQuote(
   organization: { id: string },
   {
     owner,
-    account,
+    customer,
     ...overrides
-  }: { owner: { id: string }; account?: { id: string } } & Partial<NewQuote>
+  }: { owner: { id: string }; customer?: { id: string } } & Partial<NewQuote>
 ) {
-  const accountId = account?.id ?? (await createAccount(db, organization)).id
+  const customerId = customer?.id ?? (await createCustomer(db, organization)).id
   const [quote] = await db
     .insert(schema.quotes)
     .values({
@@ -281,7 +281,7 @@ export async function createQuote(
       currencyCode: "USD",
       ...overrides,
       organizationId: organization.id,
-      accountId,
+      customerId,
       ownerId: owner.id,
       createdById: owner.id,
       updatedById: owner.id,

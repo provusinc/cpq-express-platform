@@ -1,4 +1,4 @@
-import { accountRouter } from "./routers/account"
+import { customerRouter } from "./routers/customer"
 import { allocationRouter } from "./routers/allocation"
 import { authRouter } from "./routers/auth"
 import { catalogItemRouter } from "./routers/catalog-item"
@@ -24,7 +24,7 @@ import { createCallerFactory, createTRPCRouter } from "./trpc"
  * `src/routers/<area>.ts`, registered here under its area name.
  */
 export const appRouter = createTRPCRouter({
-  account: accountRouter,
+  customer: customerRouter,
   allocation: allocationRouter,
   auth: authRouter,
   catalogItem: catalogItemRouter,

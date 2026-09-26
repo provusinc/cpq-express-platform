@@ -21,9 +21,15 @@ services:
       timeout: 5s
       retries: 10
 
-  # MinIO no longer publishes images to Docker Hub; quay.io tags are pinned.
+  # Built locally from MinIO's source (see docker/minio/Dockerfile): MinIO no
+  # longer publishes public images. Bump a release by changing its arg here.
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    build: &minio-build
+      context: docker/minio
+      args:
+        MINIO_RELEASE: RELEASE.2025-09-07T16-13-09Z
+        MC_RELEASE: RELEASE.2025-08-13T08-35-41Z
+    image: cpq-express/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: cpq-minio
@@ -41,7 +47,8 @@ services:
 
   # One-shot: creates the documents bucket, then exits.
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    build: *minio-build
+    image: cpq-express/minio:RELEASE.2025-09-07T16-13-09Z
     depends_on:
       minio:
         condition: service_healthy

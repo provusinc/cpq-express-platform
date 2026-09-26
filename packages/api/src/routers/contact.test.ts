@@ -4,7 +4,7 @@ import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 import {
-  createAccount,
+  createCustomer,
   createContact,
   createMember,
   createOrganization,
@@ -18,20 +18,20 @@ const { contacts } = schema
 async function setup(db: Db) {
   const organization = await createOrganization(db)
   const { user } = await createMember(db, organization)
-  const account = await createAccount(db, organization)
+  const customer = await createCustomer(db, organization)
   return {
     organization,
-    account,
+    customer,
     caller: organizationCaller(db, { organization, user }),
   }
 }
 
-/** The Account's Contacts as (name, isPrimary), by name. */
-const contactsOf = (db: Db, accountId: string) =>
+/** The Customer's Contacts as (name, isPrimary), by name. */
+const contactsOf = (db: Db, customerId: string) =>
   db
     .select({ name: contacts.name, isPrimary: contacts.isPrimary })
     .from(contacts)
-    .where(eq(contacts.accountId, accountId))
+    .where(eq(contacts.customerId, customerId))
     .orderBy(asc(contacts.name))
 
 const snapshotContact = (db: Db, id: string) => () =>
@@ -40,22 +40,22 @@ const snapshotContact = (db: Db, id: string) => () =>
 describe("contact.create", () => {
   it("makes the first Contact primary, later ones not", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
+      const { customer, caller } = await setup(db)
       const first = await caller.contact.create({
-        accountId: account.id,
+        customerId: customer.id,
         name: "Peter Gibbons",
         email: "peter@initech.test",
         title: "Engineer",
       })
       expect(first).toMatchObject({
-        accountId: account.id,
+        customerId: customer.id,
         name: "Peter Gibbons",
         email: "peter@initech.test",
         phone: null,
         isPrimary: true,
       })
-      await caller.contact.create({ accountId: account.id, name: "Milton" })
-      expect(await contactsOf(db, account.id)).toEqual([
+      await caller.contact.create({ customerId: customer.id, name: "Milton" })
+      expect(await contactsOf(db, customer.id)).toEqual([
         { name: "Milton", isPrimary: false },
         { name: "Peter Gibbons", isPrimary: true },
       ])
@@ -63,14 +63,14 @@ describe("contact.create", () => {
 
   it("moves the primary flag when created as primary", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
-      await createContact(db, account, { name: "Alice", isPrimary: true })
+      const { customer, caller } = await setup(db)
+      await createContact(db, customer, { name: "Alice", isPrimary: true })
       await caller.contact.create({
-        accountId: account.id,
+        customerId: customer.id,
         name: "Bob",
         isPrimary: true,
       })
-      expect(await contactsOf(db, account.id)).toEqual([
+      expect(await contactsOf(db, customer.id)).toEqual([
         { name: "Alice", isPrimary: false },
         { name: "Bob", isPrimary: true },
       ])
@@ -78,35 +78,35 @@ describe("contact.create", () => {
 
   it("rejects an invalid email", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
+      const { customer, caller } = await setup(db)
       await expect(
         caller.contact.create({
-          accountId: account.id,
+          customerId: customer.id,
           name: "Bob",
           email: "not-an-email",
         })
       ).rejects.toMatchObject({ code: "BAD_REQUEST" })
     }))
 
-  it("allows at most one primary Contact per Account in the database", () =>
+  it("allows at most one primary Contact per Customer in the database", () =>
     withTestDb(async (db) => {
-      const { account } = await setup(db)
-      await createContact(db, account, { isPrimary: true })
+      const { customer } = await setup(db)
+      await createContact(db, customer, { isPrimary: true })
       await expect(
-        db.transaction((tx) => createContact(tx, account, { isPrimary: true }))
+        db.transaction((tx) => createContact(tx, customer, { isPrimary: true }))
       ).rejects.toMatchObject({
-        cause: { constraint_name: "contacts_one_primary_per_account" },
+        cause: { constraint_name: "contacts_one_primary_per_customer" },
       })
     }))
 
   it("is isolated from other Organizations", () =>
     withTestDb(async (db) => {
-      const { organization, account } = await setup(db)
+      const { organization, customer } = await setup(db)
       await expectIsolated(db, {
         owner: organization,
         call: (caller) =>
-          caller.contact.create({ accountId: account.id, name: "Mallory" }),
-        snapshot: () => contactsOf(db, account.id),
+          caller.contact.create({ customerId: customer.id, name: "Mallory" }),
+        snapshot: () => contactsOf(db, customer.id),
       })
     }))
 })
@@ -114,8 +114,8 @@ describe("contact.create", () => {
 describe("contact.update", () => {
   it("changes only the given fields", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
-      const contact = await createContact(db, account, {
+      const { customer, caller } = await setup(db)
+      const contact = await createContact(db, customer, {
         name: "Alice",
         phone: "555",
         title: "CTO",
@@ -127,8 +127,8 @@ describe("contact.update", () => {
 
   it("is isolated from other Organizations", () =>
     withTestDb(async (db) => {
-      const { organization, account } = await setup(db)
-      const contact = await createContact(db, account)
+      const { organization, customer } = await setup(db)
+      const contact = await createContact(db, customer)
       await expectIsolated(db, {
         owner: organization,
         call: (caller) =>
@@ -139,17 +139,17 @@ describe("contact.update", () => {
 })
 
 describe("contact.setPrimary", () => {
-  it("makes this the only primary Contact of its Account", () =>
+  it("makes this the only primary Contact of its Customer", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
-      await createContact(db, account, { name: "Alice", isPrimary: true })
-      const bob = await createContact(db, account, { name: "Bob" })
-      // Another Account's primary is untouched.
-      const other = await createAccount(db, { id: account.organizationId })
+      const { customer, caller } = await setup(db)
+      await createContact(db, customer, { name: "Alice", isPrimary: true })
+      const bob = await createContact(db, customer, { name: "Bob" })
+      // Another Customer's primary is untouched.
+      const other = await createCustomer(db, { id: customer.organizationId })
       await createContact(db, other, { name: "Carol", isPrimary: true })
 
       await caller.contact.setPrimary({ id: bob.id })
-      expect(await contactsOf(db, account.id)).toEqual([
+      expect(await contactsOf(db, customer.id)).toEqual([
         { name: "Alice", isPrimary: false },
         { name: "Bob", isPrimary: true },
       ])
@@ -160,13 +160,13 @@ describe("contact.setPrimary", () => {
 
   it("is isolated from other Organizations", () =>
     withTestDb(async (db) => {
-      const { organization, account } = await setup(db)
-      await createContact(db, account, { name: "Alice", isPrimary: true })
-      const bob = await createContact(db, account, { name: "Bob" })
+      const { organization, customer } = await setup(db)
+      await createContact(db, customer, { name: "Alice", isPrimary: true })
+      const bob = await createContact(db, customer, { name: "Bob" })
       await expectIsolated(db, {
         owner: organization,
         call: (caller) => caller.contact.setPrimary({ id: bob.id }),
-        snapshot: () => contactsOf(db, account.id),
+        snapshot: () => contactsOf(db, customer.id),
       })
     }))
 })
@@ -174,16 +174,16 @@ describe("contact.setPrimary", () => {
 describe("contact.delete", () => {
   it("deletes a Contact, even the primary one", () =>
     withTestDb(async (db) => {
-      const { account, caller } = await setup(db)
-      const contact = await createContact(db, account, { isPrimary: true })
+      const { customer, caller } = await setup(db)
+      const contact = await createContact(db, customer, { isPrimary: true })
       await caller.contact.delete({ id: contact.id })
       expect(await snapshotContact(db, contact.id)()).toEqual([])
     }))
 
   it("is isolated from other Organizations", () =>
     withTestDb(async (db) => {
-      const { organization, account } = await setup(db)
-      const contact = await createContact(db, account)
+      const { organization, customer } = await setup(db)
+      const contact = await createContact(db, customer)
       await expectIsolated(db, {
         owner: organization,
         call: (caller) => caller.contact.delete({ id: contact.id }),

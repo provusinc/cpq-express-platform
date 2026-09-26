@@ -16,7 +16,7 @@ import { isOrganizationObjectKey } from "@workspace/storage"
 import { generateQuoteDocument, QUOTE_DOCUMENT_AREA } from "../documents"
 import { ORGANIZATION_SLUG_HEADER } from "../headers"
 import {
-  createAccount,
+  createCustomer,
   createContact,
   createMember,
   createOrganization,
@@ -59,20 +59,20 @@ async function setup(db: Db) {
       user: members[who].user,
       storage,
     })
-  const account = await createAccount(db, organization, {
+  const customer = await createCustomer(db, organization, {
     name: "Initech",
     billingStreet: "1 Main St",
     billingCity: "Austin",
   })
-  await createContact(db, account, { name: "Someone Else" })
-  await createContact(db, account, {
+  await createContact(db, customer, { name: "Someone Else" })
+  await createContact(db, customer, {
     name: "Bill Lumbergh",
     email: "bill@initech.test",
     isPrimary: true,
   })
   const quote = await createQuote(db, organization, {
     owner: members.member.user,
-    account,
+    customer,
     name: "Initech – Oct 2026",
   })
   const role = await createResourceRole(db, organization, {
@@ -186,9 +186,9 @@ describe("quoteDocument.generate", () => {
           subtotal: stored!.subtotal,
           total: stored!.total,
         },
-        account: { name: "Initech", billingStreet: "1 Main St" },
+        customer: { name: "Initech", billingStreet: "1 Main St" },
         contact: { name: "Bill Lumbergh", email: "bill@initech.test" },
-        company: { name: "Acme" },
+        profile: { name: "Acme" },
         phases: [{ id: phase.id, name: "Discovery" }],
         milestones: [],
         labels: { phase: { singular: "Phase" } },
@@ -314,7 +314,7 @@ describe("quoteDocument.generate", () => {
       expect(preview.logo).toBe(
         `data:image/png;base64,${Buffer.from(PNG).toString("base64")}`
       )
-      expect(preview.snapshot.company.logoKey).toBe(upload.key)
+      expect(preview.snapshot.profile.logoKey).toBe(upload.key)
     }))
 
   it("refuses a malformed or unknown Quote", () =>
@@ -637,8 +637,8 @@ describe("versions under concurrency", () => {
         .delete(quotes)
         .where(eq(quotes.organizationId, organization.id))
       await root
-        .delete(schema.accounts)
-        .where(eq(schema.accounts.organizationId, organization.id))
+        .delete(schema.customers)
+        .where(eq(schema.customers.organizationId, organization.id))
       await root
         .delete(memberships)
         .where(eq(memberships.organizationId, organization.id))

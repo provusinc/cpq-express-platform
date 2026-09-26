@@ -18,19 +18,11 @@ import type {
 } from "@/components/quotes/autosave"
 import type { Quote } from "@/components/quotes/use-quote"
 import { useLabels } from "@/components/shell/labels"
+import { PHASE_TINT_CLASSES } from "@/components/shell/tints"
 import { formatDate } from "@/lib/format"
 import { milestoneLabelRows, phaseTimeline } from "@/lib/phase-timeline"
 
 import { OverviewCard } from "./overview-card"
-
-/** Phase tints by top-level order (tokens in globals.css). */
-const TINTS: Record<number, string> = {
-  1: "bg-phase-1 text-phase-1-ink",
-  2: "bg-phase-2 text-phase-2-ink",
-  3: "bg-phase-3 text-phase-3-ink",
-  4: "bg-phase-4 text-phase-4-ink",
-  5: "bg-phase-5 text-phase-5-ink",
-}
 
 const pct = (fraction: number) => `${fraction * 100}%`
 
@@ -116,7 +108,7 @@ export function PhaseTimelineCard({
                           tabIndex={0}
                           className={cn(
                             "flex h-12 min-w-0 flex-col justify-center rounded-md px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            TINTS[segment.tint]
+                            PHASE_TINT_CLASSES[segment.tint]?.fill
                           )}
                         />
                       }

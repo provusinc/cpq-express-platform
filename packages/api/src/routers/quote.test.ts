@@ -6,7 +6,7 @@ import { LOCKED_STATUSES } from "@workspace/domain/status"
 import type { QuoteStatus, Role } from "@workspace/domain/enums"
 
 import {
-  createAccount,
+  createCustomer,
   createMember,
   createOrganization,
   createQuote,
@@ -36,8 +36,8 @@ async function setup(db: Db) {
   return { organization, members, caller }
 }
 
-const newQuote = (accountId: string) => ({
-  accountId,
+const newQuote = (customerId: string) => ({
+  customerId,
   name: "Pilot",
   startDate: "2026-10-01",
   endDate: "2026-12-31",
@@ -49,9 +49,9 @@ describe("quote.create", () => {
   it("creates a Draft owned by the caller in the Organization's currency", () =>
     withTestDb(async (db) => {
       const { organization, members, caller } = await setup(db)
-      const account = await createAccount(db, organization)
+      const customer = await createCustomer(db, organization)
       const created = await caller("member").quote.create({
-        ...newQuote(account.id),
+        ...newQuote(customer.id),
         name: "  Pilot  ",
         description: " Phase one ",
       })
@@ -60,7 +60,7 @@ describe("quote.create", () => {
         id: created.id,
         name: "Pilot",
         description: "Phase one",
-        accountId: account.id,
+        customerId: customer.id,
         status: "draft",
         currencyCode: "EUR",
         startDate: "2026-10-01",
@@ -81,24 +81,24 @@ describe("quote.create", () => {
   it("allows the same Name twice (Names aren't unique)", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
-      const account = await createAccount(db, organization)
-      await caller("member").quote.create(newQuote(account.id))
+      const customer = await createCustomer(db, organization)
+      await caller("member").quote.create(newQuote(customer.id))
       await expect(
-        caller("member").quote.create(newQuote(account.id))
+        caller("member").quote.create(newQuote(customer.id))
       ).resolves.toMatchObject({ name: "Pilot" })
     }))
 
   it("rejects an end date before the start date, and malformed dates", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
-      const account = await createAccount(db, organization)
+      const customer = await createCustomer(db, organization)
       for (const dates of [
         { startDate: "2026-10-02", endDate: "2026-10-01" },
         { startDate: "2026-02-30", endDate: "2026-10-01" },
         { startDate: "10/01/2026", endDate: "2026-10-01" },
       ]) {
         await expect(
-          caller("member").quote.create({ ...newQuote(account.id), ...dates }),
+          caller("member").quote.create({ ...newQuote(customer.id), ...dates }),
           JSON.stringify(dates)
         ).rejects.toMatchObject({ code: "BAD_REQUEST" })
       }
@@ -107,9 +107,9 @@ describe("quote.create", () => {
   it("allows a one-day Quote and no Valid Until", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
-      const account = await createAccount(db, organization)
+      const customer = await createCustomer(db, organization)
       const { id } = await caller("member").quote.create({
-        ...newQuote(account.id),
+        ...newQuote(customer.id),
         endDate: "2026-10-01",
         validUntil: null,
       })
@@ -117,59 +117,65 @@ describe("quote.create", () => {
       expect(row).toMatchObject({ endDate: "2026-10-01", validUntil: null })
     }))
 
-  it("refuses an archived Account", () =>
+  it("refuses an archived Customer", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
-      const account = await createAccount(db, organization, { archived: true })
+      const customer = await createCustomer(db, organization, {
+        archived: true,
+      })
       await expect(
-        caller("member").quote.create(newQuote(account.id))
+        caller("member").quote.create(newQuote(customer.id))
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
     }))
 
-  it("is isolated from other Organizations' Accounts", () =>
+  it("is isolated from other Organizations' Customers", () =>
     withTestDb(async (db) => {
       const acme = await createOrganization(db)
-      const account = await createAccount(db, acme)
+      const customer = await createCustomer(db, acme)
       await expectIsolated(db, {
         owner: acme,
-        call: (caller) => caller.quote.create(newQuote(account.id)),
+        call: (caller) => caller.quote.create(newQuote(customer.id)),
         snapshot: () =>
-          db.select().from(quotes).where(eq(quotes.accountId, account.id)),
+          db.select().from(quotes).where(eq(quotes.customerId, customer.id)),
       })
     }))
 })
 
 describe("quote.nameTaken", () => {
-  it("warns when the Account has a Quote with that Name, ignoring case and spaces", () =>
+  it("warns when the Customer has a Quote with that Name, ignoring case and spaces", () =>
     withTestDb(async (db) => {
       const { organization, members, caller } = await setup(db)
-      const account = await createAccount(db, organization)
-      const other = await createAccount(db, organization)
+      const customer = await createCustomer(db, organization)
+      const other = await createCustomer(db, organization)
       const quote = await createQuote(db, organization, {
         owner: members.admin.user,
-        account,
+        customer,
         name: "Pilot",
       })
       const taken = (input: {
-        accountId: string
+        customerId: string
         name: string
         exceptId?: string
       }) => caller("member").quote.nameTaken(input)
-      expect(await taken({ accountId: account.id, name: " pilot " })).toEqual({
-        taken: true,
-        count: 1,
-      })
-      expect(await taken({ accountId: account.id, name: "Pilot 2" })).toEqual({
-        taken: false,
-        count: 0,
-      })
-      expect(await taken({ accountId: other.id, name: "Pilot" })).toEqual({
+      expect(await taken({ customerId: customer.id, name: " pilot " })).toEqual(
+        {
+          taken: true,
+          count: 1,
+        }
+      )
+      expect(await taken({ customerId: customer.id, name: "Pilot 2" })).toEqual(
+        {
+          taken: false,
+          count: 0,
+        }
+      )
+      expect(await taken({ customerId: other.id, name: "Pilot" })).toEqual({
         taken: false,
         count: 0,
       })
       expect(
         await taken({
-          accountId: account.id,
+          customerId: customer.id,
           name: "Pilot",
           exceptId: quote.id,
         })
@@ -180,25 +186,27 @@ describe("quote.nameTaken", () => {
     withTestDb(async (db) => {
       const acme = await createOrganization(db)
       const { user } = await createMember(db, acme)
-      const account = await createAccount(db, acme)
-      await createQuote(db, acme, { owner: user, account, name: "Secret" })
+      const customer = await createCustomer(db, acme)
+      await createQuote(db, acme, { owner: user, customer, name: "Secret" })
       await expectIsolated(db, {
         owner: acme,
         call: (caller) =>
-          caller.quote.nameTaken({ accountId: account.id, name: "Secret" }),
+          caller.quote.nameTaken({ customerId: customer.id, name: "Secret" }),
       })
     }))
 })
 
 describe("quote.list", () => {
-  /** Three Quotes with distinct names, Accounts, owners, statuses and dates. */
+  /** Three Quotes with distinct names, Customers, owners, statuses and dates. */
   async function listSetup(db: Db) {
     const s = await setup(db)
-    const initech = await createAccount(db, s.organization, { name: "Initech" })
-    const globex = await createAccount(db, s.organization, { name: "Globex" })
+    const initech = await createCustomer(db, s.organization, {
+      name: "Initech",
+    })
+    const globex = await createCustomer(db, s.organization, { name: "Globex" })
     const alpha = await createQuote(db, s.organization, {
       owner: s.members.member.user,
-      account: initech,
+      customer: initech,
       name: "Alpha rollout",
       description: "Warehouse robots",
       status: "draft",
@@ -207,7 +215,7 @@ describe("quote.list", () => {
     })
     const beta = await createQuote(db, s.organization, {
       owner: s.members.manager.user,
-      account: globex,
+      customer: globex,
       name: "Beta support",
       status: "approved",
       validUntil: "2999-01-01",
@@ -215,7 +223,7 @@ describe("quote.list", () => {
     })
     const gamma = await createQuote(db, s.organization, {
       owner: s.members.member.user,
-      account: globex,
+      customer: globex,
       name: "gamma pilot",
       status: "rejected",
       createdAt: new Date("2026-03-10T12:00:00Z"),
@@ -226,7 +234,7 @@ describe("quote.list", () => {
   const names = (result: { rows: { name: string }[] }) =>
     result.rows.map((r) => r.name)
 
-  it("lists every member's Quotes, newest first, with Account and Owner", () =>
+  it("lists every member's Quotes, newest first, with Customer and Owner", () =>
     withTestDb(async (db) => {
       const { caller, members, alpha, initech } = await listSetup(db)
       const result = await caller("otherMember").quote.list({})
@@ -238,7 +246,7 @@ describe("quote.list", () => {
       expect(result.total).toBe(3)
       expect(result.rows[2]).toMatchObject({
         id: alpha.id,
-        account: { id: initech.id, name: "Initech" },
+        customer: { id: initech.id, name: "Initech" },
         owner: { id: members.member.user.id },
         status: "draft",
         currencyCode: "USD",
@@ -259,7 +267,7 @@ describe("quote.list", () => {
       })
     }))
 
-  it("searches Name, Description and Account name", () =>
+  it("searches Name, Description and Customer name", () =>
     withTestDb(async (db) => {
       const { caller } = await listSetup(db)
       const search = async (term: string) =>
@@ -270,7 +278,7 @@ describe("quote.list", () => {
       expect(await search("100%")).toEqual([])
     }))
 
-  it("filters by statuses, Account, created date range and owner", () =>
+  it("filters by statuses, Customer, created date range and owner", () =>
     withTestDb(async (db) => {
       const { caller, globex } = await listSetup(db)
       const list = async (
@@ -280,7 +288,7 @@ describe("quote.list", () => {
         "gamma pilot",
         "Alpha rollout",
       ])
-      expect(await list({ accountId: globex.id })).toEqual([
+      expect(await list({ customerId: globex.id })).toEqual([
         "gamma pilot",
         "Beta support",
       ])
@@ -324,7 +332,7 @@ describe("quote.list", () => {
         customer_rejected: 0,
       })
       const onGlobex = await caller("member").quote.list({
-        accountId: globex.id,
+        customerId: globex.id,
         statuses: ["approved", "rejected"],
       })
       expect(onGlobex.total).toBe(2)
@@ -350,7 +358,7 @@ describe("quote.list", () => {
     withTestDb(async (db) => {
       const { caller } = await listSetup(db)
       const sorted = async (
-        by: "name" | "account" | "status" | "validUntil" | "createdAt",
+        by: "name" | "customer" | "status" | "validUntil" | "createdAt",
         direction: "asc" | "desc"
       ) => names(await caller("member").quote.list({ sort: { by, direction } }))
       // Case-insensitive by Name.
@@ -364,7 +372,7 @@ describe("quote.list", () => {
         "Beta support",
         "Alpha rollout",
       ])
-      expect((await sorted("account", "asc"))[2]).toBe("Alpha rollout")
+      expect((await sorted("customer", "asc"))[2]).toBe("Alpha rollout")
       expect(await sorted("createdAt", "asc")).toEqual([
         "Alpha rollout",
         "Beta support",
@@ -410,20 +418,20 @@ describe("quote.list", () => {
       await expect(
         organizationCaller(db, { organization, user: outsider }).quote.list({})
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
-      // Filtering by another Organization's Account finds nothing.
-      const theirAccount = await createAccount(db, globex)
+      // Filtering by another Organization's Customer finds nothing.
+      const theirCustomer = await createCustomer(db, globex)
       expect(
-        (await caller("member").quote.list({ accountId: theirAccount.id }))
+        (await caller("member").quote.list({ customerId: theirCustomer.id }))
           .total
       ).toBe(0)
     }))
 
-  it("offers the Accounts that have Quotes as filter options", () =>
+  it("offers the Customers that have Quotes as filter options", () =>
     withTestDb(async (db) => {
       const { organization, caller, initech, globex } = await listSetup(db)
-      await createAccount(db, organization, { name: "Unquoted" })
+      await createCustomer(db, organization, { name: "Unquoted" })
       expect(await caller("member").quote.filterOptions()).toEqual({
-        accounts: [
+        customers: [
           { id: globex.id, name: "Globex" },
           { id: initech.id, name: "Initech" },
         ],
@@ -432,13 +440,15 @@ describe("quote.list", () => {
 })
 
 describe("quote.byId", () => {
-  it("returns the header, Account, Owner and the viewer's permissions", () =>
+  it("returns the header, Customer, Owner and the viewer's permissions", () =>
     withTestDb(async (db) => {
       const { organization, members, caller } = await setup(db)
-      const account = await createAccount(db, organization, { name: "Initech" })
+      const customer = await createCustomer(db, organization, {
+        name: "Initech",
+      })
       const quote = await createQuote(db, organization, {
         owner: members.member.user,
-        account,
+        customer,
         name: "Pilot",
         description: "First phase",
       })
@@ -449,7 +459,7 @@ describe("quote.byId", () => {
         description: "First phase",
         status: "draft",
         locked: false,
-        account: { id: account.id, name: "Initech", archived: false },
+        customer: { id: customer.id, name: "Initech", archived: false },
         owner: {
           id: members.member.user.id,
           email: members.member.user.email,

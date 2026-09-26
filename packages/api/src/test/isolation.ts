@@ -17,9 +17,9 @@ export const ISOLATION_CODES = ["NOT_FOUND", "FORBIDDEN"] as const
  *
  *   await expectIsolated(db, {
  *     owner: acme,
- *     call: (caller) => caller.account.byId({ id: acmeAccount.id }),
+ *     call: (caller) => caller.customer.byId({ id: acmeCustomer.id }),
  *     // optional, for mutations: must read the same before and after
- *     snapshot: () => db.select().from(accounts).where(eq(accounts.id, acmeAccount.id)),
+ *     snapshot: () => db.select().from(customers).where(eq(customers.id, acmeCustomer.id)),
  *   })
  *
  * It creates a fresh outsider Organization with an Admin who is also an

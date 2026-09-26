@@ -53,7 +53,7 @@ import { marginBelow, quoteInsightsProcedures } from "./quote-insights"
 import { quoteScheduleProcedures } from "./quote-schedule"
 import { quoteOverviewProcedures } from "./quote-overview"
 
-const { accounts, lineItems, phases, quotes, users } = schema
+const { customers, lineItems, phases, quotes, users } = schema
 
 /** The longest Description the API accepts. */
 const DESCRIPTION_MAX = 2000
@@ -61,7 +61,7 @@ const DESCRIPTION_MAX = 2000
 /** Columns the Quote list can sort by. */
 export const QUOTE_SORT_COLUMNS = [
   "name",
-  "account",
+  "customer",
   "owner",
   "status",
   "startDate",
@@ -76,7 +76,7 @@ export type QuoteSortColumn = (typeof QUOTE_SORT_COLUMNS)[number]
 
 const SORT_EXPRESSIONS: Record<QuoteSortColumn, SQLWrapper> = {
   name: sql`lower(${quotes.name})`,
-  account: sql`lower(${accounts.name})`,
+  customer: sql`lower(${customers.name})`,
   owner: sql`lower(coalesce(${users.name}, ${users.email}))`,
   status: quotes.status,
   startDate: quotes.startDate,
@@ -102,17 +102,17 @@ function refineDates(
   }
 }
 
-/** The Account a Quote is created for or warned about; NOT_FOUND if not ours. */
-async function findAccount(scope: OrganizationScope, accountId: string) {
-  const account = await scope.findById(accounts, accountId)
-  if (!account) throw notFound("Account")
-  return account
+/** The Customer a Quote is created for or warned about; NOT_FOUND if not ours. */
+async function findCustomer(scope: OrganizationScope, customerId: string) {
+  const customer = await scope.findById(customers, customerId)
+  if (!customer) throw notFound("Customer")
+  return customer
 }
 
-/** How many of the Account's Quotes are called `name` (ignoring case and spaces). */
+/** How many of the Customer's Quotes are called `name` (ignoring case and spaces). */
 async function countSameName(
   scope: OrganizationScope,
-  accountId: string,
+  customerId: string,
   name: string,
   exceptId?: string
 ) {
@@ -122,7 +122,7 @@ async function countSameName(
     .where(
       scope.where(
         quotes,
-        eq(quotes.accountId, accountId),
+        eq(quotes.customerId, customerId),
         sql`lower(btrim(${quotes.name})) = lower(btrim(${name}))`,
         exceptId ? ne(quotes.id, exceptId) : undefined
       )
@@ -142,13 +142,13 @@ const utcDayStart = (date: string) => new Date(`${date}T00:00:00.000Z`)
 
 const listInput = z
   .object({
-    /** Matches Name, Description and the Account's name. */
+    /** Matches Name, Description and the Customer's name. */
     search: z.string().trim().max(200).optional(),
     statuses: z
       .array(z.enum(QUOTE_STATUSES))
       .max(QUOTE_STATUSES.length)
       .optional(),
-    accountId: z.uuid().optional(),
+    customerId: z.uuid().optional(),
     /** Created on or after this date (UTC day). */
     createdFrom: isoDateInput.optional(),
     /** Created on or before this date (UTC day). */
@@ -188,7 +188,7 @@ const listInput = z
 
 export const quoteRouter = createTRPCRouter({
   /**
-   * One page of the Organization's Quotes with their Account and Owner.
+   * One page of the Organization's Quotes with their Customer and Owner.
    * Every member sees every Quote; `owner: "mine"` narrows to the caller's.
    * Sorted by `sort` (newest first by default), ties broken by id.
    * `validUntilPassed` is true when Valid Until is before today (UTC),
@@ -208,11 +208,13 @@ export const quoteRouter = createTRPCRouter({
             ? or(
                 ilike(quotes.name, search),
                 ilike(quotes.description, search),
-                ilike(accounts.name, search)
+                ilike(customers.name, search)
               )
             : undefined,
           statuses?.length ? inArray(quotes.status, statuses) : undefined,
-          input.accountId ? eq(quotes.accountId, input.accountId) : undefined,
+          input.customerId
+            ? eq(quotes.customerId, input.customerId)
+            : undefined,
           input.createdFrom
             ? gte(quotes.createdAt, utcDayStart(input.createdFrom))
             : undefined,
@@ -230,13 +232,13 @@ export const quoteRouter = createTRPCRouter({
             ? marginBelow(input.marginBelow)
             : undefined
         ),
-        ctx.scope.where(accounts)
+        ctx.scope.where(customers)
       ) as SQL
     const where = filters(input.statuses)
     const direction = input.sort.direction === "asc" ? asc : desc
-    const accountJoin = and(
-      eq(accounts.organizationId, quotes.organizationId),
-      eq(accounts.id, quotes.accountId)
+    const customerJoin = and(
+      eq(customers.organizationId, quotes.organizationId),
+      eq(customers.id, quotes.customerId)
     )
     const [rows, byStatus, settings] = await Promise.all([
       ctx.scope.db
@@ -255,15 +257,15 @@ export const quoteRouter = createTRPCRouter({
           marginPct: quotes.marginPct,
           createdAt: quotes.createdAt,
           updatedAt: quotes.updatedAt,
-          account: {
-            id: accounts.id,
-            name: accounts.name,
-            archived: accounts.archived,
+          customer: {
+            id: customers.id,
+            name: customers.name,
+            archived: customers.archived,
           },
           owner: { id: users.id, name: users.name, email: users.email },
         })
         .from(quotes)
-        .innerJoin(accounts, accountJoin)
+        .innerJoin(customers, customerJoin)
         .innerJoin(users, eq(users.id, quotes.ownerId))
         .where(where)
         .orderBy(
@@ -279,7 +281,7 @@ export const quoteRouter = createTRPCRouter({
       ctx.scope.db
         .select({ status: quotes.status, n: count() })
         .from(quotes)
-        .innerJoin(accounts, accountJoin)
+        .innerJoin(customers, customerJoin)
         .where(filters())
         .groupBy(quotes.status),
       getOrganizationSettings(ctx.scope),
@@ -314,43 +316,43 @@ export const quoteRouter = createTRPCRouter({
     }
   }),
 
-  /** The Accounts that have Quotes, by name, for the list's Account filter. */
+  /** The Customers that have Quotes, by name, for the list's Customer filter. */
   filterOptions: organizationProcedure.query(async ({ ctx }) => {
-    const accountsWithQuotes = await ctx.scope.db
-      .selectDistinct({ id: accounts.id, name: accounts.name })
-      .from(accounts)
+    const customersWithQuotes = await ctx.scope.db
+      .selectDistinct({ id: customers.id, name: customers.name })
+      .from(customers)
       .innerJoin(
         quotes,
         and(
-          eq(quotes.organizationId, accounts.organizationId),
-          eq(quotes.accountId, accounts.id)
+          eq(quotes.organizationId, customers.organizationId),
+          eq(quotes.customerId, customers.id)
         )
       )
-      .where(ctx.scope.where(accounts))
-      .orderBy(asc(accounts.name))
-    return { accounts: accountsWithQuotes }
+      .where(ctx.scope.where(customers))
+      .orderBy(asc(customers.name))
+    return { customers: customersWithQuotes }
   }),
 
   /**
-   * Whether the Account already has a Quote with this Name (ignoring case
+   * Whether the Customer already has a Quote with this Name (ignoring case
    * and surrounding spaces): the create dialog's non-blocking warning.
-   * `exceptId` leaves one Quote out (renaming it). NOT_FOUND for an Account
+   * `exceptId` leaves one Quote out (renaming it). NOT_FOUND for a Customer
    * that isn't this Organization's.
    */
   nameTaken: organizationProcedure
     .input(
       z.object({
-        accountId: z.uuid(),
+        customerId: z.uuid(),
         name: z.string().trim().max(QUOTE_NAME_MAX),
         exceptId: z.uuid().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      await findAccount(ctx.scope, input.accountId)
+      await findCustomer(ctx.scope, input.customerId)
       if (!input.name) return { taken: false, count: 0 }
       const n = await countSameName(
         ctx.scope,
-        input.accountId,
+        input.customerId,
         input.name,
         input.exceptId
       )
@@ -358,7 +360,7 @@ export const quoteRouter = createTRPCRouter({
     }),
 
   /**
-   * Creates a Draft Quote for an unarchived Account, owned by the caller
+   * Creates a Draft Quote for an unarchived Customer, owned by the caller
    * for its whole life, in the Organization's currency. Any member may
    * create Quotes. Returns its id (the editor's URL).
    */
@@ -366,7 +368,7 @@ export const quoteRouter = createTRPCRouter({
     .input(
       z
         .object({
-          accountId: z.uuid(),
+          customerId: z.uuid(),
           name: requiredText(QUOTE_NAME_MAX),
           description: z.string().trim().max(DESCRIPTION_MAX).optional(),
           startDate: isoDateInput,
@@ -378,15 +380,15 @@ export const quoteRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input }) =>
       ctx.scope.transaction(async (scope) => {
-        const account = await findAccount(scope, input.accountId)
-        if (account.archived) {
+        const customer = await findCustomer(scope, input.customerId)
+        if (customer.archived) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: `“${account.name}” is archived. Unarchive it to quote it.`,
+            message: `“${customer.name}” is archived. Unarchive it to quote it.`,
           })
         }
         const quote = await scope.insert(quotes, {
-          accountId: account.id,
+          customerId: customer.id,
           name: input.name,
           description: input.description || null,
           startDate: input.startDate,
@@ -405,7 +407,7 @@ export const quoteRouter = createTRPCRouter({
 
   /**
    * One Quote for the editor: its header fields and totals, its Effort in
-   * hours (Σ quantity of the hourly Line Items), Account, Owner
+   * hours (Σ quantity of the hourly Line Items), Customer, Owner
    * (and whether they are still a member), who changed it last, and what
    * the caller may do to it (`permissions`, from the domain policy).
    */
@@ -414,8 +416,8 @@ export const quoteRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const quote = await ctx.scope.findById(quotes, input.id)
       if (!quote) throw notFound("Quote")
-      const [account, people, facts, settings, [effort]] = await Promise.all([
-        ctx.scope.findById(accounts, quote.accountId),
+      const [customer, people, facts, settings, [effort]] = await Promise.all([
+        ctx.scope.findById(customers, quote.customerId),
         ctx.scope.db
           .select({ id: users.id, name: users.name, email: users.email })
           .from(users)
@@ -458,10 +460,10 @@ export const quoteRouter = createTRPCRouter({
         effortHours: toQuantityString(effort?.hours ?? 0),
         createdAt: quote.createdAt,
         updatedAt: quote.updatedAt,
-        account: {
-          id: account!.id,
-          name: account!.name,
-          archived: account!.archived,
+        customer: {
+          id: customer!.id,
+          name: customer!.name,
+          archived: customer!.archived,
         },
         owner: { ...person(quote.ownerId), isMember: facts.ownerRole !== null },
         updatedBy: person(quote.updatedById),

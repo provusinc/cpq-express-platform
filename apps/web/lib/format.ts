@@ -13,6 +13,28 @@ export function formatDate(date: Date | string) {
   return DATE.format(typeof date === "string" ? new Date(date) : date)
 }
 
+const MONTH_DAY = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+})
+
+/**
+ * A compact inclusive range: "Oct 5 – Dec 31, 2026" within a year,
+ * "Nov 2, 2026 – Feb 1, 2027" across years, one date when they are equal.
+ */
+export function formatDateRange(start: string, end: string) {
+  if (start === end) return formatDate(start)
+  if (start.slice(0, 4) !== end.slice(0, 4))
+    return `${formatDate(start)} – ${formatDate(end)}`
+  return `${MONTH_DAY.format(new Date(start))} – ${formatDate(end)}`
+}
+
+/** e.g. "Oct 5" (no year: the Timeline's axis shows it). */
+export function formatMonthDay(date: string) {
+  return MONTH_DAY.format(new Date(date))
+}
+
 const DATE_TIME = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",

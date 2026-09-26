@@ -1,5 +1,5 @@
 /**
- * Organization settings (#20): company information and logo, Hours Per Day,
+ * Organization settings (#20): Organization profile and logo, Hours Per Day,
  * deletable Quote Statuses and Label Overrides. Reads are open to every
  * member; every change is Admin-only (`settings.manage`).
  */
@@ -47,7 +47,7 @@ async function uploadLogo(
   return upload
 }
 
-const COMPANY = {
+const PROFILE = {
   name: "Acme Corporation",
   email: "Sales@Acme.com",
   phone: "+1 555 0100",
@@ -65,7 +65,7 @@ describe("reads are open to every member", () => {
     ["an Admin", "admin"],
     ["a Manager", "manager"],
     ["a Member", "member"],
-  ] as const)("%s reads labels, Quoting settings and company", (_who, role) =>
+  ] as const)("%s reads labels, Quoting settings and profile", (_who, role) =>
     withTestDb(async (db) => {
       const acme = await createOrganization(db, { name: "Acme" })
       const { user } = await createMember(db, acme, { role })
@@ -81,7 +81,7 @@ describe("reads are open to every member", () => {
         add_on: { plural: "Add-ons", enabled: true },
         phase: { singular: "Phase" },
       })
-      expect(await caller.settings.company()).toMatchObject({
+      expect(await caller.settings.profile()).toMatchObject({
         name: "Acme",
         email: null,
         logoUrl: null,
@@ -98,7 +98,7 @@ describe("reads are open to every member", () => {
       for (const call of [
         () => caller.settings.labels(),
         () => caller.settings.quoting(),
-        () => caller.settings.company(),
+        () => caller.settings.profile(),
       ]) {
         await expect(call()).rejects.toMatchObject({ code: "NOT_FOUND" })
       }
@@ -107,7 +107,7 @@ describe("reads are open to every member", () => {
 
 describe("settings.manage is Admin-only", () => {
   const commands = (caller: TestCaller) => ({
-    "settings.updateCompany": () => caller.settings.updateCompany(COMPANY),
+    "settings.updateProfile": () => caller.settings.updateProfile(PROFILE),
     "settings.updateQuoting": () =>
       caller.settings.updateQuoting({
         hoursPerDay: "7.5",
@@ -142,7 +142,7 @@ describe("settings.manage is Admin-only", () => {
           .from(organizationSettings)
           .where(eq(organizationSettings.organizationId, acme.id))
       ).toEqual([])
-      expect(await caller.settings.company()).toMatchObject({ name: "Acme" })
+      expect(await caller.settings.profile()).toMatchObject({ name: "Acme" })
     })
   )
 
@@ -161,13 +161,13 @@ describe("settings.manage is Admin-only", () => {
     }))
 })
 
-describe("company information", () => {
-  it("saves the company information, normalised", () =>
+describe("Organization profile", () => {
+  it("saves the Organization profile, normalised", () =>
     withTestDb(async (db) => {
       const { acme, caller } = await acmeWithAdmin(db)
-      const saved = await caller.settings.updateCompany(COMPANY)
+      const saved = await caller.settings.updateProfile(PROFILE)
       expect(saved).toEqual({
-        ...COMPANY,
+        ...PROFILE,
         email: "sales@acme.com",
         website: "https://acme.com",
         addressLine2: null,
@@ -189,9 +189,9 @@ describe("company information", () => {
   it("clears optional fields that are left blank or omitted", () =>
     withTestDb(async (db) => {
       const { caller } = await acmeWithAdmin(db)
-      await caller.settings.updateCompany(COMPANY)
+      await caller.settings.updateProfile(PROFILE)
       expect(
-        await caller.settings.updateCompany({ name: "Acme", phone: " " })
+        await caller.settings.updateProfile({ name: "Acme", phone: " " })
       ).toMatchObject({ name: "Acme", phone: null, email: null, city: null })
     }))
 
@@ -205,11 +205,11 @@ describe("company information", () => {
     withTestDb(async (db) => {
       const { caller } = await acmeWithAdmin(db)
       const error = await caller.settings
-        .updateCompany({ ...COMPANY, ...change })
+        .updateProfile({ ...PROFILE, ...change })
         .catch((e: unknown) => e)
       expect(error).toMatchObject({ code: "BAD_REQUEST" })
       expect(JSON.stringify(error)).toContain(field)
-      expect(await caller.settings.company()).toMatchObject({ name: "Acme" })
+      expect(await caller.settings.profile()).toMatchObject({ name: "Acme" })
     })
   )
 })
@@ -410,10 +410,10 @@ describe("logo", () => {
       expect(upload.url).toContain(upload.key)
 
       await storage.put(upload.key, PNG, { contentType: "image/png" })
-      const company = await caller.settings.confirmLogoUpload({
+      const profile = await caller.settings.confirmLogoUpload({
         key: upload.key,
       })
-      expect(company.logoUrl).toContain(upload.key)
+      expect(profile.logoUrl).toContain(upload.key)
 
       const [row] = await db
         .select({ logoKey: organizations.logoKey })
@@ -483,7 +483,7 @@ describe("logo", () => {
         caller.settings.confirmLogoUpload({ key: upload.key })
       ).rejects.toMatchObject({ code: "BAD_REQUEST" })
       expect(storage.objects.has(upload.key)).toBe(false)
-      expect((await caller.settings.company()).logoUrl).toBeNull()
+      expect((await caller.settings.profile()).logoUrl).toBeNull()
     }))
 
   it("never adopts another Organization's object as the logo", () =>
@@ -508,7 +508,7 @@ describe("logo", () => {
           globexAdmin.settings.confirmLogoUpload({ key })
         ).rejects.toMatchObject({ code: "NOT_FOUND" })
       }
-      expect((await globexAdmin.settings.company()).logoUrl).toBeNull()
+      expect((await globexAdmin.settings.profile()).logoUrl).toBeNull()
       expect(storage.objects.has(acmeUpload.key)).toBe(true)
     }))
 

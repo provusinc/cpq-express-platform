@@ -30,7 +30,7 @@ export async function generateMetadata({
 
 /**
  * The Quote editor at `/quotes/<uuid>`: the header (Name, Description,
- * status, Account, Owner, the metrics row and the actions) and the tab
+ * status, Customer, Owner, the metrics row and the actions) and the tab
  * bar, above the current tab's route
  * (`QUOTE_TABS` in components/quotes/tabs.ts). Unknown, malformed and other
  * Organizations' ids are a 404.

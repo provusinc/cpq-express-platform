@@ -16,7 +16,7 @@ export type {
   RowResult,
 } from "./catalog-import"
 export {
-  getCompany,
+  getProfile,
   getDocumentSettings,
   getLabels,
   getOrganizationSettings,

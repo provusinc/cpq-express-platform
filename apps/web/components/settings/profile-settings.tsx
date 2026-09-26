@@ -30,14 +30,14 @@ import { useTRPC } from "@/trpc/react"
 
 import { LogoUpload } from "./logo-upload"
 
-type Company = RouterOutputs["settings"]["company"]
+type Profile = RouterOutputs["settings"]["profile"]
 
-/** Mirrors `settings.updateCompany`'s input; the API re-validates and normalises. */
+/** Mirrors `settings.updateProfile`'s input; the API re-validates and normalises. */
 const formSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Enter the company name.")
+    .min(1, "Enter the Organization's name.")
     .max(200, "Use at most 200 characters."),
   email: z
     .string()
@@ -56,42 +56,42 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 type FieldName = keyof FormValues
 
-const toForm = (company: Company): FormValues => ({
-  name: company.name,
-  email: company.email ?? "",
-  phone: company.phone ?? "",
-  website: company.website ?? "",
-  addressLine1: company.addressLine1 ?? "",
-  addressLine2: company.addressLine2 ?? "",
-  city: company.city ?? "",
-  region: company.region ?? "",
-  postalCode: company.postalCode ?? "",
-  country: company.country ?? "",
+const toForm = (profile: Profile): FormValues => ({
+  name: profile.name,
+  email: profile.email ?? "",
+  phone: profile.phone ?? "",
+  website: profile.website ?? "",
+  addressLine1: profile.addressLine1 ?? "",
+  addressLine2: profile.addressLine2 ?? "",
+  city: profile.city ?? "",
+  region: profile.region ?? "",
+  postalCode: profile.postalCode ?? "",
+  country: profile.country ?? "",
 })
 
-/** Settings → Company: company information and the logo, for Quote Documents. */
-export function CompanySettings() {
+/** Settings → Organization profile: the Organization's name, contact details, address and logo, printed on Quote Documents. */
+export function ProfileSettings() {
   const trpc = useTRPC()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { data: company } = useSuspenseQuery(
-    trpc.settings.company.queryOptions()
+  const { data: profile } = useSuspenseQuery(
+    trpc.settings.profile.queryOptions()
   )
-  const update = useMutation(trpc.settings.updateCompany.mutationOptions())
+  const update = useMutation(trpc.settings.updateProfile.mutationOptions())
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: toForm(company),
+    defaultValues: toForm(profile),
   })
 
   async function onSubmit(values: FormValues) {
     try {
       const saved = await update.mutateAsync(values)
-      queryClient.setQueryData(trpc.settings.company.queryKey(), saved)
+      queryClient.setQueryData(trpc.settings.profile.queryKey(), saved)
       form.reset(toForm(saved))
-      toast.success("Company information saved")
+      toast.success("Organization profile saved")
       // The name shows in the shell (header, Organization switcher).
-      if (saved.name !== company.name) router.refresh()
+      if (saved.name !== profile.name) router.refresh()
     } catch (error) {
       const fields = fieldErrors(error)
       for (const [name, message] of Object.entries(fields)) {
@@ -116,10 +116,10 @@ export function CompanySettings() {
       control={form.control}
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor={`company-${name}`}>{label}</FieldLabel>
+          <FieldLabel htmlFor={`profile-${name}`}>{label}</FieldLabel>
           <Input
             {...field}
-            id={`company-${name}`}
+            id={`profile-${name}`}
             aria-invalid={fieldState.invalid}
             {...props}
           />
@@ -132,7 +132,7 @@ export function CompanySettings() {
 
   return (
     <div className="flex flex-col gap-8">
-      <LogoUpload logoUrl={company.logoUrl} />
+      <LogoUpload logoUrl={profile.logoUrl} />
       <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
         <FieldGroup>
           {form.formState.errors.root && (
@@ -143,13 +143,15 @@ export function CompanySettings() {
             </Alert>
           )}
           <FieldSet>
-            <FieldLegend>Company</FieldLegend>
+            <FieldLegend>Organization profile</FieldLegend>
             <FieldDescription>
               Shown on your Quote Documents. The name is also your
               Organization&apos;s name across CPQ Express.
             </FieldDescription>
             <FieldGroup>
-              {text("name", "Company name", { autoComplete: "organization" })}
+              {text("name", "Organization name", {
+                autoComplete: "organization",
+              })}
               <div className="grid gap-6 sm:grid-cols-2">
                 {text("email", "Email", {
                   type: "email",

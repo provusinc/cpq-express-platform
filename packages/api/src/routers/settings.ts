@@ -23,7 +23,7 @@ import {
 import type { ObjectStorage } from "@workspace/storage"
 
 import {
-  getCompany,
+  getProfile,
   getDocumentSettings,
   getLabels,
   getOrganizationSettings,
@@ -77,12 +77,12 @@ const emailOrBlank = z
   .nullish()
   .transform((value) => value || null)
 
-const companyInput = z.object({
+const profileInput = z.object({
   /** The Organization's name, shown across the app and on Quote Documents. */
   name: z
     .string()
     .trim()
-    .min(1, "Enter the company name.")
+    .min(1, "Enter the Organization's name.")
     .max(TEXT_MAX, `Use at most ${TEXT_MAX} characters.`),
   email: emailOrBlank,
   phone: optionalText(40),
@@ -200,11 +200,11 @@ export const settingsRouter = createTRPCRouter({
   ),
 
   /**
-   * Company information and a short-lived logo URL. Any member: Quote
+   * The Organization profile and a short-lived logo URL. Any member: Quote
    * Documents print it.
    */
-  company: organizationProcedure.query(({ ctx }) =>
-    getCompany(ctx.scope, ctx.storage)
+  profile: organizationProcedure.query(({ ctx }) =>
+    getProfile(ctx.scope, ctx.storage)
   ),
 
   /**
@@ -232,15 +232,15 @@ export const settingsRouter = createTRPCRouter({
       return getDocumentSettings(ctx.scope)
     }),
 
-  /** Replaces the company information (name, contact details, address). */
-  updateCompany: manageSettings
-    .input(companyInput)
+  /** Replaces the Organization profile (name, contact details, address). */
+  updateProfile: manageSettings
+    .input(profileInput)
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .update(organizations)
         .set({ ...input, updatedAt: new Date() })
         .where(eq(organizations.id, ctx.organization.id))
-      return getCompany(ctx.scope, ctx.storage)
+      return getProfile(ctx.scope, ctx.storage)
     }),
 
   /** Sets Hours Per Day and the deletable Quote Statuses. */
@@ -349,14 +349,14 @@ export const settingsRouter = createTRPCRouter({
       if (previous && previous !== input.key) {
         await deleteQuietly(ctx.storage, previous)
       }
-      return getCompany(ctx.scope, ctx.storage)
+      return getProfile(ctx.scope, ctx.storage)
     }),
 
   /** Removes the logo (and its object). */
   removeLogo: manageSettings.mutation(async ({ ctx }) => {
     const previous = await replaceLogoKey(ctx, null)
     if (previous) await deleteQuietly(ctx.storage, previous)
-    return getCompany(ctx.scope, ctx.storage)
+    return getProfile(ctx.scope, ctx.storage)
   }),
 })
 

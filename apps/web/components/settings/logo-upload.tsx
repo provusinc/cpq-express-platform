@@ -41,8 +41,8 @@ export function LogoUpload({ logoUrl }: { logoUrl: string | null }) {
   )
   const remove = useMutation(
     trpc.settings.removeLogo.mutationOptions({
-      onSuccess: (company) => {
-        queryClient.setQueryData(trpc.settings.company.queryKey(), company)
+      onSuccess: (profile) => {
+        queryClient.setQueryData(trpc.settings.profile.queryKey(), profile)
         toast.success("Logo removed")
       },
       onError: (error) => toast.error(errorMessage(error)),
@@ -65,8 +65,8 @@ export function LogoUpload({ logoUrl }: { logoUrl: string | null }) {
       if (!response.ok) {
         throw new Error("The upload failed. Try again.")
       }
-      const company = await confirmUpload.mutateAsync({ key })
-      queryClient.setQueryData(trpc.settings.company.queryKey(), company)
+      const profile = await confirmUpload.mutateAsync({ key })
+      queryClient.setQueryData(trpc.settings.profile.queryKey(), profile)
       toast.success("Logo uploaded")
     } catch (error) {
       toast.error(
@@ -82,7 +82,7 @@ export function LogoUpload({ logoUrl }: { logoUrl: string | null }) {
 
   return (
     <Field>
-      <FieldLabel htmlFor="company-logo">Logo</FieldLabel>
+      <FieldLabel htmlFor="profile-logo">Logo</FieldLabel>
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/40">
           {logoUrl ? (
@@ -91,7 +91,7 @@ export function LogoUpload({ logoUrl }: { logoUrl: string | null }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoUrl}
-              alt="Company logo"
+              alt="Organization logo"
               className="max-h-full max-w-full object-contain"
             />
           ) : (
@@ -101,7 +101,7 @@ export function LogoUpload({ logoUrl }: { logoUrl: string | null }) {
         <div className="flex flex-wrap gap-2">
           <input
             ref={input}
-            id="company-logo"
+            id="profile-logo"
             type="file"
             accept={ACCEPT}
             className="sr-only"

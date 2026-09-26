@@ -27,7 +27,7 @@ const list = (values: readonly string[]) =>
  * An Organization's settings (glossary: Hours Per Day; the deletable Quote
  * Statuses), one row per Organization, typed columns only. The row is created
  * on the first save: until then every setting reads as its default (see
- * `getOrganizationSettings` in `@workspace/api`). Company information and the
+ * `getOrganizationSettings` in `@workspace/api`). The Organization profile and the
  * logo key are columns of `organizations`; Label Overrides are
  * `label_overrides`. Document settings (#21) are added here as columns.
  */

@@ -85,8 +85,10 @@ import {
   selectableRows,
 } from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
+import { PHASE_TINT_CLASSES, SourceKindTag } from "@/components/shell/tints"
 import { formatDate } from "@/lib/format"
 import { formatMoney, isMoneyInput, trimMoney } from "@/lib/money"
+import { phaseTints } from "@/lib/phase-tints"
 import { phaseOptions, resolveDrop } from "@/lib/phase-tree"
 import type {
   DragSource,
@@ -195,6 +197,8 @@ interface GridContextValue extends GridActions {
   phases: readonly EditorPhase[]
   options: PhaseOption[]
   collapsed: ReadonlySet<string>
+  /** Each Phase's tint (`phaseTints`), for its rows and its children's. */
+  tints: ReadonlyMap<string, number>
 }
 
 const GridContext = createContext<GridContextValue | null>(null)
@@ -211,6 +215,37 @@ function lineOf(row: Cell["row"]): { line: EditorLine; depth: number } {
 
 /** Left padding for a row at `depth` (lines outside Phases are depth 0). */
 const indent = (depth: number) => ({ paddingLeft: `${depth * 1.25}rem` })
+
+/**
+ * Tree layout of the Name column, in rem: each level steps in by `STEP`; a
+ * Phase's chevron sits at its level, and its Line Items start past the
+ * Phase's own name (`LINE_INSET`), so they read as its children.
+ */
+const STEP = 1.5
+const LINE_INSET = 2.5
+/** The x of the guide line under the chevron at `level` (1 = top). */
+const guideX = (level: number) => (level - 1) * STEP + 0.75
+
+/**
+ * The tree guides of a row: one thin line per ancestor level, down the
+ * cell, in the Phase's tint, so a Phase's children hang off its chevron.
+ */
+function TreeGuides({ levels, tint }: { levels: number; tint?: number }) {
+  if (levels <= 0) return null
+  const colour = tint ? PHASE_TINT_CLASSES[tint]!.guide : "bg-border"
+  return (
+    <>
+      {Array.from({ length: levels }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={cn("pointer-events-none absolute -inset-y-1 w-px", colour)}
+          style={{ left: `${guideX(i + 1)}rem` }}
+        />
+      ))}
+    </>
+  )
+}
 
 // Cells are module-level components reading `GridContext`, so the column
 // definitions never change identity and an edit cell keeps its focus and
@@ -248,11 +283,17 @@ function SelectCell({ row }: Cell) {
 }
 
 function NameCell({ row }: Cell) {
-  const { readOnly, onUpdate } = useGrid()
-  const labels = useLabels()
+  const { readOnly, onUpdate, tints } = useGrid()
   const { line, depth } = lineOf(row)
+  const tint = line.phaseId ? tints.get(line.phaseId) : undefined
   return (
-    <div className="flex min-w-40 flex-col" style={indent(depth)}>
+    <div
+      className="relative flex min-w-40 flex-col"
+      style={{
+        paddingLeft: depth > 0 ? `${(depth - 1) * STEP + LINE_INSET}rem` : 0,
+      }}
+    >
+      <TreeGuides levels={depth} tint={tint} />
       <InlineText
         label="Name"
         value={line.name}
@@ -263,7 +304,7 @@ function NameCell({ row }: Cell) {
         onSave={(name) => name && onUpdate({ id: line.id, name })}
       />
       <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
-        {labels[line.sourceKind].singular}
+        <SourceKindTag kind={line.sourceKind} />
         {line.plannerManaged && (
           <Badge variant="secondary" className="h-4 px-1 text-[10px]">
             <CalendarClockIcon />
@@ -272,22 +313,6 @@ function NameCell({ row }: Cell) {
         )}
       </span>
     </div>
-  )
-}
-
-function NotesCell({ row }: Cell) {
-  const { readOnly, onUpdate } = useGrid()
-  const { line } = lineOf(row)
-  return (
-    <InlineText
-      label="Notes"
-      value={line.notes}
-      maxLength={2000}
-      disabled={readOnly}
-      placeholder={readOnly ? "" : "Add notes"}
-      className="min-w-24 text-sm"
-      onSave={(notes) => onUpdate({ id: line.id, notes })}
-    />
   )
 }
 
@@ -518,12 +543,6 @@ function LineActionsCell({ row }: Cell) {
 const dataColumns: DataTableColumns<GridRow> = [
   { id: "name", header: ColumnTitle, meta: { label: "Name" }, cell: NameCell },
   {
-    id: "notes",
-    header: ColumnTitle,
-    meta: { label: "Notes" },
-    cell: NotesCell,
-  },
-  {
     id: "startDate",
     header: ColumnTitle,
     meta: { label: "Start" },
@@ -613,9 +632,10 @@ function DroppableRow({
     <TableRow
       ref={setRef}
       className={cn(
+        className,
+        // the drop hint wins over the row's own tint edge while dragging
         hint === "before" && "shadow-[inset_0_2px_0_0_var(--color-primary)]",
-        hint === "into" && "bg-primary/10 ring-2 ring-primary ring-inset",
-        className
+        hint === "into" && "bg-primary/10 ring-2 ring-primary ring-inset"
       )}
       {...props}
     >
@@ -714,8 +734,14 @@ function PhaseRowCells({
   row: Extract<GridRow, { kind: "phase" }>
   columnIds: string[]
 }) {
-  const { currency, readOnly, collapsed, onToggleCollapsed, onRenamePhase } =
-    useGrid()
+  const {
+    currency,
+    readOnly,
+    collapsed,
+    tints,
+    onToggleCollapsed,
+    onRenamePhase,
+  } = useGrid()
   const labels = useLabels()
   const { phase, rollup, depth } = row
   const open = !collapsed.has(phase.id)
@@ -744,8 +770,12 @@ function PhaseRowCells({
         break
       case "name":
         cells.push(
-          <TableCell key={columnId} colSpan={2} className="py-1">
-            <div className="flex items-center gap-1" style={indent(depth - 1)}>
+          <TableCell key={columnId} className="py-1">
+            <div
+              className="relative flex items-center gap-1"
+              style={{ paddingLeft: `${(depth - 1) * STEP}rem` }}
+            >
+              <TreeGuides levels={depth - 1} tint={tints.get(phase.id)} />
               <Button
                 variant="ghost"
                 size="icon-xs"
@@ -762,18 +792,26 @@ function PhaseRowCells({
                   required
                   maxLength={200}
                   disabled={readOnly}
-                  className="font-semibold"
+                  className={cn(
+                    "font-semibold",
+                    depth === 1 && "text-[0.9375rem]"
+                  )}
                   onSave={(name) => name && onRenamePhase(phase.id, name)}
                 />
-                <span className="px-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-2 shrink-0 rounded-full",
+                      PHASE_TINT_CLASSES[tints.get(phase.id) ?? 1]!.dot
+                    )}
+                  />
                   {labels.phase.singular} · {contents}
                 </span>
               </div>
             </div>
           </TableCell>
         )
-        break
-      case "notes":
         break
       case "startDate":
       case "endDate": {
@@ -859,7 +897,14 @@ function LineItemsBody({
   dragging: boolean
 }) {
   const { table } = useDataTable<GridRow>()
-  const { readOnly } = useGrid()
+  const { readOnly, tints } = useGrid()
+  // A Phase's rows share its tint: the Phase row washed, every row in it
+  // with the tint's edge, so the block reads as one.
+  const tintOf = (row: GridRow) => {
+    const phaseId = row.kind === "phase" ? row.phase.id : row.line.phaseId
+    const tint = phaseId ? tints.get(phaseId) : undefined
+    return tint ? PHASE_TINT_CLASSES[tint] : undefined
+  }
   const labels = useLabels()
   return (
     <TableBody>
@@ -870,7 +915,10 @@ function LineItemsBody({
               id={row.id}
               hint={hintFor(row.id)}
               data-row-id={row.id}
-              className="bg-muted/40 hover:bg-muted/60"
+              className={cn(
+                tintOf(row.original)?.row ?? "bg-muted/40 hover:bg-muted/60",
+                tintOf(row.original)?.edge
+              )}
             >
               <PhaseRowCells row={row.original} columnIds={columnIds} />
             </DroppableRow>
@@ -880,6 +928,7 @@ function LineItemsBody({
               hint={hintFor(row.id)}
               data-row-id={row.id}
               data-state={row.getIsSelected() ? "selected" : undefined}
+              className={tintOf(row.original)?.edge}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} className="py-1">
@@ -913,7 +962,7 @@ function LineItemsBody({
  * The Line Items grid (niko-table): a tree table of Phase rows (expand /
  * collapse, inline rename, derived total, margin and date span, actions)
  * with their Line Items and sub-Phases nested under them (`subRows`), and
- * per line: name, notes, start and end dates, quantity, unit, unit price
+ * per line: name (with its item type), start and end dates, quantity, unit, unit price
  * (marked when it overrides the Base Rate, with a reset), line total and
  * line margin. Every editable cell autosaves through `onUpdate`. Rows drag
  * by their handle (dnd-kit, not niko's row DnD, which only reorders a flat
@@ -1059,6 +1108,7 @@ export function LineItemsGrid({
         phases,
         options: phaseOptions(phases),
         collapsed,
+        tints: phaseTints(phases),
       }}
     >
       <DndContext

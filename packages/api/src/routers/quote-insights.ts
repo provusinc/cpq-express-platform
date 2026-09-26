@@ -40,7 +40,7 @@ import { toMoneyString } from "@workspace/domain/money"
 
 import { organizationProcedure } from "../trpc"
 
-const { accounts, approvalSteps, quotes } = schema
+const { customers, approvalSteps, quotes } = schema
 
 /** How many recent Quotes the insights return. */
 export const RECENT_QUOTES_LIMIT = 5
@@ -147,14 +147,14 @@ export const quoteInsightsProcedures = {
           currencyCode: quotes.currencyCode,
           total: quotes.total,
           updatedAt: quotes.updatedAt,
-          account: { id: accounts.id, name: accounts.name },
+          customer: { id: customers.id, name: customers.name },
         })
         .from(quotes)
         .innerJoin(
-          accounts,
+          customers,
           and(
-            eq(accounts.organizationId, quotes.organizationId),
-            eq(accounts.id, quotes.accountId)
+            eq(customers.organizationId, quotes.organizationId),
+            eq(customers.id, quotes.customerId)
           )
         )
         .where(
@@ -166,7 +166,7 @@ export const quoteInsightsProcedures = {
                 eq(quotes.updatedById, ctx.user.id)
               )
             ),
-            ctx.scope.where(accounts)
+            ctx.scope.where(customers)
           )
         )
         .orderBy(desc(quotes.updatedAt), desc(quotes.id))

@@ -60,14 +60,14 @@ export async function getLabels(scope: OrganizationScope): Promise<Labels> {
 export const LOGO_URL_EXPIRES_IN_SECONDS = 60 * 60
 
 /**
- * Company information (Settings → Company) with a short-lived URL for the
+ * The Organization profile (Settings → Organization profile) with a short-lived URL for the
  * logo, or `logoUrl: null` without one.
  */
-export async function getCompany(
+export async function getProfile(
   scope: OrganizationScope,
   storage: ObjectStorage
 ) {
-  const [company] = await scope.db
+  const [profile] = await scope.db
     .select({
       name: organizations.name,
       email: organizations.email,
@@ -84,7 +84,7 @@ export async function getCompany(
     .from(organizations)
     .where(eq(organizations.id, scope.organizationId))
     .limit(1)
-  const { logoKey, ...info } = company!
+  const { logoKey, ...info } = profile!
   return {
     ...info,
     logoUrl: logoKey

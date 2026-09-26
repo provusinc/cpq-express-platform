@@ -4,7 +4,7 @@ import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 import {
-  createAccount,
+  createCustomer,
   createCatalogItem,
   createMember,
   createOrganization,
@@ -34,10 +34,10 @@ async function setup(db: Db) {
   }
   const caller = (who: keyof typeof members) =>
     organizationCaller(db, { organization, user: members[who].user })
-  const account = await createAccount(db, organization, { name: "Initech" })
+  const customer = await createCustomer(db, organization, { name: "Initech" })
   const quote = await createQuote(db, organization, {
     owner: members.member.user,
-    account,
+    customer,
     name: "Initech rollout",
     description: "Phase one",
     validUntil: "2026-09-30",
@@ -117,7 +117,7 @@ async function setup(db: Db) {
     organization,
     members,
     caller,
-    account,
+    customer,
     quote,
     product,
     addOn,
@@ -202,7 +202,7 @@ const MONEY_FIELDS = [
 describe("quote.clone", () => {
   it("copies the Phase tree, lines, Allocations, Milestones and Discount into a Draft the cloner owns", () =>
     withTestDb(async (db) => {
-      const { caller, members, quote, account } = await setup(db)
+      const { caller, members, quote, customer } = await setup(db)
       // Committed and someone else's: still clonable by any member.
       await db
         .update(quotes)
@@ -218,7 +218,7 @@ describe("quote.clone", () => {
       expect(clone).toMatchObject({
         name: "Copy of Initech rollout",
         status: "draft",
-        accountId: account.id,
+        customerId: customer.id,
         ownerId: members.otherMember.user.id,
         createdById: members.otherMember.user.id,
         updatedById: members.otherMember.user.id,
@@ -280,38 +280,38 @@ describe("quote.clone", () => {
       expect(await quoteRow(db, quote.id)).toEqual(source)
     }))
 
-  it("clones for another Account, and refuses an archived or unknown one", () =>
+  it("clones for another Customer, and refuses an archived or unknown one", () =>
     withTestDb(async (db) => {
       const { caller, organization, quote } = await setup(db)
-      const globex = await createAccount(db, organization, { name: "Globex" })
+      const globex = await createCustomer(db, organization, { name: "Globex" })
       const { id } = await caller("admin").quote.clone({
         id: quote.id,
-        accountId: globex.id,
+        customerId: globex.id,
       })
-      expect((await quoteRow(db, id)).accountId).toBe(globex.id)
+      expect((await quoteRow(db, id)).customerId).toBe(globex.id)
 
-      const archived = await createAccount(db, organization, {
+      const archived = await createCustomer(db, organization, {
         name: "Hooli",
         archived: true,
       })
       await expect(
-        caller("admin").quote.clone({ id: quote.id, accountId: archived.id })
+        caller("admin").quote.clone({ id: quote.id, customerId: archived.id })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
 
       const other = await createOrganization(db)
-      const foreign = await createAccount(db, other)
+      const foreign = await createCustomer(db, other)
       await expect(
-        caller("admin").quote.clone({ id: quote.id, accountId: foreign.id })
+        caller("admin").quote.clone({ id: quote.id, customerId: foreign.id })
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
 
-  it("refuses when the source's own Account is archived and no other is given", () =>
+  it("refuses when the source's own Customer is archived and no other is given", () =>
     withTestDb(async (db) => {
-      const { caller, quote, account } = await setup(db)
+      const { caller, quote, customer } = await setup(db)
       await db
-        .update(schema.accounts)
+        .update(schema.customers)
         .set({ archived: true })
-        .where(eq(schema.accounts.id, account.id))
+        .where(eq(schema.customers.id, customer.id))
       await expect(
         caller("member").quote.clone({ id: quote.id })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })

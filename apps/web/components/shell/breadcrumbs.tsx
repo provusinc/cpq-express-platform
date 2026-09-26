@@ -51,10 +51,10 @@ export function Breadcrumbs() {
     if (tab && parts[2]) {
       crumbs.push({ href: `/quotes/${parts[1]}${tab.path}`, label: tab.label })
     }
-  } else if (parts[0] === "accounts" && parts[1] && UUID.test(parts[1])) {
+  } else if (parts[0] === "customers" && parts[1] && UUID.test(parts[1])) {
     crumbs.push({
-      href: `/accounts/${parts[1]}`,
-      label: <AccountName id={parts[1]} />,
+      href: `/customers/${parts[1]}`,
+      label: <CustomerName id={parts[1]} />,
     })
   } else if (parts[0] === "settings" && parts[1]) {
     const tab = SETTINGS_TABS.find((t) => t.segment === parts[1])
@@ -108,8 +108,8 @@ function QuoteName({ id }: { id: string }) {
   return useHydrated() ? <CachedQuoteName id={id} /> : <>Quote</>
 }
 
-function AccountName({ id }: { id: string }) {
-  return useHydrated() ? <CachedAccountName id={id} /> : <>Account</>
+function CustomerName({ id }: { id: string }) {
+  return useHydrated() ? <CachedCustomerName id={id} /> : <>Customer</>
 }
 
 function CachedQuoteName({ id }: { id: string }) {
@@ -121,11 +121,11 @@ function CachedQuoteName({ id }: { id: string }) {
   return <>{data?.name ?? "Quote"}</>
 }
 
-function CachedAccountName({ id }: { id: string }) {
+function CachedCustomerName({ id }: { id: string }) {
   const trpc = useTRPC()
   const { data } = useQuery({
-    ...trpc.account.byId.queryOptions({ id }),
+    ...trpc.customer.byId.queryOptions({ id }),
     enabled: false,
   })
-  return <>{data?.name ?? "Account"}</>
+  return <>{data?.name ?? "Customer"}</>
 }

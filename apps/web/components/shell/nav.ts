@@ -33,7 +33,7 @@ export interface NavItem {
 }
 
 /** The sidebar's sections, in order (the Admin entries come last). */
-export const NAV_SECTIONS = ["Quoting", "Customers", "Catalog"] as const
+export const NAV_SECTIONS = ["Quoting", "Catalog"] as const
 export type NavSection = (typeof NAV_SECTIONS)[number] | "Organization"
 
 /**
@@ -56,10 +56,10 @@ export const NAV_ITEMS: NavItem[] = [
     section: "Quoting",
   },
   {
-    label: "Accounts",
-    href: "/accounts",
+    label: "Customers",
+    href: "/customers",
     icon: Building2Icon,
-    section: "Customers",
+    section: "Quoting",
   },
   {
     label: "Products",

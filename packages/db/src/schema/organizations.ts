@@ -22,8 +22,8 @@ export const organizations = pgTable(
     name: text().notNull(),
     /** ISO 4217 code; one currency per Organization, set at provisioning. */
     currencyCode: char({ length: 3 }).notNull(),
-    // Company information (Settings → Company), printed on Quote Documents.
-    // The company name is `name`. All optional.
+    // The Organization profile (Settings → Organization profile), printed on Quote Documents.
+    // The Organization's name is `name`. All optional.
     email: text(),
     phone: text(),
     website: text(),

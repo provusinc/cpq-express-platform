@@ -102,8 +102,8 @@ export function ApprovalQueueList({
           name={q.name}
           detail={
             isApprover
-              ? `${q.account.name} · ${ownerName(q.owner)}`
-              : q.account.name
+              ? `${q.customer.name} · ${ownerName(q.owner)}`
+              : q.customer.name
           }
           figure={wholeMoney(q.total, q.currencyCode)}
           tag={<WaitTag ageDays={q.ageDays} />}
@@ -129,7 +129,7 @@ export function RecentList({ rows }: { rows: Recent }) {
           key={q.id}
           href={`/quotes/${q.id}`}
           name={q.name}
-          detail={q.account.name}
+          detail={q.customer.name}
           figure={wholeMoney(q.total, q.currencyCode)}
           tag={<QuoteStatusBadge status={q.status} />}
         />

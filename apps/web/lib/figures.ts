@@ -1,5 +1,5 @@
 /**
- * The Quote header's figures, as pure helpers: the Account monogram, the
+ * The Quote header's figures, as pure helpers: the Customer monogram, the
  * margin tone, compact Effort and the Quote's Duration. Money stays decimal
  * strings (ADR-0002); only display rounding happens here.
  */

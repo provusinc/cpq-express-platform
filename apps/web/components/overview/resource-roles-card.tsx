@@ -101,7 +101,7 @@ export function ResourceRolesCard({
             <Item key={role.id} size="xs" role="listitem" className="py-1.5">
               <ItemMedia>
                 <Avatar className="size-8 rounded-lg after:rounded-lg">
-                  <AvatarFallback className="rounded-lg bg-accent text-xs font-semibold text-accent-foreground">
+                  <AvatarFallback className="rounded-lg bg-series-1/15 text-xs font-semibold text-series-1">
                     {initials(role.name)}
                   </AvatarFallback>
                 </Avatar>

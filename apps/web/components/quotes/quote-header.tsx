@@ -94,8 +94,8 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
 }
 
 /**
- * The Quote editor's header, kept compact: the Account's monogram beside
- * the Name (edited in place) with the meta line under it (status, Account,
+ * The Quote editor's header, kept compact: the Customer's monogram beside
+ * the Name (edited in place) with the meta line under it (status, Customer,
  * Owner, Valid Until) and the Description as one muted line when there is
  * one (else "Add a description" in the "…" menu), the actions at the right
  * (`QuoteHeaderActions`); then the metrics strip — Total, Margin %, Effort
@@ -119,7 +119,7 @@ export function QuoteHeader({ quoteId }: { quoteId: string }) {
           aria-hidden
         >
           <AvatarFallback className="rounded-lg bg-accent text-sm font-semibold tracking-wide text-accent-foreground">
-            {initials(quote.account.name)}
+            {initials(quote.customer.name)}
           </AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -177,7 +177,7 @@ export function QuoteHeader({ quoteId }: { quoteId: string }) {
   )
 }
 
-/** Status · Account · Owner · Valid Until, one quiet line under the Name. */
+/** Status · Customer · Owner · Valid Until, one quiet line under the Name. */
 function MetaLine({ quote }: { quote: Quote }) {
   const owner = quote.owner.name ?? quote.owner.email
   return (
@@ -185,12 +185,12 @@ function MetaLine({ quote }: { quote: Quote }) {
       <QuoteStatusBadge status={quote.status} className="shrink-0" />
       <Dot />
       <Link
-        href={`/accounts/${quote.account.id}`}
+        href={`/customers/${quote.customer.id}`}
         className="font-medium text-foreground underline-offset-4 hover:underline"
       >
-        {quote.account.name}
+        {quote.customer.name}
       </Link>
-      {quote.account.archived && <Badge variant="secondary">Archived</Badge>}
+      {quote.customer.archived && <Badge variant="secondary">Archived</Badge>}
       <Dot />
       <span>
         Owner <span className="text-foreground">{owner}</span>

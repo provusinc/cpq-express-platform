@@ -47,9 +47,10 @@ export function UserMenu({
               />
             }
           >
-            <Avatar className="size-8 rounded-lg">
+            {/* A person is round and iris (as the Overview's Contact). */}
+            <Avatar className="size-8">
               {user.image && <AvatarImage src={user.image} alt="" />}
-              <AvatarFallback className="rounded-lg">
+              <AvatarFallback className="bg-iris-soft text-xs font-medium text-iris-ink">
                 {initials(display)}
               </AvatarFallback>
             </Avatar>

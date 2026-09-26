@@ -19,7 +19,7 @@ import { allocationsByLine } from "../line-items"
 import { getOrganizationSettings } from "../settings"
 import { organizationProcedure } from "../trpc"
 
-const { accounts, contacts, lineItems, quotes, resourceRoles } = schema
+const { customers, contacts, lineItems, quotes, resourceRoles } = schema
 
 async function findQuote(scope: OrganizationScope, id: string) {
   const quote = await scope.findById(quotes, id)
@@ -36,7 +36,7 @@ const quoteLines = (scope: OrganizationScope, quoteId: string) =>
 export const quoteOverviewProcedures = {
   /**
    * What the Overview tab adds to `quote.byId` and `quote.editor`: the
-   * Account (industry and billing city for its card) with its primary
+   * Customer (industry and billing city for its card) with its primary
    * Contact, and the Resource Roles the Quote's Line Items use (name and
    * location; the tab sums their Effort from the editor's lines, so it
    * follows edits at once). Every member may read it.
@@ -45,8 +45,8 @@ export const quoteOverviewProcedures = {
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const quote = await findQuote(ctx.scope, input.id)
-      const [account, [primaryContact], roles] = await Promise.all([
-        ctx.scope.findById(accounts, quote.accountId),
+      const [customer, [primaryContact], roles] = await Promise.all([
+        ctx.scope.findById(customers, quote.customerId),
         ctx.scope.db
           .select({
             id: contacts.id,
@@ -60,7 +60,7 @@ export const quoteOverviewProcedures = {
             ctx.scope.where(
               contacts,
               and(
-                eq(contacts.accountId, quote.accountId),
+                eq(contacts.customerId, quote.customerId),
                 eq(contacts.isPrimary, true)
               )
             )
@@ -92,15 +92,15 @@ export const quoteOverviewProcedures = {
       ])
       return {
         quoteId: quote.id,
-        account: {
-          id: account!.id,
-          name: account!.name,
-          type: account!.type,
-          industry: account!.industry,
-          website: account!.website,
-          city: account!.billingCity,
-          state: account!.billingState,
-          country: account!.billingCountry,
+        customer: {
+          id: customer!.id,
+          name: customer!.name,
+          type: customer!.type,
+          industry: customer!.industry,
+          website: customer!.website,
+          city: customer!.billingCity,
+          state: customer!.billingState,
+          country: customer!.billingCountry,
         },
         primaryContact: primaryContact ?? null,
         resourceRoles: roles,

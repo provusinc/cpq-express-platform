@@ -38,7 +38,7 @@ import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 const cloneSchema = z.object({
-  accountId: z.string().min(1, "Choose an Account."),
+  customerId: z.string().min(1, "Choose a Customer."),
   refreshRates: z.boolean(),
 })
 type CloneValues = z.infer<typeof cloneSchema>
@@ -47,20 +47,20 @@ type CloneValues = z.infer<typeof cloneSchema>
 export interface CloneSource {
   id: string
   name: string
-  account: { id: string; name: string; archived?: boolean }
+  customer: { id: string; name: string; archived?: boolean }
 }
 
 const defaults = (
-  account: Pick<CloneSource["account"], "id" | "archived">
+  customer: Pick<CloneSource["customer"], "id" | "archived">
 ): CloneValues => ({
-  // An archived Account can't be quoted, so make the user choose.
-  accountId: account.archived ? "" : account.id,
+  // An archived Customer can't be quoted, so make the user choose.
+  customerId: customer.archived ? "" : customer.id,
   refreshRates: false,
 })
 
 /**
  * Clone a Quote: "Copy of {name}" in Draft, owned by the caller, for the
- * same or another unarchived Account, optionally re-priced from the
+ * same or another unarchived Customer, optionally re-priced from the
  * current catalog. Opens the new Quote.
  */
 export function CloneQuoteDialog({
@@ -77,19 +77,19 @@ export function CloneQuoteDialog({
   const queryClient = useQueryClient()
   const form = useForm<CloneValues>({
     resolver: zodResolver(cloneSchema),
-    defaultValues: defaults(source.account),
+    defaultValues: defaults(source.customer),
   })
 
-  const { id: accountId, archived } = source.account
+  const { id: customerId, archived } = source.customer
   useEffect(() => {
-    if (open) form.reset(defaults({ id: accountId, archived }))
-  }, [open, accountId, archived, form])
+    if (open) form.reset(defaults({ id: customerId, archived }))
+  }, [open, customerId, archived, form])
 
-  const accounts = useQuery({
-    ...trpc.account.listForPicker.queryOptions({ limit: 100 }),
+  const customers = useQuery({
+    ...trpc.customer.listForPicker.queryOptions({ limit: 100 }),
     enabled: open,
   })
-  const accountItems = (accounts.data ?? [])
+  const customerItems = (customers.data ?? [])
     .filter((a) => !a.archived)
     .map((a) => ({ value: a.id, label: a.name }))
 
@@ -111,7 +111,7 @@ export function CloneQuoteDialog({
   const onSubmit = form.handleSubmit((values) =>
     clone.mutate({
       id: source.id,
-      accountId: values.accountId,
+      customerId: values.customerId,
       refreshRates: values.refreshRates,
     })
   )
@@ -130,41 +130,41 @@ export function CloneQuoteDialog({
         <form id="clone-quote-form" onSubmit={onSubmit}>
           <FieldGroup>
             <Controller
-              name="accountId"
+              name="customerId"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="clone-accountId">Account</FieldLabel>
+                  <FieldLabel htmlFor="clone-customerId">Customer</FieldLabel>
                   <Select
-                    items={accountItems}
+                    items={customerItems}
                     value={field.value || null}
                     onValueChange={(v) => field.onChange(v ?? "")}
                   >
                     <SelectTrigger
-                      id="clone-accountId"
+                      id="clone-customerId"
                       className="w-full"
                       aria-invalid={fieldState.invalid}
                     >
                       <SelectValue
                         placeholder={
-                          accounts.isPending
-                            ? "Loading Accounts…"
-                            : "Choose an Account"
+                          customers.isPending
+                            ? "Loading Customers…"
+                            : "Choose a Customer"
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {accountItems.map((a) => (
+                      {customerItems.map((a) => (
                         <SelectItem key={a.value} value={a.value}>
                           {a.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {source.account.archived && (
+                  {source.customer.archived && (
                     <FieldDescription>
-                      {source.account.name} is archived, so choose another
-                      Account.
+                      {source.customer.name} is archived, so choose another
+                      Customer.
                     </FieldDescription>
                   )}
                   {fieldState.invalid && (

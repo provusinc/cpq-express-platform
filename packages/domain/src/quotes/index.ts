@@ -24,20 +24,20 @@ const MONTHS = [
 export const QUOTE_NAME_MAX = 200
 
 /**
- * The suggested Name for a new Quote: "{Account} – {Mon YYYY}" of the Quote
+ * The suggested Name for a new Quote: "{Customer} – {Mon YYYY}" of the Quote
  * Start Date (e.g. "Initech – Oct 2026"), or just the month without an
- * Account. Trimmed to `QUOTE_NAME_MAX`.
+ * Customer. Trimmed to `QUOTE_NAME_MAX`.
  */
 export function suggestQuoteName(
-  accountName: string | null | undefined,
+  customerName: string | null | undefined,
   startDate: IsoDate
 ): string {
   const [year, month] = startDate.split("-")
   const period = `${MONTHS[Number(month) - 1] ?? ""} ${year ?? ""}`.trim()
-  const account = accountName?.trim()
-  if (!account) return period
+  const customer = customerName?.trim()
+  if (!customer) return period
   const suffix = ` – ${period}`
-  return account.slice(0, QUOTE_NAME_MAX - suffix.length) + suffix
+  return customer.slice(0, QUOTE_NAME_MAX - suffix.length) + suffix
 }
 
 /** Names compare ignoring case and surrounding spaces (the duplicate warning). */

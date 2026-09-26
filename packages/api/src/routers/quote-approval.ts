@@ -25,7 +25,7 @@ import { optionalText, paging } from "../inputs"
 import { quoteCommand } from "../quotes"
 import { organizationProcedure } from "../trpc"
 
-const { accounts, approvalSteps, quotes, users } = schema
+const { customers, approvalSteps, quotes, users } = schema
 
 export const quoteApprovalProcedures = {
   /**
@@ -229,17 +229,17 @@ export const quoteApprovalProcedures = {
             marginPct: quotes.marginPct,
             startDate: quotes.startDate,
             endDate: quotes.endDate,
-            account: { id: accounts.id, name: accounts.name },
+            customer: { id: customers.id, name: customers.name },
             owner: { id: users.id, name: users.name, email: users.email },
             submittedAt: submitted.submittedAt,
             submitComment: submitted.comment,
           })
           .from(quotes)
           .innerJoin(
-            accounts,
+            customers,
             and(
-              eq(accounts.organizationId, quotes.organizationId),
-              eq(accounts.id, quotes.accountId)
+              eq(customers.organizationId, quotes.organizationId),
+              eq(customers.id, quotes.customerId)
             )
           )
           .innerJoin(users, eq(users.id, quotes.ownerId))

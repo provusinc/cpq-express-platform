@@ -70,7 +70,7 @@ export function AppShell({
                 <SidebarTrigger className="-ml-1 text-muted-foreground" />
                 <Breadcrumbs />
                 <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                  <CommandMenuTrigger className="w-9 justify-center px-0 lg:w-56 lg:justify-start lg:pl-2.5 xl:w-64" />
+                  <CommandMenuTrigger className="w-9 justify-center px-0 lg:w-56 lg:justify-start lg:pr-1.5 lg:pl-2.5 xl:w-64" />
                   <ThemeToggle />
                 </div>
               </header>

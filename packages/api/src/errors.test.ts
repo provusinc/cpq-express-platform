@@ -10,7 +10,7 @@ import { createTRPCContext, createTRPCRouter, publicProcedure } from "./trpc"
 const router = createTRPCRouter({
   blocked: publicProcedure.mutation(() => {
     throw inUseError({
-      entity: "account",
+      entity: "customer",
       name: "Initech",
       counts: { quotes: 7 },
       examples: ["A", "B", "C", "D", "E", "F", "G"],
@@ -53,7 +53,7 @@ describe("inUseError", () => {
       code: "CONFLICT",
       inUse: {
         kind: "in_use",
-        entity: "account",
+        entity: "customer",
         name: "Initech",
         counts: { quotes: 7 },
         examples: ["A", "B", "C", "D", "E"],

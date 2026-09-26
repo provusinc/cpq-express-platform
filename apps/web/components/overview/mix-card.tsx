@@ -8,14 +8,9 @@ import type { EditorLine, EditorTotals } from "@/components/quotes/autosave"
 import { useLabels } from "@/components/shell/labels"
 import { wholeMoney } from "@/lib/money"
 
-import { OverviewCard } from "./overview-card"
+import { SOURCE_KIND_TONES } from "@/components/shell/tints"
 
-/** Each item type keeps its chart colour (labour, Products, Add-ons). */
-const TYPE_BG = {
-  resource_role: "bg-series-1",
-  product: "bg-series-2",
-  add_on: "bg-series-3",
-} as const
+import { OverviewCard } from "./overview-card"
 
 const pct = (value: string | Decimal) => `${new Decimal(value).toFixed(0)}%`
 
@@ -74,7 +69,10 @@ export function MixCard({
               .map((row) => (
                 <span
                   key={row.sourceKind}
-                  className={cn("h-full", TYPE_BG[row.sourceKind])}
+                  className={cn(
+                    "h-full",
+                    SOURCE_KIND_TONES[row.sourceKind].dot
+                  )}
                   style={{ width: `${row.shareOfSubtotal}%` }}
                 />
               ))}
@@ -97,7 +95,7 @@ export function MixCard({
                       <span
                         className={cn(
                           "size-2.5 shrink-0 rounded-[3px]",
-                          TYPE_BG[row.sourceKind]
+                          SOURCE_KIND_TONES[row.sourceKind].dot
                         )}
                         aria-hidden
                       />

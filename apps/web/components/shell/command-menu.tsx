@@ -3,7 +3,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import {
   FileTextIcon,
-  MonitorIcon,
   MoonIcon,
   PlusIcon,
   SearchIcon,
@@ -33,9 +32,10 @@ import { formatMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
 import { useNavItems, useShell } from "./shell-context"
+import { navIconClass } from "./tints"
 
 /**
- * The ⌘K command menu: find a Quote by name or Account (server search),
+ * The ⌘K command menu: find a Quote by name or Customer (server search),
  * jump to any page in the navigation, start a New Quote or switch the
  * theme. `open` is owned by the shell so the header button opens it too.
  */
@@ -101,14 +101,14 @@ function CommandMenuContent({ close }: { close: () => void }) {
     ? (found.data?.rows ?? []).map((q) => ({
         id: q.id,
         name: q.name,
-        account: q.account.name,
+        customer: q.customer.name,
         status: q.status,
         total: formatMoney(q.total, q.currencyCode),
       }))
     : (recent.data?.recent ?? []).map((q) => ({
         id: q.id,
         name: q.name,
-        account: q.account.name,
+        customer: q.customer.name,
         status: q.status,
         total: formatMoney(q.total, q.currencyCode),
       }))
@@ -135,7 +135,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
             {quotes.map((quote) => (
               <CommandItem
                 key={quote.id}
-                value={`quote ${quote.id} ${quote.name} ${quote.account}`}
+                value={`quote ${quote.id} ${quote.name} ${quote.customer}`}
                 keywords={query ? [query] : undefined}
                 onSelect={() => run(() => router.push(`/quotes/${quote.id}`))}
               >
@@ -144,7 +144,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
                   {quote.name}
                 </span>
                 <span className="hidden min-w-0 truncate text-muted-foreground sm:inline">
-                  {quote.account}
+                  {quote.customer}
                 </span>
                 <span className="ml-auto flex shrink-0 items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums">
@@ -170,7 +170,9 @@ function CommandMenuContent({ close }: { close: () => void }) {
               value={`go ${item.label}`}
               onSelect={() => run(() => router.push(item.href))}
             >
-              <item.icon className="text-muted-foreground" />
+              <item.icon
+                className={navIconClass(item.term) ?? "text-muted-foreground"}
+              />
               {item.label}
             </CommandItem>
           ))}
@@ -181,7 +183,6 @@ function CommandMenuContent({ close }: { close: () => void }) {
             [
               ["light", "Light", SunIcon],
               ["dark", "Dark", MoonIcon],
-              ["system", "System", MonitorIcon],
             ] as const
           ).map(([value, label, Icon]) => (
             <CommandItem
@@ -191,9 +192,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
             >
               <Icon className="text-muted-foreground" />
               {label} theme
-              {value !== "system" && (
-                <CommandShortcut className="tracking-normal">D</CommandShortcut>
-              )}
+              <CommandShortcut className="tracking-normal">D</CommandShortcut>
             </CommandItem>
           ))}
         </CommandGroup>

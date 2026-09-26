@@ -45,7 +45,7 @@ const isoDate = z.string().refine(isIsoDate, "Enter a date.")
 
 const quoteSchema = z
   .object({
-    accountId: z.string().min(1, "Choose an Account."),
+    customerId: z.string().min(1, "Choose a Customer."),
     name: z.string().trim().min(1, "Enter a name.").max(QUOTE_NAME_MAX),
     startDate: isoDate,
     endDate: isoDate,
@@ -73,10 +73,10 @@ const TIME_PERIOD_ITEMS = TIME_PERIODS.map((value) => ({
 }))
 
 /** A new Quote's defaults: starts today, ~3 months long, valid 30 days. */
-function defaultValues(accountId = ""): QuoteValues {
+function defaultValues(customerId = ""): QuoteValues {
   const today = todayIsoDate()
   return {
-    accountId,
+    customerId,
     name: "",
     startDate: today,
     endDate: addDays(today, 90),
@@ -86,64 +86,64 @@ function defaultValues(accountId = ""): QuoteValues {
 }
 
 /**
- * New Quote: pick an unarchived Account, a Name (prefilled with
- * "{Account} – {Mon YYYY}" of the start date until the user types their
+ * New Quote: pick an unarchived Customer, a Name (prefilled with
+ * "{Customer} – {Mon YYYY}" of the start date until the user types their
  * own), dates, Valid Until and Time Period. Warns — without blocking — when
- * the Account already has a Quote with that Name. Opens the new Quote.
+ * the Customer already has a Quote with that Name. Opens the new Quote.
  */
 export function CreateQuoteDialog({
   open,
   onOpenChange,
-  accountId,
+  customerId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Preselect this Account (e.g. from an Account's page). */
-  accountId?: string
+  /** Preselect this Customer (e.g. from a Customer's page). */
+  customerId?: string
 }) {
   const trpc = useTRPC()
   const router = useRouter()
   const queryClient = useQueryClient()
   const form = useForm<QuoteValues>({
     resolver: zodResolver(quoteSchema),
-    defaultValues: defaultValues(accountId),
+    defaultValues: defaultValues(customerId),
   })
 
   useEffect(() => {
-    if (open) form.reset(defaultValues(accountId))
-  }, [open, accountId, form])
+    if (open) form.reset(defaultValues(customerId))
+  }, [open, customerId, form])
 
-  const accounts = useQuery({
-    ...trpc.account.listForPicker.queryOptions({ limit: 100 }),
+  const customers = useQuery({
+    ...trpc.customer.listForPicker.queryOptions({ limit: 100 }),
     enabled: open,
   })
-  const accountItems = (accounts.data ?? []).map((a) => ({
+  const customerItems = (customers.data ?? []).map((a) => ({
     value: a.id,
     label: a.name,
   }))
 
-  const [selectedAccountId, startDate, name] = useWatch({
+  const [selectedCustomerId, startDate, name] = useWatch({
     control: form.control,
-    name: ["accountId", "startDate", "name"],
+    name: ["customerId", "startDate", "name"],
   })
-  const accountName = accounts.data?.find(
-    (a) => a.id === selectedAccountId
+  const customerName = customers.data?.find(
+    (a) => a.id === selectedCustomerId
   )?.name
 
   // Keep the suggested Name in step until the user edits it.
   useEffect(() => {
     if (!open || form.getFieldState("name").isDirty) return
     if (!isIsoDate(startDate)) return
-    form.setValue("name", suggestQuoteName(accountName, startDate))
-  }, [open, accountName, startDate, form])
+    form.setValue("name", suggestQuoteName(customerName, startDate))
+  }, [open, customerName, startDate, form])
 
   const deferredName = useDeferredValue(name.trim())
   const nameTaken = useQuery({
     ...trpc.quote.nameTaken.queryOptions({
-      accountId: selectedAccountId,
+      customerId: selectedCustomerId,
       name: deferredName,
     }),
-    enabled: open && Boolean(selectedAccountId && deferredName),
+    enabled: open && Boolean(selectedCustomerId && deferredName),
   })
 
   const create = useMutation(
@@ -210,40 +210,40 @@ export function CreateQuoteDialog({
         <form id="create-quote-form" onSubmit={onSubmit}>
           <FieldGroup>
             <Controller
-              name="accountId"
+              name="customerId"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="quote-accountId">Account</FieldLabel>
+                  <FieldLabel htmlFor="quote-customerId">Customer</FieldLabel>
                   <Select
-                    items={accountItems}
+                    items={customerItems}
                     value={field.value || null}
                     onValueChange={(v) => field.onChange(v ?? "")}
                   >
                     <SelectTrigger
-                      id="quote-accountId"
+                      id="quote-customerId"
                       className="w-full"
                       aria-invalid={fieldState.invalid}
                     >
                       <SelectValue
                         placeholder={
-                          accounts.isPending
-                            ? "Loading Accounts…"
-                            : "Choose an Account"
+                          customers.isPending
+                            ? "Loading Customers…"
+                            : "Choose a Customer"
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {accountItems.map((a) => (
+                      {customerItems.map((a) => (
                         <SelectItem key={a.value} value={a.value}>
                           {a.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {accounts.isSuccess && accountItems.length === 0 && (
+                  {customers.isSuccess && customerItems.length === 0 && (
                     <FieldDescription>
-                      No Accounts yet. Create one on the Accounts page first.
+                      No Customers yet. Create one on the Customers page first.
                     </FieldDescription>
                   )}
                   {fieldState.invalid && (
@@ -270,7 +270,7 @@ export function CreateQuoteDialog({
                       className="flex items-center gap-1.5 text-sm text-warning-ink"
                     >
                       <TriangleAlertIcon className="size-4 shrink-0" />
-                      {accountName ?? "This Account"} already has{" "}
+                      {customerName ?? "This Customer"} already has{" "}
                       {nameTaken.data.count === 1
                         ? "a Quote"
                         : `${nameTaken.data.count} Quotes`}{" "}

@@ -1,50 +1,44 @@
 "use client"
 
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
+import { MoonIcon, SunIcon } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@workspace/ui/components/button"
+import { Kbd } from "@workspace/ui/components/kbd"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@workspace/ui/components/tooltip"
 
-const THEMES = [
-  { value: "light", label: "Light", icon: SunIcon },
-  { value: "dark", label: "Dark", icon: MoonIcon },
-  { value: "system", label: "System", icon: MonitorIcon },
-] as const
-
-/** Light / dark / system switch. The `d` key also flips light and dark. */
+/**
+ * One button that flips light and dark (as on shadcn's site). Until it is
+ * first used the theme follows the OS (`defaultTheme="system"` in
+ * `ThemeProvider`); the `d` key does the same flip.
+ */
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
+  const next = resolvedTheme === "dark" ? "light" : "dark"
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Tooltip>
+      <TooltipTrigger
         render={
-          <Button variant="ghost" size="icon" aria-label="Toggle theme" />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle theme"
+            aria-keyshortcuts="D"
+            onClick={() => setTheme(next)}
+          />
         }
       >
         <SunIcon className="size-4 scale-100 rotate-0 transition-transform dark:scale-0 dark:-rotate-90" />
         <MoonIcon className="absolute size-4 scale-0 rotate-90 transition-transform dark:scale-100 dark:rotate-0" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup
-          value={theme ?? "system"}
-          onValueChange={(value) => setTheme(String(value))}
-        >
-          {THEMES.map(({ value, label, icon: Icon }) => (
-            <DropdownMenuRadioItem key={value} value={value}>
-              <Icon />
-              {label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </TooltipTrigger>
+      <TooltipContent className="flex items-center gap-2">
+        Toggle theme <Kbd>D</Kbd>
+      </TooltipContent>
+    </Tooltip>
   )
 }

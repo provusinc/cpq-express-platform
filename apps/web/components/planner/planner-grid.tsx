@@ -8,6 +8,7 @@ import { checkAllocationAmount } from "@workspace/domain/allocations"
 import type { PeriodType } from "@workspace/domain/enums"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { PHASE_TINT_CLASSES } from "@/components/shell/tints"
 import {
   dragFillEdits,
   dragFillRange,
@@ -299,7 +300,7 @@ export function PlannerGrid({
           <div
             className={cn(
               "truncate rounded-sm px-2 py-0.5 text-left text-xs font-medium",
-              TINT[band.tint]
+              PHASE_TINT_CLASSES[band.tint]?.fill
             )}
             title={band.name}
           >
@@ -388,7 +389,10 @@ export function PlannerGrid({
                 <tr key={`phase-${row.id}`} className="bg-muted/50">
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 h-9 border-r border-b bg-muted px-2 text-left font-medium"
+                    className={cn(
+                      "sticky left-0 z-10 h-9 border-r border-b bg-muted px-2 text-left font-medium",
+                      tint && PHASE_TINT_CLASSES[tint]?.edge
+                    )}
                     style={{ paddingLeft: 6 + row.depth * 16 }}
                   >
                     <button
@@ -407,7 +411,7 @@ export function PlannerGrid({
                           aria-hidden
                           className={cn(
                             "size-2.5 shrink-0 rounded-full",
-                            DOT[tint]
+                            PHASE_TINT_CLASSES[tint]?.dot
                           )}
                         />
                       )}
@@ -567,22 +571,6 @@ export function PlannerGrid({
       </table>
     </div>
   )
-}
-
-/** Phase band fills and dots, by tint (as on the Overview's Phase bar). */
-const TINT: Record<number, string> = {
-  1: "bg-phase-1 text-phase-1-ink",
-  2: "bg-phase-2 text-phase-2-ink",
-  3: "bg-phase-3 text-phase-3-ink",
-  4: "bg-phase-4 text-phase-4-ink",
-  5: "bg-phase-5 text-phase-5-ink",
-}
-const DOT: Record<number, string> = {
-  1: "bg-phase-1-ink",
-  2: "bg-phase-2-ink",
-  3: "bg-phase-3-ink",
-  4: "bg-phase-4-ink",
-  5: "bg-phase-5-ink",
 }
 
 /**

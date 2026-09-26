@@ -13,10 +13,10 @@ import type { LucideIcon } from "lucide-react"
  */
 export const SETTINGS_TABS = [
   {
-    segment: "company",
-    label: "Company",
+    segment: "profile",
+    label: "Organization profile",
     description: "Name, logo and address",
-    href: "/settings/company",
+    href: "/settings/profile",
     icon: Building2Icon,
   },
   {

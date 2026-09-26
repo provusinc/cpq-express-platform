@@ -81,7 +81,7 @@ const layoutFor = (saved: { order: string[]; hidden: string[] } | null) =>
 
 /**
  * The Quote list (niko-table, server-side): search, faceted filters
- * (status, Account, owner), created date range, sorting and paging all run
+ * (status, Customer, owner), created date range, sorting and paging all run
  * on the server (`quote.list`); columns the user shows, hides and reorders
  * are saved to their preferences. Valid Until dates in the past are
  * highlighted. Each row's menu (and right-click) opens, clones or deletes
@@ -185,7 +185,7 @@ export function QuotesList({
     () => [
       ...toColumnFilters({
         status: filters.statuses,
-        account: filters.accountId,
+        customer: filters.customerId,
         owner: filters.owner === "mine" ? "mine" : undefined,
       }),
       ...(filters.createdFrom || filters.createdTo
@@ -202,7 +202,7 @@ export function QuotesList({
     ],
     [
       filters.statuses,
-      filters.accountId,
+      filters.customerId,
       filters.owner,
       filters.createdFrom,
       filters.createdTo,
@@ -215,7 +215,7 @@ export function QuotesList({
       | undefined
     setFilter({
       statuses: nextStatuses.length > 0 ? nextStatuses : undefined,
-      accountId: facetValues(next, "account")[0],
+      customerId: facetValues(next, "customer")[0],
       owner: facetValues(next, "owner")[0] === "mine" ? "mine" : "all",
       createdFrom: toLocalDay(created?.[0]),
       createdTo: toLocalDay(created?.[1]),
@@ -225,7 +225,7 @@ export function QuotesList({
   const filtered =
     Boolean(deferredSearch) ||
     statuses.length > 0 ||
-    Boolean(filters.accountId) ||
+    Boolean(filters.customerId) ||
     Boolean(filters.createdFrom) ||
     Boolean(filters.createdTo) ||
     Boolean(filters.validUntilFrom) ||
@@ -291,7 +291,7 @@ export function QuotesList({
         title="Quotes"
         description={
           <>
-            Priced engagements offered to your Accounts ·{" "}
+            Priced engagements offered to your Customers ·{" "}
             {focus?.kind === "insight" && (
               <span className="font-medium text-foreground">
                 {INSIGHT_LABELS[focus.key]} ·{" "}
@@ -346,7 +346,7 @@ export function QuotesList({
           <DataTableToolbarSection className="px-0">
             <SearchFilter
               aria-label="Search Quotes"
-              placeholder="Search name, description, Account"
+              placeholder="Search name, description, Customer"
               className="w-full flex-none sm:w-64"
             />
             <FacetedFilter
@@ -357,8 +357,8 @@ export function QuotesList({
               limitToFilteredRows={false}
             />
             <FacetedFilter
-              accessorKey="account"
-              options={(options.data?.accounts ?? []).map((a) => ({
+              accessorKey="customer"
+              options={(options.data?.customers ?? []).map((a) => ({
                 value: a.id,
                 label: a.name,
               }))}
@@ -441,7 +441,7 @@ export function QuotesList({
             empty={{
               icon: <FileTextIcon />,
               title: "No Quotes yet",
-              description: "Create a Quote for one of your Accounts.",
+              description: "Create a Quote for one of your Customers.",
               filteredTitle: "No Quotes match",
               filteredDescription: "Try another search or clear the filters.",
               action: (

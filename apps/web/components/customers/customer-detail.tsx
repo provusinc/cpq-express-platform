@@ -48,19 +48,19 @@ import { PageHeader } from "@/components/shell/page-header"
 import { errorMessage, inUseOf } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-import { AccountDialog } from "./account-dialog"
+import { CustomerDialog } from "./customer-dialog"
 import { ContactDialog } from "./contact-dialog"
 
-type Account = RouterOutputs["account"]["byId"]
-type Contact = Account["contacts"][number]
+type Customer = RouterOutputs["customer"]["byId"]
+type Contact = Customer["contacts"][number]
 
-/** An Account's page: details, archive/delete, and its Contacts. */
-export function AccountDetail({ accountId }: { accountId: string }) {
+/** A Customer's page: details, archive/delete, and its Contacts. */
+export function CustomerDetail({ customerId }: { customerId: string }) {
   const trpc = useTRPC()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { data: account } = useSuspenseQuery(
-    trpc.account.byId.queryOptions({ id: accountId })
+  const { data: customer } = useSuspenseQuery(
+    trpc.customer.byId.queryOptions({ id: customerId })
   )
 
   const [editing, setEditing] = useState(false)
@@ -68,33 +68,33 @@ export function AccountDetail({ accountId }: { accountId: string }) {
   const [blocked, setBlocked] = useState<string | null>(null)
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.account.pathFilter())
+    queryClient.invalidateQueries(trpc.customer.pathFilter())
   const onError = (e: unknown) => toast.error(errorMessage(e))
   const archive = useMutation(
-    trpc.account.archive.mutationOptions({
+    trpc.customer.archive.mutationOptions({
       onSuccess: async () => {
-        toast.success("Account archived. It no longer appears in pickers.")
+        toast.success("Customer archived. It no longer appears in pickers.")
         await invalidate()
       },
       onError,
     })
   )
   const unarchive = useMutation(
-    trpc.account.unarchive.mutationOptions({
+    trpc.customer.unarchive.mutationOptions({
       onSuccess: async () => {
-        toast.success("Account restored.")
+        toast.success("Customer restored.")
         await invalidate()
       },
       onError,
     })
   )
   const remove = useMutation(
-    trpc.account.delete.mutationOptions({
+    trpc.customer.delete.mutationOptions({
       onSuccess: async () => {
-        toast.success(`“${account.name}” deleted.`)
+        toast.success(`“${customer.name}” deleted.`)
         setConfirmDelete(false)
-        router.push("/accounts")
-        await queryClient.invalidateQueries(trpc.account.list.pathFilter())
+        router.push("/customers")
+        await queryClient.invalidateQueries(trpc.customer.list.pathFilter())
       },
       onError: (e) => {
         setConfirmDelete(false)
@@ -105,32 +105,32 @@ export function AccountDetail({ accountId }: { accountId: string }) {
   )
 
   const address = [
-    account.billingStreet,
-    [account.billingCity, account.billingState, account.billingPostalCode]
+    customer.billingStreet,
+    [customer.billingCity, customer.billingState, customer.billingPostalCode]
       .filter(Boolean)
       .join(" "),
-    account.billingCountry,
+    customer.billingCountry,
   ].filter(Boolean)
 
   return (
     <>
       <PageHeader
-        title={account.name}
+        title={customer.name}
         description={
-          [account.type, account.industry].filter(Boolean).join(" · ") ||
+          [customer.type, customer.industry].filter(Boolean).join(" · ") ||
           undefined
         }
       >
-        {account.archived && <Badge variant="secondary">Archived</Badge>}
+        {customer.archived && <Badge variant="secondary">Archived</Badge>}
         <Button variant="outline" onClick={() => setEditing(true)}>
           <PencilIcon data-icon="inline-start" />
           Edit
         </Button>
-        {account.archived ? (
+        {customer.archived ? (
           <Button
             variant="outline"
             disabled={unarchive.isPending}
-            onClick={() => unarchive.mutate({ id: account.id })}
+            onClick={() => unarchive.mutate({ id: customer.id })}
           >
             <ArchiveRestoreIcon data-icon="inline-start" />
             Unarchive
@@ -139,7 +139,7 @@ export function AccountDetail({ accountId }: { accountId: string }) {
           <Button
             variant="outline"
             disabled={archive.isPending}
-            onClick={() => archive.mutate({ id: account.id })}
+            onClick={() => archive.mutate({ id: customer.id })}
           >
             <ArchiveIcon data-icon="inline-start" />
             Archive
@@ -164,28 +164,28 @@ export function AccountDetail({ accountId }: { accountId: string }) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <Detail label="Type" value={account.type} />
-              <Detail label="Industry" value={account.industry} />
+              <Detail label="Type" value={customer.type} />
+              <Detail label="Industry" value={customer.industry} />
               <Detail
                 label="Website"
                 value={
-                  account.website && (
+                  customer.website && (
                     <a
                       href={
-                        /^https?:\/\//.test(account.website)
-                          ? account.website
-                          : `https://${account.website}`
+                        /^https?:\/\//.test(customer.website)
+                          ? customer.website
+                          : `https://${customer.website}`
                       }
                       target="_blank"
                       rel="noreferrer"
                       className="underline-offset-4 hover:underline"
                     >
-                      {account.website}
+                      {customer.website}
                     </a>
                   )
                 }
               />
-              <Detail label="Phone" value={account.phone} />
+              <Detail label="Phone" value={customer.phone} />
               <Detail
                 label="Billing address"
                 value={
@@ -199,21 +199,21 @@ export function AccountDetail({ accountId }: { accountId: string }) {
             </dl>
           </CardContent>
         </Card>
-        <ContactsCard account={account} />
+        <ContactsCard customer={customer} />
       </div>
 
-      <AccountDialog
+      <CustomerDialog
         open={editing}
         onOpenChange={setEditing}
-        account={account}
+        customer={customer}
       />
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title={`Delete “${account.name}”?`}
+        title={`Delete “${customer.name}”?`}
         description="Its Contacts are deleted too. This can't be undone."
         pending={remove.isPending}
-        onConfirm={() => remove.mutate({ id: account.id })}
+        onConfirm={() => remove.mutate({ id: customer.id })}
       />
     </>
   )
@@ -309,14 +309,14 @@ const contactColumns: DataTableColumns<Contact> = [
   }),
 ]
 
-function ContactsCard({ account }: { account: Account }) {
+function ContactsCard({ customer }: { customer: Customer }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
   const [dialog, setDialog] = useState<{ contact: Contact | null } | null>(null)
   const [deleting, setDeleting] = useState<Contact | null>(null)
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.account.pathFilter())
+    queryClient.invalidateQueries(trpc.customer.pathFilter())
   const onError = (e: unknown) => toast.error(errorMessage(e))
   const setPrimary = useMutation(
     trpc.contact.setPrimary.mutationOptions({
@@ -360,7 +360,7 @@ function ContactsCard({ account }: { account: Account }) {
             onDelete: setDeleting,
           }}
         >
-          <LocalTableRoot columns={contactColumns} data={account.contacts}>
+          <LocalTableRoot columns={contactColumns} data={customer.contacts}>
             <ListTable
               rowMenu={ContactRowMenu}
               empty={{
@@ -376,7 +376,7 @@ function ContactsCard({ account }: { account: Account }) {
       <ContactDialog
         open={dialog !== null}
         onOpenChange={(open) => !open && setDialog(null)}
-        accountId={account.id}
+        customerId={customer.id}
         contact={dialog?.contact}
       />
       <ConfirmDialog

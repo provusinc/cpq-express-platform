@@ -88,7 +88,7 @@ export const QUOTE_ACTIONS_COLUMN = "actions"
 /** Column id → its name in the header and the Columns menu. */
 export const QUOTE_COLUMN_LABELS = {
   name: "Name",
-  account: "Account",
+  customer: "Customer",
   status: "Status",
   total: "Total",
   owner: "Owner",
@@ -148,10 +148,10 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
       </Link>
     ),
   }),
-  helper.accessor((r) => r.account.name, {
-    id: "account",
+  helper.accessor((r) => r.customer.name, {
+    id: "customer",
     header: SortableColumnTitle,
-    meta: label("account"),
+    meta: label("customer"),
   }),
   helper.accessor("status", {
     id: "status",

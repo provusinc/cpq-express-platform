@@ -10,32 +10,32 @@ import { OverviewCard } from "./overview-card"
 type Overview = RouterOutputs["quote"]["overview"]
 
 /**
- * Who the Quote is for: the Account (industry, type and billing city) and
- * its primary Contact (Quotes reach Contacts only through their Account),
- * linking to the Account for the rest.
+ * Who the Quote is for: the Customer (industry, type and billing city) and
+ * its primary Contact (Quotes reach Contacts only through their Customer),
+ * linking to the Customer for the rest.
  */
 export function CustomerCard({
-  account,
+  customer,
   contact,
 }: {
-  account: Overview["account"]
+  customer: Overview["customer"]
   contact: Overview["primaryContact"]
 }) {
-  const place = [account.city, account.state ?? account.country]
+  const place = [customer.city, customer.state ?? customer.country]
     .filter(Boolean)
     .join(", ")
-  const facts = [account.industry, account.type, place].filter(Boolean)
+  const facts = [customer.industry, customer.type, place].filter(Boolean)
   return (
     <OverviewCard
-      title="Account"
-      link={{ href: `/accounts/${account.id}`, label: "Open" }}
+      title="Customer"
+      link={{ href: `/customers/${customer.id}`, label: "Open" }}
     >
       <div className="flex items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
           <Building2Icon className="size-4.5" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="truncate font-medium">{account.name}</p>
+          <p className="truncate font-medium">{customer.name}</p>
           <p className="truncate text-xs text-muted-foreground">
             {facts.length > 0 ? facts.join(" · ") : "No details yet"}
           </p>
@@ -80,7 +80,7 @@ export function CustomerCard({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            The Account has no primary Contact yet.
+            The Customer has no primary Contact yet.
           </p>
         )}
       </div>

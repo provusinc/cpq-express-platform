@@ -28,6 +28,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { TagsFilter } from "@/components/catalog/tags-filter"
 import {
@@ -38,6 +39,7 @@ import {
 } from "@/components/shell/empty"
 import { FilterSelect } from "@/components/shell/filter-select"
 import { useLabels } from "@/components/shell/labels"
+import { SOURCE_KIND_TONES } from "@/components/shell/tints"
 import { formatMoney } from "@/lib/money"
 import type { PhaseOption } from "@/lib/phase-tree"
 import { useTRPC } from "@/trpc/react"
@@ -143,6 +145,13 @@ export function AddItemsSheet({
           <TabsList className="w-full">
             {tabs.map((term) => (
               <TabsTrigger key={term} value={term}>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    SOURCE_KIND_TONES[term].dot
+                  )}
+                />
                 {labels[term].plural}
               </TabsTrigger>
             ))}

@@ -75,15 +75,15 @@ describe("user preferences", () => {
       const ada = createTestCaller(db, { user: await createUser(db) })
       const bob = createTestCaller(db, { user: await createUser(db) })
       await ada.user.setQuoteListColumns({
-        order: ["name", "account", "name"],
+        order: ["name", "customer", "name"],
         hidden: ["description"],
       })
       await ada.user.setQuoteListColumns({
-        order: ["account", "name"],
+        order: ["customer", "name"],
         hidden: ["owner"],
       })
       expect((await ada.user.preferences()).quoteListColumns).toEqual({
-        order: ["account", "name"],
+        order: ["customer", "name"],
         hidden: ["owner"],
       })
       expect((await bob.user.preferences()).quoteListColumns).toEqual({

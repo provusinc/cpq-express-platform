@@ -53,11 +53,11 @@ import { ViewTabs } from "@/components/shell/view-tabs"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-import { AccountDialog } from "./account-dialog"
-import { INITIAL_ACCOUNT_LIST_INPUT } from "./list-input"
-import type { AccountListInput } from "./list-input"
+import { CustomerDialog } from "./customer-dialog"
+import { INITIAL_CUSTOMER_LIST_INPUT } from "./list-input"
+import type { CustomerListInput } from "./list-input"
 
-type AccountRow = RouterOutputs["account"]["list"]["rows"][number]
+type CustomerRow = RouterOutputs["customer"]["list"]["rows"][number]
 
 /** The status tabs; Active is the default. */
 const STATUS_VIEWS = [
@@ -66,30 +66,30 @@ const STATUS_VIEWS = [
   { value: "all", label: "All" },
 ] as const
 
-interface AccountRowActions {
-  onArchive: (account: AccountRow) => void
-  onUnarchive: (account: AccountRow) => void
-  onDelete: (account: AccountRow) => void
+interface CustomerRowActions {
+  onArchive: (customer: CustomerRow) => void
+  onUnarchive: (customer: CustomerRow) => void
+  onDelete: (customer: CustomerRow) => void
 }
-const AccountRowActionsContext = createContext<AccountRowActions | null>(null)
+const CustomerRowActionsContext = createContext<CustomerRowActions | null>(null)
 
-/** An Account's actions (its "…" menu and its right-click menu). */
-function AccountRowMenu() {
-  const actions = useContext(AccountRowActionsContext)!
-  const account = useDataTableRow<AccountRow>()
+/** A Customer's actions (its "…" menu and its right-click menu). */
+function CustomerRowMenu() {
+  const actions = useContext(CustomerRowActionsContext)!
+  const customer = useDataTableRow<CustomerRow>()
   return (
     <>
-      <RowMenuItem render={<Link href={`/accounts/${account.id}`} />}>
+      <RowMenuItem render={<Link href={`/customers/${customer.id}`} />}>
         <ExternalLinkIcon />
         Open
       </RowMenuItem>
-      {account.archived ? (
-        <RowMenuItem onClick={() => actions.onUnarchive(account)}>
+      {customer.archived ? (
+        <RowMenuItem onClick={() => actions.onUnarchive(customer)}>
           <ArchiveRestoreIcon />
           Unarchive
         </RowMenuItem>
       ) : (
-        <RowMenuItem onClick={() => actions.onArchive(account)}>
+        <RowMenuItem onClick={() => actions.onArchive(customer)}>
           <ArchiveIcon />
           Archive
         </RowMenuItem>
@@ -97,7 +97,7 @@ function AccountRowMenu() {
       <RowMenuSeparator />
       <RowMenuItem
         variant="destructive"
-        onClick={() => actions.onDelete(account)}
+        onClick={() => actions.onDelete(customer)}
       >
         <Trash2Icon />
         Delete
@@ -106,10 +106,10 @@ function AccountRowMenu() {
   )
 }
 
-const columns: DataTableColumns<AccountRow> = [
-  selectColumn<AccountRow>({
+const columns: DataTableColumns<CustomerRow> = [
+  selectColumn<CustomerRow>({
     allLabel: "Select all on this page",
-    rowLabel: (account) => `Select ${account.name}`,
+    rowLabel: (customer) => `Select ${customer.name}`,
   }),
   {
     id: "name",
@@ -118,7 +118,10 @@ const columns: DataTableColumns<AccountRow> = [
     meta: { label: "Name" },
     cell: ({ row }) => (
       <span className="font-medium">
-        <Link href={`/accounts/${row.original.id}`} className="hover:underline">
+        <Link
+          href={`/customers/${row.original.id}`}
+          className="hover:underline"
+        >
           {row.original.name}
         </Link>
         {row.original.archived && (
@@ -162,32 +165,32 @@ const columns: DataTableColumns<AccountRow> = [
         </span>
       ),
   },
-  actionsColumn<AccountRow>({
-    label: (account) => `Actions for ${account.name}`,
-    Menu: AccountRowMenu,
+  actionsColumn<CustomerRow>({
+    label: (customer) => `Actions for ${customer.name}`,
+    Menu: CustomerRowMenu,
   }),
 ]
 
-/** The Accounts page: search, filters, paging, create and bulk delete. */
-export function AccountsList() {
+/** The Customers page: search, filters, paging, create and bulk delete. */
+export function CustomersList() {
   const trpc = useTRPC()
   const router = useRouter()
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())
-  const [filters, setFilters] = useState<AccountListInput>(
-    INITIAL_ACCOUNT_LIST_INPUT
+  const [filters, setFilters] = useState<CustomerListInput>(
+    INITIAL_CUSTOMER_LIST_INPUT
   )
-  const input: AccountListInput = {
+  const input: CustomerListInput = {
     ...filters,
     ...(deferredSearch ? { search: deferredSearch } : {}),
   }
   const list = useQuery({
-    ...trpc.account.list.queryOptions(input),
+    ...trpc.customer.list.queryOptions(input),
     placeholderData: keepPreviousData,
   })
-  const options = useQuery(trpc.account.filterOptions.queryOptions())
+  const options = useQuery(trpc.customer.filterOptions.queryOptions())
 
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [creating, setCreating] = useState(false)
@@ -196,15 +199,15 @@ export function AccountsList() {
     label: string
   } | null>(null)
 
-  const setFilter = (changes: Partial<AccountListInput>) => {
+  const setFilter = (changes: Partial<CustomerListInput>) => {
     setFilters((f) => ({ ...f, ...changes, page: changes.page ?? 1 }))
     setSelection({})
   }
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.account.pathFilter())
+    queryClient.invalidateQueries(trpc.customer.pathFilter())
   const archive = useMutation(
-    trpc.account.archive.mutationOptions({
+    trpc.customer.archive.mutationOptions({
       onSuccess: async (a) => {
         toast.success(`“${a.name}” archived.`)
         await invalidate()
@@ -213,7 +216,7 @@ export function AccountsList() {
     })
   )
   const unarchive = useMutation(
-    trpc.account.unarchive.mutationOptions({
+    trpc.customer.unarchive.mutationOptions({
       onSuccess: async (a) => {
         toast.success(`“${a.name}” restored.`)
         await invalidate()
@@ -222,12 +225,12 @@ export function AccountsList() {
     })
   )
   const deleteMany = useMutation(
-    trpc.account.deleteMany.mutationOptions({
+    trpc.customer.deleteMany.mutationOptions({
       onSuccess: async ({ ids }) => {
         toast.success(
           ids.length === 1
-            ? "Account deleted."
-            : `${ids.length} Accounts deleted.`
+            ? "Customer deleted."
+            : `${ids.length} Customers deleted.`
         )
         setSelection({})
         setDeleting(null)
@@ -239,7 +242,7 @@ export function AccountsList() {
       },
     })
   )
-  const rowActions: AccountRowActions = {
+  const rowActions: CustomerRowActions = {
     onArchive: (a) => archive.mutate({ id: a.id }),
     onUnarchive: (a) => unarchive.mutate({ id: a.id }),
     onDelete: (a) => setDeleting({ ids: [a.id], label: `“${a.name}”` }),
@@ -270,17 +273,17 @@ export function AccountsList() {
   return (
     <>
       <PageHeader
-        title="Accounts"
-        description="The companies you quote, and their Contacts."
+        title="Customers"
+        description="The customers you quote, and their Contacts."
       >
         <Button onClick={() => setCreating(true)}>
           <PlusIcon data-icon="inline-start" />
-          New Account
+          New Customer
         </Button>
       </PageHeader>
 
       <ViewTabs
-        label="Account status"
+        label="Customer status"
         views={STATUS_VIEWS.map((view) => ({
           ...view,
           count: list.data?.statusCounts[view.value],
@@ -290,19 +293,19 @@ export function AccountsList() {
         summary={
           <>
             <span className="tabular-nums">{list.data?.total ?? 0}</span>{" "}
-            {list.data?.total === 1 ? "Account" : "Accounts"}
+            {list.data?.total === 1 ? "Customer" : "Customers"}
             {filtered ? " match" : ""}
           </>
         }
       />
 
-      <AccountRowActionsContext value={rowActions}>
+      <CustomerRowActionsContext value={rowActions}>
         <ServerTableRoot
           columns={columns}
           data={list.data?.rows}
           isLoading={list.isPending}
           page={filters.page ?? 1}
-          pageSize={filters.pageSize ?? INITIAL_ACCOUNT_LIST_INPUT.pageSize}
+          pageSize={filters.pageSize ?? INITIAL_CUSTOMER_LIST_INPUT.pageSize}
           total={list.data?.total ?? 0}
           onPageChange={(paging) => setFilter(paging)}
           columnFilters={columnFilters}
@@ -317,7 +320,7 @@ export function AccountsList() {
         >
           <DataTableToolbarSection className="px-0">
             <SearchFilter
-              aria-label="Search Accounts"
+              aria-label="Search Customers"
               placeholder="Search name, industry, website"
               className="w-full flex-none sm:w-64"
             />
@@ -352,8 +355,8 @@ export function AccountsList() {
                   ids: selectedIds,
                   label:
                     selectedIds.length === 1
-                      ? "the selected Account"
-                      : `${selectedIds.length} Accounts`,
+                      ? "the selected Customer"
+                      : `${selectedIds.length} Customers`,
                 })
               }
             >
@@ -363,24 +366,24 @@ export function AccountsList() {
           </DataTableSelectionBar>
           <ListTable
             filtered={filtered}
-            rowMenu={AccountRowMenu}
+            rowMenu={CustomerRowMenu}
             empty={{
               icon: <Building2Icon />,
               title:
                 filters.status === "archived"
-                  ? "No archived Accounts"
-                  : "No Accounts yet",
+                  ? "No archived Customers"
+                  : "No Customers yet",
               description:
                 filters.status === "archived"
-                  ? "Archive an Account to hide it from new Quotes."
-                  : "Create the first company you quote.",
-              filteredTitle: "No Accounts match",
+                  ? "Archive a Customer to hide it from new Quotes."
+                  : "Create the first customer you quote.",
+              filteredTitle: "No Customers match",
               filteredDescription: "Try another search or clear the filters.",
               action:
                 filters.status === "archived" ? undefined : (
                   <Button onClick={() => setCreating(true)}>
                     <PlusIcon data-icon="inline-start" />
-                    New Account
+                    New Customer
                   </Button>
                 ),
               filteredAction: (
@@ -396,18 +399,18 @@ export function AccountsList() {
             isFetching={list.isFetching}
           />
         </ServerTableRoot>
-      </AccountRowActionsContext>
+      </CustomerRowActionsContext>
 
-      <AccountDialog
+      <CustomerDialog
         open={creating}
         onOpenChange={setCreating}
-        onCreated={(a) => router.push(`/accounts/${a.id}`)}
+        onCreated={(a) => router.push(`/customers/${a.id}`)}
       />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
         title={`Delete ${deleting?.label ?? ""}?`}
-        description="Their Contacts are deleted too. An Account used by Quotes can't be deleted; archive it instead."
+        description="Their Contacts are deleted too. A Customer used by Quotes can't be deleted; archive it instead."
         pending={deleteMany.isPending}
         onConfirm={() => deleting && deleteMany.mutate({ ids: deleting.ids })}
       />

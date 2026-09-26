@@ -4,7 +4,7 @@ import { HydrateClient, prefetch, trpc } from "@/trpc/server"
 type Params = Promise<{ slug: string; quoteId: string }>
 
 /**
- * The Quote editor's index tab, Overview: the Account and primary Contact,
+ * The Quote editor's index tab, Overview: the Customer and primary Contact,
  * the Resource Roles, the mix, the Phase timeline, the approval history and
  * the cost changes. The layout has already checked the Quote exists.
  */

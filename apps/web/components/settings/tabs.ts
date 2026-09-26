@@ -1,6 +1,7 @@
 import {
   Building2Icon,
   FileTextIcon,
+  ListChecksIcon,
   SlidersHorizontalIcon,
   TagsIcon,
 } from "lucide-react"
@@ -25,6 +26,13 @@ export const SETTINGS_TABS = [
     description: "Working hours and deletion rules",
     href: "/settings/quoting",
     icon: SlidersHorizontalIcon,
+  },
+  {
+    segment: "statuses",
+    label: "Quote Statuses",
+    description: "Your steps inside each Stage",
+    href: "/settings/statuses",
+    icon: ListChecksIcon,
   },
   {
     segment: "labels",

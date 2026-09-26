@@ -33,6 +33,7 @@ import {
   organizationProcedure,
   permittedProcedure,
 } from "../trpc"
+import { quoteStatusSettingsProcedures } from "./settings-quote-statuses"
 
 const {
   documentSettings,
@@ -185,6 +186,8 @@ const documentSettingsInput = z
 const manageSettings = permittedProcedure("settings.manage")
 
 export const settingsRouter = createTRPCRouter({
+  ...quoteStatusSettingsProcedures,
+
   /**
    * Every term's display names and visibility (Label Overrides over the
    * canonical names). Any member: the whole UI is labelled with these.

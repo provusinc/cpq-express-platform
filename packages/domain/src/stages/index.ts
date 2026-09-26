@@ -185,3 +185,154 @@ export const QUOTE_STATUS_NAME_MAX = 40
 
 /** Every Stage has at least one and at most this many Statuses. */
 export const QUOTE_STATUSES_PER_STAGE_MAX = 10
+
+/**
+ * The colours an Admin may give a Quote Status: the status tones (grey,
+ * blue, iris, green, amber, red) as `#rrggbb`. A Status without a colour
+ * takes its Stage's tone.
+ */
+export const QUOTE_STATUS_COLOURS = [
+  { colour: "#737373", label: "Grey" },
+  { colour: "#1447e6", label: "Blue" },
+  { colour: "#6a59cb", label: "Iris" },
+  { colour: "#219761", label: "Green" },
+  { colour: "#eb9f2c", label: "Amber" },
+  { colour: "#d73434", label: "Red" },
+] as const satisfies readonly { colour: string; label: string }[]
+
+/** Whether two Quote Status names are the same (trimmed, ignoring case). */
+export function sameQuoteStatusName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+export type QuoteStatusNameCheck =
+  | { ok: true; name: string }
+  | { ok: false; reason: "blank" | "too_long" | "duplicate"; message: string }
+
+/**
+ * Checks a Quote Status name: trimmed, not blank, at most
+ * `QUOTE_STATUS_NAME_MAX` characters, and not one of `taken` (the
+ * Organization's other Statuses' names, compared with
+ * `sameQuoteStatusName`). Returns the trimmed name.
+ */
+export function checkQuoteStatusName(
+  name: string,
+  taken: readonly string[] = []
+): QuoteStatusNameCheck {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return { ok: false, reason: "blank", message: "Enter a name." }
+  }
+  if (trimmed.length > QUOTE_STATUS_NAME_MAX) {
+    return {
+      ok: false,
+      reason: "too_long",
+      message: `Use at most ${QUOTE_STATUS_NAME_MAX} characters.`,
+    }
+  }
+  if (taken.some((other) => sameQuoteStatusName(other, trimmed))) {
+    return {
+      ok: false,
+      reason: "duplicate",
+      message: `A Quote Status named “${trimmed}” already exists.`,
+    }
+  }
+  return { ok: true, name: trimmed }
+}
+
+export type QuoteStatusColourCheck =
+  | { ok: true; colour: string | null }
+  | { ok: false; reason: "invalid_colour"; message: string }
+
+/** Checks a Quote Status colour: none, or one of `QUOTE_STATUS_COLOURS`. */
+export function checkQuoteStatusColour(
+  colour: string | null | undefined
+): QuoteStatusColourCheck {
+  if (colour == null || colour === "") return { ok: true, colour: null }
+  const normalised = colour.trim().toLowerCase()
+  if (!QUOTE_STATUS_COLOURS.some((option) => option.colour === normalised)) {
+    return {
+      ok: false,
+      reason: "invalid_colour",
+      message: "Pick one of the status colours.",
+    }
+  }
+  return { ok: true, colour: normalised }
+}
+
+export type QuoteStatusChange =
+  | { ok: true }
+  | {
+      ok: false
+      reason:
+        | "stage_full"
+        | "last_status"
+        | "replacement_required"
+        | "replacement_same"
+        | "replacement_other_stage"
+      message: string
+    }
+
+/** Whether a Stage that has `count` Statuses can take another. */
+export function canAddQuoteStatus(count: number): QuoteStatusChange {
+  if (count >= QUOTE_STATUSES_PER_STAGE_MAX) {
+    return {
+      ok: false,
+      reason: "stage_full",
+      message: `A Stage can have at most ${QUOTE_STATUSES_PER_STAGE_MAX} Quote Statuses.`,
+    }
+  }
+  return { ok: true }
+}
+
+/**
+ * Whether a Status can be deleted: never the last of its Stage (it can be
+ * renamed instead). A Status Quotes sit on (`quoteCount` > 0) needs a
+ * `replacement`, another Status of the same Stage, which those Quotes move
+ * to; an unused one needs none.
+ */
+export function canDeleteQuoteStatus({
+  status,
+  countInStage,
+  quoteCount,
+  replacement,
+}: {
+  status: { id: string; stage: QuoteStage }
+  /** How many Statuses the Stage has, this one included. */
+  countInStage: number
+  /** How many Quotes sit on this Status. */
+  quoteCount: number
+  replacement?: { id: string; stage: QuoteStage } | null
+}): QuoteStatusChange {
+  if (countInStage <= 1) {
+    return {
+      ok: false,
+      reason: "last_status",
+      message:
+        "Every Stage needs at least one Quote Status. Rename this one instead.",
+    }
+  }
+  if (replacement) {
+    if (replacement.id === status.id) {
+      return {
+        ok: false,
+        reason: "replacement_same",
+        message: "Pick another Quote Status as the replacement.",
+      }
+    }
+    if (replacement.stage !== status.stage) {
+      return {
+        ok: false,
+        reason: "replacement_other_stage",
+        message: "The replacement must be a Quote Status of the same Stage.",
+      }
+    }
+  } else if (quoteCount > 0) {
+    return {
+      ok: false,
+      reason: "replacement_required",
+      message: `${quoteCount} ${quoteCount === 1 ? "Quote is" : "Quotes are"} in this Status. Pick the Status to move ${quoteCount === 1 ? "it" : "them"} to.`,
+    }
+  }
+  return { ok: true }
+}

@@ -12,7 +12,8 @@ import { cn } from "@workspace/ui/lib/utils"
  * value isn't saved; a blank `required` value, or one `validate` rejects
  * (it returns the message to show), is refused and restored.
  * While not focused it follows `value`, so a colleague's change shows up
- * after a refetch.
+ * after a refetch. `idleText` replaces the shown text while not focused
+ * (e.g. blank for a flat fee's quantity); focusing reveals the value.
  */
 export function InlineText({
   value,
@@ -26,6 +27,8 @@ export function InlineText({
   validate,
   inputMode,
   autoFocus,
+  idleText,
+  title,
   className,
 }: {
   value: string | null
@@ -43,6 +46,9 @@ export function InlineText({
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"]
   /** Focus on mount (a field revealed by an "Add …" action). */
   autoFocus?: boolean
+  /** Shown instead of the value while the field isn't focused. */
+  idleText?: string
+  title?: string
   className?: string
 }) {
   const [draft, setDraft] = useState(value ?? "")
@@ -76,8 +82,9 @@ export function InlineText({
 
   const props = {
     "aria-label": label,
-    value: draft,
+    value: idleText !== undefined && !focused ? idleText : draft,
     placeholder,
+    title,
     disabled,
     maxLength,
     autoFocus,

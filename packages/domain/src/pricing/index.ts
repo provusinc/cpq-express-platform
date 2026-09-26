@@ -54,6 +54,18 @@ export function defaultLineItemQuantity(input: {
     : toQuantityString(1)
 }
 
+/**
+ * Whether a Line Item's quantity is shown (display only; pricing is
+ * unchanged). A flat fee is Each with quantity 1, so its quantity is hidden
+ * and its unit price reads as the line's amount. Hour lines always show it.
+ */
+export function showsQuantity(line: {
+  billingUnit: BillingUnit
+  quantity: DecimalInput
+}): boolean {
+  return line.billingUnit !== "each" || !new Decimal(line.quantity).equals(1)
+}
+
 /** The Quote Discount as entered. `value` is a percent (10 = 10 %) or an amount. */
 export interface QuoteDiscount {
   kind: DiscountKind

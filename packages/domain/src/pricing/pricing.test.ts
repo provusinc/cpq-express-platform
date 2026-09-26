@@ -7,6 +7,7 @@ import {
   priceQuote,
   type PricingLine,
   type QuoteDiscount,
+  showsQuantity,
 } from "./index"
 
 const line = (
@@ -305,5 +306,20 @@ describe("priceQuote – cost and Margin", () => {
     expect(result.margin).toBe("-999.0000")
     expect(result.marginPct).toBe("-999.9999")
     expect(result.lines[0]?.lineMarginPct).toBe("-999.9999")
+  })
+})
+
+describe("showsQuantity", () => {
+  it.each([
+    ["each", "1.000", false],
+    ["each", "1", false],
+    ["each", 1, false],
+    ["each", "2.000", true],
+    ["each", "0.000", true],
+    ["each", "1.500", true],
+    ["hour", "1.000", true],
+    ["hour", "40.000", true],
+  ] as const)("%s × %s → %s", (billingUnit, quantity, expected) => {
+    expect(showsQuantity({ billingUnit, quantity })).toBe(expected)
   })
 })

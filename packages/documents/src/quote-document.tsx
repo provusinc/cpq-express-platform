@@ -21,6 +21,7 @@ import type {
 } from "@workspace/domain/documents"
 import type { MilestoneType } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
+import { showsQuantity } from "@workspace/domain/pricing"
 import type { ReactNode } from "react"
 
 import {
@@ -340,7 +341,11 @@ function LineRow({
         </Text>
       )}
       <Text style={styles.colQty}>
-        {line.billingUnit === "hour" ? `${qty} h` : qty}
+        {!showsQuantity(line)
+          ? ""
+          : line.billingUnit === "hour"
+            ? `${qty} h`
+            : qty}
       </Text>
       <Text style={styles.colPrice}>{money(line.unitPrice)}</Text>
       <Text style={styles.colTotal}>{money(line.lineTotal)}</Text>

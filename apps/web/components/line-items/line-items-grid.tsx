@@ -45,6 +45,7 @@ import { toast } from "sonner"
 
 import { Decimal } from "@workspace/domain/money"
 import { canPlacePhase, MAX_PHASE_DEPTH } from "@workspace/domain/phases"
+import { showsQuantity } from "@workspace/domain/pricing"
 import type { PhaseRollup } from "@workspace/domain/phases"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -351,10 +352,15 @@ function EndCell({ row }: Cell) {
 function QuantityCell({ row }: Cell) {
   const { readOnly, onUpdate } = useGrid()
   const { line } = lineOf(row)
+  // A flat fee (Each × 1) shows no quantity; an editor still sees and
+  // changes it on focus.
+  const flatFee = !showsQuantity(line)
   return (
     <InlineText
       label="Quantity"
       value={trimMoney(line.quantity)}
+      idleText={flatFee ? "" : undefined}
+      title={flatFee ? "Flat fee (quantity 1)" : undefined}
       required
       inputMode="decimal"
       disabled={readOnly}
@@ -382,6 +388,8 @@ function UnitPriceCell({ row }: Cell) {
   const { line } = lineOf(row)
   const overridden = trimMoney(line.unitPrice) !== trimMoney(line.basePrice)
   const base = formatMoney(line.basePrice, currency)
+  // A flat fee's unit price is the line's amount.
+  const flatFee = !showsQuantity(line)
   return (
     <div className="flex items-center justify-end gap-1">
       {overridden && (
@@ -406,7 +414,8 @@ function UnitPriceCell({ row }: Cell) {
         </Tooltip>
       )}
       <InlineText
-        label="Unit price"
+        label={flatFee ? "Amount" : "Unit price"}
+        title={flatFee ? "Flat fee: the line's amount" : undefined}
         value={trimMoney(line.unitPrice)}
         required
         inputMode="decimal"

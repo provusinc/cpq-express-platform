@@ -18,6 +18,10 @@ export { organizationScope } from "./organization-scope"
 export { createInvitationToken, hashInvitationToken } from "./invitation-token"
 export { recomputeQuoteTotals } from "./quote-totals"
 export {
+  createDefaultCustomerClassifications,
+  ensureCustomerClassification,
+} from "./customer-classifications"
+export {
   createDefaultQuoteStatuses,
   findQuoteStatus,
   stageEntryStatus,

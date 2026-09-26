@@ -14,6 +14,7 @@ import {
   FINANCIAL_GRANULARITIES,
 } from "@workspace/domain/financials"
 
+import { classificationRefs } from "../customer-classifications"
 import { notFound } from "../errors"
 import { allocationsByLine } from "../line-items"
 import { getOrganizationSettings } from "../settings"
@@ -36,7 +37,7 @@ const quoteLines = (scope: OrganizationScope, quoteId: string) =>
 export const quoteOverviewProcedures = {
   /**
    * What the Overview tab adds to `quote.byId` and `quote.editor`: the
-   * Customer (industry and billing city for its card) with its primary
+   * Customer (Customer Type, Industry and billing city for its card) with its primary
    * Contact, and the Resource Roles the Quote's Line Items use (name and
    * location; the tab sums their Effort from the editor's lines, so it
    * follows edits at once). Every member may read it.
@@ -90,13 +91,20 @@ export const quoteOverviewProcedures = {
           )
           .orderBy(asc(resourceRoles.name)),
       ])
+      const refs = await classificationRefs(ctx.scope, [
+        customer!.customerTypeId,
+        customer!.industryId,
+      ])
       return {
         quoteId: quote.id,
         customer: {
           id: customer!.id,
           name: customer!.name,
-          type: customer!.type,
-          industry: customer!.industry,
+          customerType:
+            (customer!.customerTypeId && refs.get(customer!.customerTypeId)) ||
+            null,
+          industry:
+            (customer!.industryId && refs.get(customer!.industryId)) || null,
           website: customer!.website,
           city: customer!.billingCity,
           state: customer!.billingState,

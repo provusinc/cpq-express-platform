@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { eq, schema } from "@workspace/db"
 import { QUOTE_STAGES } from "@workspace/domain/enums"
 import type { QuoteStage } from "@workspace/domain/enums"
+import { DEFAULT_CUSTOMER_CLASSIFICATIONS } from "@workspace/domain/customers"
 import { RESERVED_SLUGS } from "@workspace/domain/organizations"
 
 import {
@@ -110,6 +111,35 @@ describe("platform.createOrganization", () => {
         ["won", "Won", 0, null],
         ["lost", "Lost", 0, null],
       ])
+    }))
+
+  it("gives the new Organization the default Customer Types and Industries", () =>
+    withTestDb(async (db) => {
+      const { caller } = await platformCaller(db)
+      const { organization } = await caller.platform.createOrganization({
+        name: "Initech",
+        slug: "initech",
+        currencyCode: "USD",
+      })
+      const values = await db
+        .select()
+        .from(schema.customerClassifications)
+        .where(
+          eq(schema.customerClassifications.organizationId, organization.id)
+        )
+        .orderBy(
+          schema.customerClassifications.kind,
+          schema.customerClassifications.sequence
+        )
+      const names = (kind: string) =>
+        values.filter((v) => v.kind === kind).map((v) => v.name)
+      expect(names("customer_type")).toEqual([
+        ...DEFAULT_CUSTOMER_CLASSIFICATIONS.customer_type,
+      ])
+      expect(names("industry")).toEqual([
+        ...DEFAULT_CUSTOMER_CLASSIFICATIONS.industry,
+      ])
+      expect(values.every((v) => v.retiredAt === null)).toBe(true)
     }))
 
   it.each([...RESERVED_SLUGS])("rejects the reserved slug %s", (slug) =>

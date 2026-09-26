@@ -4,6 +4,7 @@ import type { Role } from "@workspace/domain/enums"
 
 import type { Db } from "../index"
 import { organizationScope } from "../organization-scope"
+import { createDefaultCustomerClassifications } from "../customer-classifications"
 import { createDefaultQuoteStatuses } from "../quote-statuses"
 import { memberships, organizations, users } from "../schema"
 
@@ -90,6 +91,9 @@ export async function seedTenancy(db: Db) {
       .returning()
     seeded[org.slug] = organization!
     await createDefaultQuoteStatuses(organizationScope(db, organization!.id))
+    await createDefaultCustomerClassifications(
+      organizationScope(db, organization!.id)
+    )
 
     for (const member of members) {
       const user = await upsertUser(db, member)

@@ -47,12 +47,17 @@ import {
   ServerTableRoot,
   toColumnFilters,
 } from "@/components/shell/data-table"
-import { FacetedFilter, SearchFilter } from "@/components/shell/table-toolbar"
+import {
+  ColumnsMenu,
+  FacetedFilter,
+  SearchFilter,
+} from "@/components/shell/table-toolbar"
 import { PageHeader } from "@/components/shell/page-header"
 import { ViewTabs } from "@/components/shell/view-tabs"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
+import { ClassificationName } from "./classification-name"
 import { CustomerDialog } from "./customer-dialog"
 import { INITIAL_CUSTOMER_LIST_INPUT } from "./list-input"
 import type { CustomerListInput } from "./list-input"
@@ -116,6 +121,7 @@ const columns: DataTableColumns<CustomerRow> = [
     accessorKey: "name",
     header: ColumnTitle,
     meta: { label: "Name" },
+    enableHiding: false,
     cell: ({ row }) => (
       <span className="font-medium">
         <Link
@@ -132,17 +138,20 @@ const columns: DataTableColumns<CustomerRow> = [
       </span>
     ),
   },
+  // Optional columns (the Columns menu), filtered by value id on the server.
   {
-    id: "type",
-    accessorKey: "type",
+    id: "customerType",
+    accessorFn: (c) => c.customerType?.id ?? "",
     header: ColumnTitle,
     meta: { label: "Type" },
+    cell: ({ row }) => <ClassificationName value={row.original.customerType} />,
   },
   {
     id: "industry",
-    accessorKey: "industry",
+    accessorFn: (c) => c.industry?.id ?? "",
     header: ColumnTitle,
     meta: { label: "Industry" },
+    cell: ({ row }) => <ClassificationName value={row.original.industry} />,
   },
   {
     id: "location",
@@ -190,7 +199,19 @@ export function CustomersList() {
     ...trpc.customer.list.queryOptions(input),
     placeholderData: keepPreviousData,
   })
-  const options = useQuery(trpc.customer.filterOptions.queryOptions())
+  // The lists' values are the filters' static options (retired ones too:
+  // Customers keep them).
+  const classifications = useQuery(
+    trpc.settings.customerClassifications.queryOptions()
+  )
+  const filterOptions = (kind: "customer_type" | "industry") =>
+    (classifications.data ?? [])
+      .filter((v) => v.kind === kind)
+      .map((v) => ({
+        value: v.id,
+        label: v.retired ? `${v.name} (retired)` : v.name,
+      }))
+  const [visibility, setVisibility] = useState<Record<string, boolean>>({})
 
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [creating, setCreating] = useState(false)
@@ -252,22 +273,25 @@ export function CustomersList() {
   const selectedIds = rows.filter((r) => selection[r.id]).map((r) => r.id)
 
   const columnFilters = toColumnFilters({
-    type: filters.type,
-    industry: filters.industry,
+    customerType: filters.customerTypeIds,
+    industry: filters.industryIds,
   })
-  const onColumnFiltersChange = (next: ColumnFiltersState) =>
+  const onColumnFiltersChange = (next: ColumnFiltersState) => {
+    const customerTypeIds = facetValues(next, "customerType")
+    const industryIds = facetValues(next, "industry")
     setFilter({
-      type: facetValues(next, "type")[0],
-      industry: facetValues(next, "industry")[0],
+      customerTypeIds: customerTypeIds.length ? customerTypeIds : undefined,
+      industryIds: industryIds.length ? industryIds : undefined,
     })
+  }
 
   const filtered =
     Boolean(deferredSearch) ||
-    Boolean(filters.type) ||
-    Boolean(filters.industry)
+    Boolean(filters.customerTypeIds?.length) ||
+    Boolean(filters.industryIds?.length)
   const clearFilters = () => {
     setSearch("")
-    setFilter({ type: undefined, industry: undefined })
+    setFilter({ customerTypeIds: undefined, industryIds: undefined })
   }
 
   return (
@@ -317,6 +341,8 @@ export function CustomersList() {
           }}
           rowSelection={selection}
           onRowSelectionChange={setSelection}
+          columnVisibility={visibility}
+          onColumnVisibilityChange={setVisibility}
         >
           <DataTableToolbarSection className="px-0">
             <SearchFilter
@@ -325,23 +351,18 @@ export function CustomersList() {
               className="w-full flex-none sm:w-64"
             />
             <FacetedFilter
-              accessorKey="type"
-              options={(options.data?.types ?? []).map((t) => ({
-                value: t,
-                label: t,
-              }))}
+              accessorKey="customerType"
+              options={filterOptions("customer_type")}
               showCounts={false}
               limitToFilteredRows={false}
             />
             <FacetedFilter
               accessorKey="industry"
-              options={(options.data?.industries ?? []).map((i) => ({
-                value: i,
-                label: i,
-              }))}
+              options={filterOptions("industry")}
               showCounts={false}
               limitToFilteredRows={false}
             />
+            <ColumnsMenu />
           </DataTableToolbarSection>
           <DataTableSelectionBar
             selectedCount={selectedIds.length}

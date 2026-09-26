@@ -9,13 +9,14 @@ import {
   eq,
   ilike,
   inArray,
-  isNotNull,
   ne,
   or,
   schema,
   sql,
 } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
+import { canChooseClassification } from "@workspace/domain/customers"
+import type { CustomerClassificationKind } from "@workspace/domain/enums"
 
 import {
   IN_USE_EXAMPLE_LIMIT,
@@ -31,14 +32,18 @@ import {
   requiredText,
   stripUndefined,
 } from "../inputs"
+import { classificationRefs } from "../customer-classifications"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 
-const { customers, contacts, quotes } = schema
+const { customers, contacts, customerClassifications, quotes } = schema
 
-/** Customer fields a user edits (name handled separately: it's unique). */
+/**
+ * Customer fields a user edits (name handled separately: it's unique).
+ * `customerTypeId` / `industryId`: a value of that list, `null` for none.
+ */
 const customerFields = {
-  type: optionalText(100),
-  industry: optionalText(100),
+  customerTypeId: z.uuid().nullable().optional(),
+  industryId: z.uuid().nullable().optional(),
   website: optionalText(500),
   phone: optionalText(50),
   billingStreet: optionalText(500),
@@ -46,6 +51,62 @@ const customerFields = {
   billingState: optionalText(100),
   billingPostalCode: optionalText(20),
   billingCountry: optionalText(100),
+}
+
+/**
+ * Checks the Customer Type and Industry a create or update sets: each must
+ * be a value of its own list in this Organization (NOT_FOUND otherwise) and
+ * not retired, unless the Customer already has it (BAD_REQUEST).
+ */
+async function assertClassifications(
+  scope: OrganizationScope,
+  changes: { customerTypeId?: string | null; industryId?: string | null },
+  current?: { customerTypeId: string | null; industryId: string | null }
+) {
+  const fields: [
+    CustomerClassificationKind,
+    string | null | undefined,
+    string | null | undefined,
+  ][] = [
+    ["customer_type", changes.customerTypeId, current?.customerTypeId],
+    ["industry", changes.industryId, current?.industryId],
+  ]
+  for (const [kind, id, currentId] of fields) {
+    if (!id) continue
+    const [value] = await scope.findMany(customerClassifications, {
+      where: and(
+        eq(customerClassifications.id, id),
+        eq(customerClassifications.kind, kind)
+      ),
+      limit: 1,
+    })
+    if (!value) {
+      throw notFound(kind === "customer_type" ? "Customer Type" : "Industry")
+    }
+    const choice = canChooseClassification(
+      kind,
+      { id: value.id, name: value.name, retired: value.retiredAt !== null },
+      currentId
+    )
+    if (!choice.ok) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: choice.message })
+    }
+  }
+}
+
+/** A Customer row with its Customer Type and Industry resolved. */
+async function withClassifications<
+  T extends { customerTypeId: string | null; industryId: string | null },
+>(scope: OrganizationScope, rows: T[]) {
+  const refs = await classificationRefs(
+    scope,
+    rows.flatMap((r) => [r.customerTypeId, r.industryId])
+  )
+  return rows.map((row) => ({
+    ...row,
+    customerType: (row.customerTypeId && refs.get(row.customerTypeId)) || null,
+    industry: (row.industryId && refs.get(row.industryId)) || null,
+  }))
 }
 
 const NAME_KEY = "customers_organization_id_name_key"
@@ -150,16 +211,17 @@ const primaryContacts = schema.contacts
 
 export const customerRouter = createTRPCRouter({
   /**
-   * One page of Customers, by name. `search` matches name, industry and
-   * website; `type` and `industry` match exactly; `status` defaults to the
-   * unarchived Customers.
+   * One page of Customers, by name. `search` matches name, Industry name and
+   * website; `customerTypeIds` / `industryIds` keep the Customers with one of
+   * those values; `status` defaults to the unarchived Customers. Rows carry
+   * `customerType` / `industry` (`{ id, name, retired }` or null).
    */
   list: organizationProcedure
     .input(
       z.object({
         search: z.string().trim().max(200).optional(),
-        type: z.string().optional(),
-        industry: z.string().optional(),
+        customerTypeIds: z.array(z.uuid()).max(200).optional(),
+        industryIds: z.array(z.uuid()).max(200).optional(),
         status: z.enum(["active", "archived", "all"]).default("active"),
         ...paging,
       })
@@ -171,12 +233,31 @@ export const customerRouter = createTRPCRouter({
         input.search
           ? or(
               ilike(customers.name, containsPattern(input.search)),
-              ilike(customers.industry, containsPattern(input.search)),
+              inArray(
+                customers.industryId,
+                ctx.scope.db
+                  .select({ id: customerClassifications.id })
+                  .from(customerClassifications)
+                  .where(
+                    ctx.scope.where(
+                      customerClassifications,
+                      eq(customerClassifications.kind, "industry"),
+                      ilike(
+                        customerClassifications.name,
+                        containsPattern(input.search)
+                      )
+                    )
+                  )
+              ),
               ilike(customers.website, containsPattern(input.search))
             )
           : undefined,
-        input.type ? eq(customers.type, input.type) : undefined,
-        input.industry ? eq(customers.industry, input.industry) : undefined
+        input.customerTypeIds?.length
+          ? inArray(customers.customerTypeId, input.customerTypeIds)
+          : undefined,
+        input.industryIds?.length
+          ? inArray(customers.industryId, input.industryIds)
+          : undefined
       )
       const where =
         input.status === "all"
@@ -191,8 +272,8 @@ export const customerRouter = createTRPCRouter({
           .select({
             id: customers.id,
             name: customers.name,
-            type: customers.type,
-            industry: customers.industry,
+            customerTypeId: customers.customerTypeId,
+            industryId: customers.industryId,
             website: customers.website,
             phone: customers.phone,
             billingCity: customers.billingCity,
@@ -239,7 +320,7 @@ export const customerRouter = createTRPCRouter({
         all: (counts?.active ?? 0) + (counts?.archived ?? 0),
       }
       return {
-        rows: rows.map((r) => ({
+        rows: (await withClassifications(ctx.scope, rows)).map((r) => ({
           ...r,
           primaryContact: r.primaryContact?.id ? r.primaryContact : null,
         })),
@@ -250,25 +331,6 @@ export const customerRouter = createTRPCRouter({
         pageSize: input.pageSize,
       }
     }),
-
-  /** The distinct types and industries in use, for the list filters. */
-  filterOptions: organizationProcedure.query(async ({ ctx }) => {
-    const distinct = async (
-      column: typeof customers.type | typeof customers.industry
-    ) => {
-      const rows = await ctx.scope.db
-        .selectDistinct({ value: column })
-        .from(customers)
-        .where(ctx.scope.where(customers, isNotNull(column)))
-        .orderBy(asc(column))
-      return rows.map((r) => r.value!)
-    }
-    const [types, industries] = await Promise.all([
-      distinct(customers.type),
-      distinct(customers.industry),
-    ])
-    return { types, industries }
-  }),
 
   /**
    * Unarchived Customers for a picker (e.g. a Quote's Customer), by name.
@@ -324,7 +386,8 @@ export const customerRouter = createTRPCRouter({
           asc(contacts.id),
         ],
       })
-      return { ...customer, contacts: customerContacts }
+      const [resolved] = await withClassifications(ctx.scope, [customer])
+      return { ...resolved!, contacts: customerContacts }
     }),
 
   /** Creates a Customer. CONFLICT when the name is taken. */
@@ -333,6 +396,7 @@ export const customerRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       ctx.scope.transaction(async (scope) => {
         await assertNameFree(scope, input.name)
+        await assertClassifications(scope, input)
         return withNameGuard(input.name, () =>
           scope.insert(customers, stripUndefined(input))
         )
@@ -350,8 +414,10 @@ export const customerRouter = createTRPCRouter({
     )
     .mutation(({ ctx, input: { id, ...changes } }) =>
       ctx.scope.transaction(async (scope) => {
-        if (!(await scope.findById(customers, id))) throw notFound("Customer")
+        const current = await scope.findById(customers, id)
+        if (!current) throw notFound("Customer")
         if (changes.name) await assertNameFree(scope, changes.name, id)
+        await assertClassifications(scope, changes, current)
         const updated = await withNameGuard(changes.name ?? "", () =>
           scope.update(customers, id, stripUndefined(changes))
         )

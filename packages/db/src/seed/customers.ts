@@ -1,13 +1,17 @@
 import { and, eq, sql } from "drizzle-orm"
 
+import { ensureCustomerClassification } from "../customer-classifications"
 import type { Db } from "../index"
+import { organizationScope } from "../organization-scope"
 import { customers, contacts } from "../schema"
 import type { Organization } from "../schema"
 
 /**
  * Demo Customers for `acme`: the five sample Customers of the Salesforce
  * edition's data plan (`salesforce/data/accounts.json`), each with two
- * Contacts (the first is primary). The old data had no Contacts.
+ * Contacts (the first is primary). The old data had no Contacts. Customer
+ * Type and Industry name values of the Organization's lists (created when
+ * missing).
  *
  * Idempotent: Customers are matched by name (case-insensitive, trimmed, the
  * unique key) and Contacts by (Customer, email), then reset to these values.
@@ -15,7 +19,7 @@ import type { Organization } from "../schema"
 export const SEED_CUSTOMERS = [
   {
     name: "Acme Corp Express CPQ Demo",
-    type: "Customer - Direct",
+    customerType: "Customer",
     industry: "Technology",
     phone: "(555) 123-4567",
     website: "https://www.acme-corp.com",
@@ -41,8 +45,8 @@ export const SEED_CUSTOMERS = [
   },
   {
     name: "TechStart Express CPQ Demo",
-    type: "Prospect",
-    industry: "Software",
+    customerType: "Prospect",
+    industry: "Technology",
     phone: "(555) 987-6543",
     website: "https://www.techstart.com",
     billingStreet: "456 Innovation Drive",
@@ -67,7 +71,7 @@ export const SEED_CUSTOMERS = [
   },
   {
     name: "Global Mfg Express",
-    type: "Customer - Direct",
+    customerType: "Customer",
     industry: "Manufacturing",
     phone: "(555) 456-7890",
     website: "https://www.globalmfg.com",
@@ -93,7 +97,7 @@ export const SEED_CUSTOMERS = [
   },
   {
     name: "Healthcare Express",
-    type: "Customer - Partner",
+    customerType: "Partner",
     industry: "Healthcare",
     phone: "(555) 321-9876",
     website: "https://www.healthpartners.com",
@@ -119,7 +123,7 @@ export const SEED_CUSTOMERS = [
   },
   {
     name: "Retail Express",
-    type: "Prospect",
+    customerType: "Prospect",
     industry: "Retail",
     phone: "(555) 654-3210",
     website: "https://www.retailsolutions.com",
@@ -147,7 +151,26 @@ export const SEED_CUSTOMERS = [
 
 export async function seedCustomers(db: Db, organization: Organization) {
   const organizationId = organization.id
-  for (const { contacts: seedContacts, ...values } of SEED_CUSTOMERS) {
+  const scope = organizationScope(db, organizationId)
+  for (const {
+    contacts: seedContacts,
+    customerType,
+    industry,
+    ...fields
+  } of SEED_CUSTOMERS) {
+    const values = {
+      ...fields,
+      customerTypeId: await ensureCustomerClassification(
+        scope,
+        "customer_type",
+        customerType
+      ),
+      industryId: await ensureCustomerClassification(
+        scope,
+        "industry",
+        industry
+      ),
+    }
     const [existing] = await db
       .select({ id: customers.id })
       .from(customers)

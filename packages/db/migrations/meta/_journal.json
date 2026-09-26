@@ -141,6 +141,20 @@
       "when": 1790445282455,
       "tag": "0019_status_change_action",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790445974635,
+      "tag": "0020_customer_classifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790445998556,
+      "tag": "0021_customer_classifications_drop_text",
+      "breakpoints": true
     }
   ]
 }

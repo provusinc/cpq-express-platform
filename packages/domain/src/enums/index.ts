@@ -114,6 +114,26 @@ export const MILESTONE_TYPE_LABELS: Record<MilestoneType, string> = {
 }
 
 /**
+ * The Organization-managed value lists that classify a Customer (glossary:
+ * Customer Type / Industry). One table holds both, told apart by this kind.
+ */
+export const CUSTOMER_CLASSIFICATION_KINDS = [
+  "customer_type",
+  "industry",
+] as const
+export type CustomerClassificationKind =
+  (typeof CUSTOMER_CLASSIFICATION_KINDS)[number]
+
+/** Each list's names for UI copy. */
+export const CUSTOMER_CLASSIFICATION_KIND_LABELS: Record<
+  CustomerClassificationKind,
+  { singular: string; plural: string }
+> = {
+  customer_type: { singular: "Customer Type", plural: "Customer Types" },
+  industry: { singular: "Industry", plural: "Industries" },
+}
+
+/**
  * Domain terms an Organization may rename with a Label Override. Code and API
  * always use these canonical terms; only UI copy changes.
  */

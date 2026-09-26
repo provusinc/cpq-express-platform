@@ -4,13 +4,16 @@ import type { SessionUser } from "@workspace/auth"
 import { QUOTE_STAGES } from "@workspace/domain/enums"
 import type {
   ApprovalStepAction,
+  CustomerClassificationKind,
   QuoteStage,
   Role,
 } from "@workspace/domain/enums"
 import { nextStage } from "@workspace/domain/stages"
 import {
+  createDefaultCustomerClassifications,
   createDefaultQuoteStatuses,
   createInvitationToken,
+  ensureCustomerClassification,
   eq,
   organizationScope,
   schema,
@@ -71,7 +74,7 @@ type NewOrganization = typeof schema.organizations.$inferInsert
 
 /**
  * Inserts an Organization (unique slug by default, USD) with the default
- * Quote Statuses, like the Platform Admin console. Returns the row.
+ * Quote Statuses, Customer Types and Industries, like the Platform Admin console. Returns the row.
  */
 export async function createOrganization(
   db: Db,
@@ -88,6 +91,9 @@ export async function createOrganization(
     })
     .returning()
   await createDefaultQuoteStatuses(organizationScope(db, organization!.id))
+  await createDefaultCustomerClassifications(
+    organizationScope(db, organization!.id)
+  )
   return organization!
 }
 
@@ -194,6 +200,28 @@ export async function createCustomer(
     })
     .returning()
   return customer!
+}
+
+/**
+ * The id of the Organization's Customer Type or Industry named `name`
+ * (ignoring case), created at the end of its list when missing; with
+ * `retired`, retired too.
+ */
+export async function customerClassification(
+  db: Db,
+  organization: { id: string },
+  kind: CustomerClassificationKind,
+  name: string,
+  { retired = false }: { retired?: boolean } = {}
+) {
+  const scope = organizationScope(db, organization.id)
+  const id = await ensureCustomerClassification(scope, kind, name)
+  if (retired) {
+    await scope.update(schema.customerClassifications, id, {
+      retiredAt: new Date(),
+    })
+  }
+  return id
 }
 
 type NewContact = Omit<

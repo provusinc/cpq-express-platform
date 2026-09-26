@@ -1,5 +1,6 @@
 import {
   Building2Icon,
+  ContactRoundIcon,
   FileTextIcon,
   ListChecksIcon,
   SlidersHorizontalIcon,
@@ -33,6 +34,13 @@ export const SETTINGS_TABS = [
     description: "Your steps inside each Stage",
     href: "/settings/statuses",
     icon: ListChecksIcon,
+  },
+  {
+    segment: "customer-fields",
+    label: "Customer fields",
+    description: "Customer Types and Industries",
+    href: "/settings/customer-fields",
+    icon: ContactRoundIcon,
   },
   {
     segment: "labels",

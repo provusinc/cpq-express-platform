@@ -5,7 +5,7 @@
  *   Organization's) record.
  * - `inUseError(details)` — CONFLICT when a delete is blocked because other
  *   records reference the target (Customers, Catalog Items and Resource
- *   Roles used by Quotes). The structured details reach the client as
+ *   Roles used by Quotes; Customer Types and Industries used by Customers). The structured details reach the client as
  *   `error.data.inUse` (see the errorFormatter in `trpc.ts`):
  *
  *     { kind: "in_use", entity: "customer", name: "Initech",
@@ -18,12 +18,18 @@
 import { TRPCError } from "@trpc/server"
 
 /** What can be blocked from deletion by references to it. */
-export type InUseEntity = "customer" | "catalog_item" | "resource_role"
+export type InUseEntity =
+  | "customer"
+  | "catalog_item"
+  | "resource_role"
+  | "customer_type"
+  | "industry"
 
 /** What references it, counted (only non-zero counts need be present). */
 export interface InUseCounts {
   quotes?: number
   lineItems?: number
+  customers?: number
 }
 
 export interface InUseDetails {
@@ -34,8 +40,11 @@ export interface InUseDetails {
   counts: InUseCounts
   /** A few names of referencing records (e.g. Quote names), for the message. */
   examples: string[]
-  /** The alternative to offer: archive (Customers) or deactivate (catalog). */
-  suggestion: "archive" | "deactivate"
+  /**
+   * The alternative to offer: archive (Customers), deactivate (catalog) or
+   * retire (Customer Types and Industries).
+   */
+  suggestion: "archive" | "deactivate" | "retire"
 }
 
 /** Carried as the TRPCError's `cause`; the errorFormatter exposes `details`. */
@@ -53,9 +62,14 @@ function inUseMessage({ name, counts, examples, suggestion }: InUseDetails) {
   const parts: string[] = []
   if (counts.quotes) parts.push(plural(counts.quotes, "Quote"))
   if (counts.lineItems) parts.push(plural(counts.lineItems, "Line Item"))
+  if (counts.customers) parts.push(plural(counts.customers, "Customer"))
   const used = parts.length > 0 ? parts.join(" and ") : "other records"
   const named = examples.length > 0 ? ` (${examples.join(", ")})` : ""
-  const instead = suggestion === "archive" ? "Archive" : "Deactivate"
+  const instead = {
+    archive: "Archive",
+    deactivate: "Deactivate",
+    retire: "Retire",
+  }[suggestion]
   return `“${name}” is used by ${used}${named}. ${instead} it instead.`
 }
 

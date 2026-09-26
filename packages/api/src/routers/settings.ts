@@ -33,6 +33,7 @@ import {
   organizationProcedure,
   permittedProcedure,
 } from "../trpc"
+import { customerClassificationSettingsProcedures } from "./settings-customer-classifications"
 import { quoteStatusSettingsProcedures } from "./settings-quote-statuses"
 
 const {
@@ -187,6 +188,7 @@ const manageSettings = permittedProcedure("settings.manage")
 
 export const settingsRouter = createTRPCRouter({
   ...quoteStatusSettingsProcedures,
+  ...customerClassificationSettingsProcedures,
 
   /**
    * Every term's display names and visibility (Label Overrides over the

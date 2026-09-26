@@ -24,7 +24,11 @@ export function CustomerCard({
   const place = [customer.city, customer.state ?? customer.country]
     .filter(Boolean)
     .join(", ")
-  const facts = [customer.industry, customer.type, place].filter(Boolean)
+  const facts = [
+    customer.industry?.name,
+    customer.customerType?.name,
+    place,
+  ].filter(Boolean)
   return (
     <OverviewCard
       title="Customer"

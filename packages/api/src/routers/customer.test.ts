@@ -10,6 +10,7 @@ import {
   createOrganization,
   createQuote,
   createUser,
+  customerClassification,
   expectIsolated,
   organizationCaller,
   withTestDb,
@@ -35,21 +36,73 @@ describe("customer.create", () => {
   it("creates a Customer with trimmed fields, blanks as null", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
+      const prospect = await customerClassification(
+        db,
+        organization,
+        "customer_type",
+        "Prospect"
+      )
+      const technology = await customerClassification(
+        db,
+        organization,
+        "industry",
+        "Technology"
+      )
       const customer = await caller.customer.create({
         name: "  Initech  ",
-        type: "Prospect",
-        industry: " Software ",
+        customerTypeId: prospect,
+        industryId: technology,
         website: "",
         billingCity: "Austin",
       })
       expect(customer).toMatchObject({
         organizationId: organization.id,
         name: "Initech",
-        type: "Prospect",
-        industry: "Software",
+        customerTypeId: prospect,
+        industryId: technology,
         website: null,
         billingCity: "Austin",
         archived: false,
+      })
+      expect(await caller.customer.byId({ id: customer.id })).toMatchObject({
+        customerType: { id: prospect, name: "Prospect", retired: false },
+        industry: { id: technology, name: "Technology", retired: false },
+      })
+    }))
+
+  it("refuses a value of the other list, another Organization's or a retired one", () =>
+    withTestDb(async (db) => {
+      const { organization, caller } = await setup(db)
+      const technology = await customerClassification(
+        db,
+        organization,
+        "industry",
+        "Technology"
+      )
+      const theirs = await customerClassification(
+        db,
+        await createOrganization(db),
+        "customer_type",
+        "Prospect"
+      )
+      const lead = await customerClassification(
+        db,
+        organization,
+        "customer_type",
+        "Lead",
+        { retired: true }
+      )
+      await expect(
+        caller.customer.create({ name: "A", customerTypeId: technology })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      await expect(
+        caller.customer.create({ name: "B", customerTypeId: theirs })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      await expect(
+        caller.customer.create({ name: "C", customerTypeId: lead })
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Customer Type “Lead” is retired. Pick another value.",
       })
     }))
 
@@ -114,9 +167,15 @@ describe("customer.update", () => {
   it("changes only the given fields", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
+      const software = await customerClassification(
+        db,
+        organization,
+        "industry",
+        "Software"
+      )
       const customer = await createCustomer(db, organization, {
         name: "Initech",
-        industry: "Software",
+        industryId: software,
         phone: "555",
       })
       const updated = await caller.customer.update({
@@ -126,9 +185,44 @@ describe("customer.update", () => {
       })
       expect(updated).toMatchObject({
         name: "Initech Ltd",
-        industry: "Software",
+        industryId: software,
         phone: null,
       })
+    }))
+
+  it("keeps a retired value until it is changed, then can't go back", () =>
+    withTestDb(async (db) => {
+      const { organization, caller } = await setup(db)
+      const lead = await customerClassification(
+        db,
+        organization,
+        "customer_type",
+        "Lead",
+        { retired: true }
+      )
+      const partner = await customerClassification(
+        db,
+        organization,
+        "customer_type",
+        "Partner"
+      )
+      const customer = await createCustomer(db, organization, {
+        customerTypeId: lead,
+      })
+      // The dialog sends every field back: the retired value is kept.
+      await expect(
+        caller.customer.update({ id: customer.id, customerTypeId: lead })
+      ).resolves.toMatchObject({ customerTypeId: lead })
+      expect(await caller.customer.byId({ id: customer.id })).toMatchObject({
+        customerType: { name: "Lead", retired: true },
+      })
+      await caller.customer.update({ id: customer.id, customerTypeId: partner })
+      await expect(
+        caller.customer.update({ id: customer.id, customerTypeId: lead })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+      await expect(
+        caller.customer.update({ id: customer.id, customerTypeId: null })
+      ).resolves.toMatchObject({ customerTypeId: null })
     }))
 
   it("may keep its own name in another case, but not take another's", () =>
@@ -163,20 +257,26 @@ describe("customer.list", () => {
   it("pages, searches and filters this Organization's Customers", () =>
     withTestDb(async (db) => {
       const { organization, caller } = await setup(db)
+      const value = (kind: "customer_type" | "industry", name: string) =>
+        customerClassification(db, organization, kind, name)
+      const prospect = await value("customer_type", "Prospect")
+      const customerType = await value("customer_type", "Customer")
+      const software = await value("industry", "Software")
+      const healthcare = await value("industry", "Healthcare")
       const initech = await createCustomer(db, organization, {
         name: "Initech",
-        type: "Prospect",
-        industry: "Software",
+        customerTypeId: prospect,
+        industryId: software,
       })
       await createCustomer(db, organization, {
         name: "acme",
-        type: "Customer",
-        industry: "Manufacturing",
+        customerTypeId: customerType,
+        industryId: await value("industry", "Manufacturing"),
       })
       await createCustomer(db, organization, {
         name: "Umbrella",
-        type: "Customer",
-        industry: "Healthcare",
+        customerTypeId: customerType,
+        industryId: healthcare,
         archived: true,
       })
       await createCustomer(db, await createOrganization(db), {
@@ -189,13 +289,19 @@ describe("customer.list", () => {
       expect(all).toMatchObject({ total: 2, page: 1, pageSize: 25 })
       expect(all.statusCounts).toEqual({ active: 2, archived: 1, all: 3 })
       expect(
-        (await caller.customer.list({ status: "archived", type: "Customer" }))
-          .statusCounts
+        (
+          await caller.customer.list({
+            status: "archived",
+            customerTypeIds: [customerType],
+          })
+        ).statusCounts
       ).toEqual({ active: 1, archived: 1, all: 2 })
       expect(all.rows.map((r) => r.name)).toEqual(["acme", "Initech"])
       expect(all.rows[1]).toMatchObject({
         contactCount: 2,
         primaryContact: { name: "Peter" },
+        customerType: { id: prospect, name: "Prospect", retired: false },
+        industry: { id: software, name: "Software", retired: false },
       })
       expect(all.rows[0]!.primaryContact).toBeNull()
 
@@ -203,14 +309,22 @@ describe("customer.list", () => {
       expect(page2.rows.map((r) => r.name)).toEqual(["Initech"])
       expect(page2.total).toBe(2)
 
+      // Search matches the Industry's name.
       expect(
         (await caller.customer.list({ search: "soft" })).rows.map((r) => r.name)
       ).toEqual(["Initech"])
       expect(
-        (await caller.customer.list({ type: "Customer" })).rows.map(
-          (r) => r.name
-        )
+        (
+          await caller.customer.list({ customerTypeIds: [customerType] })
+        ).rows.map((r) => r.name)
       ).toEqual(["acme"])
+      expect(
+        (
+          await caller.customer.list({
+            customerTypeIds: [customerType, prospect],
+          })
+        ).rows.map((r) => r.name)
+      ).toEqual(["acme", "Initech"])
       expect(
         (await caller.customer.list({ status: "archived" })).rows.map(
           (r) => r.name
@@ -218,7 +332,10 @@ describe("customer.list", () => {
       ).toEqual(["Umbrella"])
       expect(
         (
-          await caller.customer.list({ status: "all", industry: "Healthcare" })
+          await caller.customer.list({
+            status: "all",
+            industryIds: [healthcare],
+          })
         ).rows.map((r) => r.name)
       ).toEqual(["Umbrella"])
     }))
@@ -231,26 +348,6 @@ describe("customer.list", () => {
       expect(
         (await caller.customer.list({ search: "100%" })).rows.map((r) => r.name)
       ).toEqual(["100% Juice"])
-    }))
-})
-
-describe("customer.filterOptions", () => {
-  it("lists the distinct types and industries in use", () =>
-    withTestDb(async (db) => {
-      const { organization, caller } = await setup(db)
-      await createCustomer(db, organization, {
-        type: "Prospect",
-        industry: "Software",
-      })
-      await createCustomer(db, organization, { type: "Customer" })
-      await createCustomer(db, organization, { type: "Prospect" })
-      await createCustomer(db, await createOrganization(db), {
-        type: "Elsewhere",
-      })
-      expect(await caller.customer.filterOptions()).toEqual({
-        types: ["Customer", "Prospect"],
-        industries: ["Software"],
-      })
     }))
 })
 

@@ -14,6 +14,7 @@
  * - schedule: Quote date change (shift / clamp), Line Item start change
  * - phases:  Phase tree rules (depth ≤ 3, no cycles), grid order, rollups
  * - milestones: Milestone colours and limits
+ * - customers: Customer Type / Industry value lists (defaults, name checks, retired values)
  * - organizations: slug rules (format, reserved), currency codes
  * - members: Membership rules (the last-Admin guard)
  * - settings: Organization settings (Hours Per Day, Label Overrides, logo)
@@ -34,6 +35,7 @@ export * from "./allocations"
 export * from "./schedule"
 export * from "./phases"
 export * from "./milestones"
+export * from "./customers"
 export * from "./organizations"
 export * from "./members"
 export * from "./settings"

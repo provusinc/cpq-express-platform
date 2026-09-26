@@ -8,6 +8,8 @@ export { createTRPCContext } from "./trpc"
 export { ORGANIZATION_SLUG_HEADER } from "./headers"
 export type { CreateContextOptions, TRPCContext } from "./trpc"
 export type { InvitationStatus } from "./invitations"
+export type { ClassificationRef } from "./customer-classifications"
+export type { CustomerClassificationView } from "./routers/settings-customer-classifications"
 export type { InUseDetails, InUseEntity, InUseCounts } from "./errors"
 export type {
   CatalogItemImportValues,

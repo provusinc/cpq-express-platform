@@ -11,7 +11,7 @@ export default async function CustomersPage() {
   await prefetchNow(
     trpc.customer.list.queryOptions(INITIAL_CUSTOMER_LIST_INPUT)
   )
-  prefetch(trpc.customer.filterOptions.queryOptions())
+  prefetch(trpc.settings.customerClassifications.queryOptions())
   return (
     <HydrateClient>
       <CustomersList />

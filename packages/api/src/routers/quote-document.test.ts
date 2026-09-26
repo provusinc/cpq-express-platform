@@ -646,6 +646,11 @@ describe("versions under concurrency", () => {
         .delete(schema.quoteStatuses)
         .where(eq(schema.quoteStatuses.organizationId, organization.id))
       await root
+        .delete(schema.customerClassifications)
+        .where(
+          eq(schema.customerClassifications.organizationId, organization.id)
+        )
+      await root
         .delete(organizations)
         .where(eq(organizations.id, organization.id))
       await root.delete(users).where(inArray(users.id, [user.id]))

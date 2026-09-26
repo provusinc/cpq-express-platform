@@ -1,13 +1,15 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
 import type { RouterOutputs } from "@workspace/api"
+import { selectableClassifications } from "@workspace/domain/customers"
+import type { CustomerClassificationKind } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -26,16 +28,28 @@ import {
   FieldLegend,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 
 import { errorCode, errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 type Customer = RouterOutputs["customer"]["byId"]
+type ClassificationValue =
+  RouterOutputs["settings"]["customerClassifications"][number]
+
+/** The select's "no value" option (a Customer Type / Industry is optional). */
+const NONE = "__none__"
 
 const customerSchema = z.object({
   name: z.string().trim().min(1, "Enter a name.").max(200),
-  type: z.string().max(100),
-  industry: z.string().max(100),
+  customerTypeId: z.string(),
+  industryId: z.string(),
   website: z.string().max(500),
   phone: z.string().max(50),
   billingStreet: z.string().max(500),
@@ -46,10 +60,16 @@ const customerSchema = z.object({
 })
 type CustomerValues = z.infer<typeof customerSchema>
 
+const CLASSIFICATIONS: {
+  name: "customerTypeId" | "industryId"
+  kind: CustomerClassificationKind
+  label: string
+}[] = [
+  { name: "customerTypeId", kind: "customer_type", label: "Type" },
+  { name: "industryId", kind: "industry", label: "Industry" },
+]
 const FIELDS: { name: keyof CustomerValues; label: string; wide?: boolean }[] =
   [
-    { name: "type", label: "Type" },
-    { name: "industry", label: "Industry" },
     { name: "website", label: "Website" },
     { name: "phone", label: "Phone" },
   ]
@@ -65,8 +85,8 @@ const ADDRESS: { name: keyof CustomerValues; label: string; wide?: boolean }[] =
 function toValues(customer?: Customer | null): CustomerValues {
   return {
     name: customer?.name ?? "",
-    type: customer?.type ?? "",
-    industry: customer?.industry ?? "",
+    customerTypeId: customer?.customerTypeId ?? "",
+    industryId: customer?.industryId ?? "",
     website: customer?.website ?? "",
     phone: customer?.phone ?? "",
     billingStreet: customer?.billingStreet ?? "",
@@ -134,11 +154,46 @@ export function CustomerDialog({
     })
   )
   const pending = create.isPending || update.isPending
+  const classifications = useQuery({
+    ...trpc.settings.customerClassifications.queryOptions(),
+    enabled: open,
+  })
 
   const onSubmit = form.handleSubmit((values) => {
-    if (customer) update.mutate({ id: customer.id, ...values })
-    else create.mutate(values)
+    const input = {
+      ...values,
+      customerTypeId: values.customerTypeId || null,
+      industryId: values.industryId || null,
+    }
+    if (customer) update.mutate({ id: customer.id, ...input })
+    else create.mutate(input)
   })
+
+  const renderClassification = ({
+    name,
+    kind,
+    label,
+  }: (typeof CLASSIFICATIONS)[number]) => (
+    <Controller
+      key={name}
+      name={name}
+      control={form.control}
+      render={({ field, fieldState }) => (
+        <Field data-invalid={fieldState.invalid}>
+          <FieldLabel htmlFor={`customer-${name}`}>{label}</FieldLabel>
+          <ClassificationSelect
+            id={`customer-${name}`}
+            values={(classifications.data ?? []).filter((v) => v.kind === kind)}
+            currentId={customer?.[name] ?? null}
+            value={field.value}
+            onChange={field.onChange}
+            invalid={fieldState.invalid}
+          />
+          {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+        </Field>
+      )}
+    />
+  )
 
   const renderField = ({
     name,
@@ -190,6 +245,7 @@ export function CustomerDialog({
           <FieldGroup>
             {renderField({ name: "name", label: "Name", wide: true })}
             <div className="grid gap-4 sm:grid-cols-2">
+              {CLASSIFICATIONS.map(renderClassification)}
               {FIELDS.map(renderField)}
             </div>
             <FieldSet>
@@ -214,5 +270,61 @@ export function CustomerDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * A Customer Type or Industry picker: the list's values that aren't retired,
+ * plus the Customer's own value even when retired (muted), and None.
+ */
+function ClassificationSelect({
+  id,
+  values,
+  currentId,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string
+  values: ClassificationValue[]
+  currentId: string | null
+  value: string
+  onChange: (value: string) => void
+  invalid: boolean
+}) {
+  const options = selectableClassifications(values, currentId)
+  const items = [
+    { value: NONE, label: "None" },
+    ...options.map((o) => ({
+      value: o.id,
+      label: o.retired ? `${o.name} (retired)` : o.name,
+    })),
+  ]
+  return (
+    <Select
+      items={items}
+      value={value || NONE}
+      onValueChange={(next) =>
+        onChange(next == null || next === NONE ? "" : String(next))
+      }
+    >
+      <SelectTrigger id={id} className="w-full" aria-invalid={invalid}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NONE}>
+          <span className="text-muted-foreground">None</span>
+        </SelectItem>
+        {options.map((option) => (
+          <SelectItem
+            key={option.id}
+            value={option.id}
+            className={option.retired ? "text-muted-foreground" : undefined}
+          >
+            {option.retired ? `${option.name} (retired)` : option.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

@@ -4,6 +4,7 @@ import { z } from "zod"
 import {
   and,
   count,
+  createDefaultCustomerClassifications,
   createDefaultQuoteStatuses,
   desc,
   eq,
@@ -106,7 +107,9 @@ export const platformRouter = createTRPCRouter({
             message: `The slug "${input.slug}" is already taken.`,
           })
         }
-        await createDefaultQuoteStatuses(organizationScope(tx, organization.id))
+        const scope = organizationScope(tx, organization.id)
+        await createDefaultQuoteStatuses(scope)
+        await createDefaultCustomerClassifications(scope)
         const invitation = input.adminEmail
           ? await issueInvitation(
               { ...ctx, db: tx },

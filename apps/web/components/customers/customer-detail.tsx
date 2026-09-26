@@ -48,6 +48,7 @@ import { PageHeader } from "@/components/shell/page-header"
 import { errorMessage, inUseOf } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
+import { ClassificationName } from "./classification-name"
 import { CustomerDialog } from "./customer-dialog"
 import { ContactDialog } from "./contact-dialog"
 
@@ -117,8 +118,9 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
       <PageHeader
         title={customer.name}
         description={
-          [customer.type, customer.industry].filter(Boolean).join(" · ") ||
-          undefined
+          [customer.customerType?.name, customer.industry?.name]
+            .filter(Boolean)
+            .join(" · ") || undefined
         }
       >
         {customer.archived && <Badge variant="secondary">Archived</Badge>}
@@ -164,8 +166,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <Detail label="Type" value={customer.type} />
-              <Detail label="Industry" value={customer.industry} />
+              <Detail
+                label="Type"
+                value={<ClassificationName value={customer.customerType} />}
+              />
+              <Detail
+                label="Industry"
+                value={<ClassificationName value={customer.industry} />}
+              />
               <Detail
                 label="Website"
                 value={

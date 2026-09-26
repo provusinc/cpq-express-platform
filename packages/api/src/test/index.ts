@@ -18,7 +18,7 @@
  *
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
  * `createSession`, `createOrganization`, `createMembership`, `createMember`,
- * and per area `createCustomer`, `createContact`, `createCatalogItem`,
+ * and per area `createCustomer`, `customerClassification`, `createContact`, `createCatalogItem`,
  * `createResourceRole`, `createQuote`, `createQuoteStatus`,
  * `createApprovalStep`, `setQuoteStage`.
  *
@@ -68,6 +68,7 @@ export {
   createResourceRole,
   createSession,
   createUser,
+  customerClassification,
   setQuoteStage,
   toSessionUser,
 } from "./fixtures"

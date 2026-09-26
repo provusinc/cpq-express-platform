@@ -32,7 +32,6 @@ import { formatMoney } from "@/lib/money"
 import { useTRPC } from "@/trpc/react"
 
 import { useNavItems, useShell } from "./shell-context"
-import { navIconClass } from "./tints"
 
 /**
  * The ⌘K command menu: find a Quote by name or Customer (server search),
@@ -179,7 +178,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
               onSelect={() => run(() => router.push(item.href))}
             >
               <item.icon
-                className={navIconClass(item.term) ?? "text-muted-foreground"}
+                className={item.iconClass ?? "text-muted-foreground"}
               />
               {item.label}
             </CommandItem>

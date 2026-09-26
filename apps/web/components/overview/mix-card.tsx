@@ -5,10 +5,10 @@ import { Decimal } from "@workspace/domain/money"
 import { cn } from "@workspace/ui/lib/utils"
 
 import type { EditorLine, EditorTotals } from "@/components/quotes/autosave"
+import { useCatalogTypes } from "@/components/shell/catalog-types"
 import { useLabels } from "@/components/shell/labels"
+import { catalogTypeTone, LABOUR_TONE } from "@/components/shell/tints"
 import { wholeMoney } from "@/lib/money"
-
-import { SOURCE_KIND_TONES } from "@/components/shell/tints"
 
 import { OverviewCard } from "./overview-card"
 
@@ -16,7 +16,7 @@ const pct = (value: string | Decimal) => `${new Decimal(value).toFixed(0)}%`
 
 /**
  * What the Quote is made of: revenue per item type (labour = Resource
- * Roles, Products, Add-ons) before the Quote Discount as one proportion
+ * Roles, then each Catalog Type) before the Quote Discount as one proportion
  * bar, a legend with each type's share and own margin, and the blended
  * hourly rate and cost of the labour. Computed in the browser from the
  * editor's lines (the domain's `breakdownByItemType`), so it follows
@@ -32,10 +32,34 @@ export function MixCard({
   className?: string
 }) {
   const labels = useLabels()
+  const types = useCatalogTypes()
   const currency = totals.currencyCode
-  const breakdown = breakdownByItemType(lines).filter(
-    (row) => row.lineCount > 0 || labels[row.sourceKind].enabled
+  const typeById = new Map(types.map((t) => [t.id, t]))
+  // Labour and every active type are listed; an inactive one only when used.
+  const breakdown = breakdownByItemType(
+    lines,
+    types.map((t) => t.id)
   )
+    .filter(
+      (row) =>
+        row.lineCount > 0 ||
+        !row.catalogTypeId ||
+        typeById.get(row.catalogTypeId)?.active
+    )
+    .map((row) => {
+      const type = row.catalogTypeId
+        ? typeById.get(row.catalogTypeId)
+        : undefined
+      return {
+        ...row,
+        name: row.catalogTypeId
+          ? (type?.plural ?? "Catalog Items")
+          : labels.resource_role.plural,
+        dot: row.catalogTypeId
+          ? catalogTypeTone(type?.colourIndex ?? 0).dot
+          : LABOUR_TONE.dot,
+      }
+    })
   const empty = breakdown.every((row) => row.lineCount === 0)
 
   const labour = lines.filter((l) => l.sourceKind === "resource_role")
@@ -68,11 +92,8 @@ export function MixCard({
               .filter((row) => new Decimal(row.shareOfSubtotal).gt(0))
               .map((row) => (
                 <span
-                  key={row.sourceKind}
-                  className={cn(
-                    "h-full",
-                    SOURCE_KIND_TONES[row.sourceKind].dot
-                  )}
+                  key={row.key}
+                  className={cn("h-full", row.dot)}
                   style={{ width: `${row.shareOfSubtotal}%` }}
                 />
               ))}
@@ -89,17 +110,17 @@ export function MixCard({
             </thead>
             <tbody>
               {breakdown.map((row) => (
-                <tr key={row.sourceKind} className="h-8">
+                <tr key={row.key} className="h-8">
                   <th scope="row" className="text-left font-normal">
                     <span className="flex items-center gap-2">
                       <span
                         className={cn(
                           "size-2.5 shrink-0 rounded-[3px]",
-                          SOURCE_KIND_TONES[row.sourceKind].dot
+                          row.dot
                         )}
                         aria-hidden
                       />
-                      {labels[row.sourceKind].plural}
+                      {row.name}
                     </span>
                   </th>
                   <td className="text-right text-muted-foreground">

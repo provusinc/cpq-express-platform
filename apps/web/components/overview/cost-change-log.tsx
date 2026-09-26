@@ -14,7 +14,7 @@ import {
   LocalTableRoot,
   SortableColumnTitle,
 } from "@/components/shell/data-table"
-import { useLabels } from "@/components/shell/labels"
+import { useItemType } from "@/components/shell/tints"
 import { formatDateTime } from "@/lib/format"
 import { formatMoney } from "@/lib/money"
 
@@ -27,13 +27,11 @@ type CostChangeCell = { row: { original: CostChange } }
 const CurrencyContext = createContext("USD")
 
 function SourceCell({ row }: CostChangeCell) {
-  const labels = useLabels()
+  const { singular } = useItemType(row.original)
   return (
     <>
       {row.original.sourceName}
-      <span className="ml-1 text-xs text-muted-foreground">
-        {labels[row.original.sourceKind].singular}
-      </span>
+      <span className="ml-1 text-xs text-muted-foreground">{singular}</span>
     </>
   )
 }

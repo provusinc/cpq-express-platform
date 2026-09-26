@@ -4,7 +4,9 @@ import { eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 import {
+  catalogTypeNamed,
   createCatalogItem,
+  createCatalogType,
   createMember,
   createOrganization,
   createUser,
@@ -27,6 +29,10 @@ async function setup(db: Db) {
     organizationCaller(db, { organization, user: who.user })
   return {
     organization,
+    types: {
+      product: await catalogTypeNamed(db, organization, "Product"),
+      addOn: await catalogTypeNamed(db, organization, "Add-on"),
+    },
     admin: as(admin),
     manager: as(manager),
     member: as(member),
@@ -37,11 +43,11 @@ const snapshotItem = (db: Db, id: string) => () =>
   db.select().from(catalogItems).where(eq(catalogItems.id, id))
 
 describe("catalogItem.create", () => {
-  it("creates a Product with money at storage scale and normalised tags", () =>
+  it("creates an item of a Catalog Type with money at storage scale and normalised tags", () =>
     withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      const { organization, types, admin } = await setup(db)
       const item = await admin.catalogItem.create({
-        kind: "product",
+        catalogTypeId: types.product.id,
         name: " Premium Support Plan ",
         description: "24/7",
         price: "250",
@@ -50,7 +56,7 @@ describe("catalogItem.create", () => {
       })
       expect(item).toMatchObject({
         organizationId: organization.id,
-        kind: "product",
+        catalogTypeId: types.product.id,
         name: "Premium Support Plan",
         price: "250.0000",
         cost: "180.5000",
@@ -60,49 +66,77 @@ describe("catalogItem.create", () => {
       })
     }))
 
-  it("creates an hourly Add-on", () =>
+  it("checks the Billing Unit against the item's Catalog Type", () =>
     withTestDb(async (db) => {
-      const { admin } = await setup(db)
+      const { organization, types, admin } = await setup(db)
+      const fields = { name: "Thing", price: "1", cost: "1" }
       expect(
         await admin.catalogItem.create({
-          kind: "add_on",
-          name: "Project Management",
-          price: "125.00",
-          cost: "100",
+          ...fields,
+          catalogTypeId: types.addOn.id,
           billingUnit: "hour",
         })
-      ).toMatchObject({ kind: "add_on", billingUnit: "hour" })
-    }))
-
-  it("refuses an hourly Product, in the API and the database", () =>
-    withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      ).toMatchObject({ catalogTypeId: types.addOn.id, billingUnit: "hour" })
       await expect(
         admin.catalogItem.create({
-          kind: "product",
-          name: "Hourly thing",
-          price: "1",
-          cost: "1",
+          ...fields,
+          catalogTypeId: types.product.id,
           billingUnit: "hour",
         })
-      ).rejects.toMatchObject({ code: "BAD_REQUEST" })
-      await expect(
-        db.transaction((tx) =>
-          createCatalogItem(tx, organization, { billingUnit: "hour" })
-        )
       ).rejects.toMatchObject({
-        cause: { constraint_name: "catalog_items_product_billed_each" },
+        code: "BAD_REQUEST",
+        message: "Products are billed Each, not Hour.",
       })
+      // A type billed only by the Hour: its items default to Hour and
+      // refuse Each.
+      const services = await createCatalogType(db, organization, {
+        singular: "Service",
+        plural: "Services",
+        billingUnits: ["hour"],
+      })
+      expect(
+        await admin.catalogItem.create({
+          ...fields,
+          catalogTypeId: services.id,
+        })
+      ).toMatchObject({ billingUnit: "hour" })
+      await expect(
+        admin.catalogItem.create({
+          ...fields,
+          catalogTypeId: services.id,
+          billingUnit: "each",
+        })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+    }))
+
+  it("refuses an inactive Catalog Type and another Organization's", () =>
+    withTestDb(async (db) => {
+      const { organization, admin } = await setup(db)
+      const fields = { name: "Thing", price: "1", cost: "1" }
+      const retired = await createCatalogType(db, organization, {
+        active: false,
+      })
+      await expect(
+        admin.catalogItem.create({ ...fields, catalogTypeId: retired.id })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+      const elsewhere = await catalogTypeNamed(
+        db,
+        await createOrganization(db),
+        "Product"
+      )
+      await expect(
+        admin.catalogItem.create({ ...fields, catalogTypeId: elsewhere.id })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
 
   it.each([["-1"], ["abc"], ["1.23456"], ["1e3"], [""]])(
     "rejects the price %j",
     (price) =>
       withTestDb(async (db) => {
-        const { admin } = await setup(db)
+        const { types, admin } = await setup(db)
         await expect(
           admin.catalogItem.create({
-            kind: "add_on",
+            catalogTypeId: types.addOn.id,
             name: "X",
             price,
             cost: "1",
@@ -113,11 +147,11 @@ describe("catalogItem.create", () => {
 
   it("is for Admins only", () =>
     withTestDb(async (db) => {
-      const { manager, member } = await setup(db)
+      const { types, manager, member } = await setup(db)
       for (const caller of [manager, member]) {
         await expect(
           caller.catalogItem.create({
-            kind: "product",
+            catalogTypeId: types.product.id,
             name: "X",
             price: "1",
             cost: "1",
@@ -128,14 +162,14 @@ describe("catalogItem.create", () => {
 
   it("refuses a non-member", () =>
     withTestDb(async (db) => {
-      const { organization } = await setup(db)
+      const { organization, types } = await setup(db)
       const outsider = organizationCaller(db, {
         organization,
         user: await createUser(db),
       })
       await expect(
         outsider.catalogItem.create({
-          kind: "product",
+          catalogTypeId: types.product.id,
           name: "X",
           price: "1",
           cost: "1",
@@ -145,9 +179,9 @@ describe("catalogItem.create", () => {
 })
 
 describe("catalogItem.list", () => {
-  it("lists one kind, filtered and paged, for any member", () =>
+  it("lists one Catalog Type, filtered and paged, for any member", () =>
     withTestDb(async (db) => {
-      const { organization, member } = await setup(db)
+      const { organization, types, member } = await setup(db)
       await createCatalogItem(db, organization, {
         name: "Basic Support",
         price: "75",
@@ -164,7 +198,7 @@ describe("catalogItem.list", () => {
         active: false,
       })
       await createCatalogItem(db, organization, {
-        kind: "add_on",
+        type: "Add-on",
         name: "Project Management",
         billingUnit: "hour",
       })
@@ -174,9 +208,12 @@ describe("catalogItem.list", () => {
       const names = async (
         input: Partial<Parameters<typeof member.catalogItem.list>[0]>
       ) =>
-        (await member.catalogItem.list({ kind: "product", ...input })).rows.map(
-          (r) => r.name
-        )
+        (
+          await member.catalogItem.list({
+            catalogTypeId: types.product.id,
+            ...input,
+          })
+        ).rows.map((r) => r.name)
 
       expect(await names({})).toEqual([
         "Basic Support",
@@ -189,7 +226,7 @@ describe("catalogItem.list", () => {
       ])
       expect(await names({ status: "inactive" })).toEqual(["Old Workshop"])
       const inactive = await member.catalogItem.list({
-        kind: "product",
+        catalogTypeId: types.product.id,
         status: "inactive",
       })
       expect(inactive.total).toBe(1)
@@ -197,7 +234,7 @@ describe("catalogItem.list", () => {
       expect(
         (
           await member.catalogItem.list({
-            kind: "product",
+            catalogTypeId: types.product.id,
             status: "active",
             search: "support",
           })
@@ -214,27 +251,65 @@ describe("catalogItem.list", () => {
       expect(await names({ pageSize: 2, page: 2 })).toEqual(["Premium Support"])
       expect(
         (
-          await member.catalogItem.list({ kind: "add_on", billingUnit: "hour" })
+          await member.catalogItem.list({
+            catalogTypeId: types.addOn.id,
+            billingUnit: "hour",
+          })
         ).rows.map((r) => r.name)
       ).toEqual(["Project Management"])
-      expect((await member.catalogItem.list({ kind: "product" })).total).toBe(3)
+      expect(
+        (await member.catalogItem.list({ catalogTypeId: types.product.id }))
+          .total
+      ).toBe(3)
+    }))
+
+  it("lists an inactive Catalog Type's items (read-only in the app)", () =>
+    withTestDb(async (db) => {
+      const { organization, member } = await setup(db)
+      const retired = await createCatalogType(db, organization, {
+        active: false,
+      })
+      await createCatalogItem(db, organization, {
+        catalogTypeId: retired.id,
+        name: "Legacy",
+      })
+      expect(
+        (await member.catalogItem.list({ catalogTypeId: retired.id })).rows.map(
+          (r) => r.name
+        )
+      ).toEqual(["Legacy"])
+      // …but the Add Items sheet offers none of them.
+      expect(
+        (await member.catalogItem.listForPicker({ catalogTypeId: retired.id }))
+          .rows
+      ).toEqual([])
+    }))
+
+  it("is isolated from other Organizations", () =>
+    withTestDb(async (db) => {
+      const { organization, types } = await setup(db)
+      await createCatalogItem(db, organization)
+      await expectIsolated(db, {
+        owner: organization,
+        call: (caller) =>
+          caller.catalogItem.list({ catalogTypeId: types.product.id }),
+      })
     }))
 })
 
 describe("catalogItem.tags", () => {
-  it("lists the tags in use on one kind", () =>
+  it("lists the tags in use on one Catalog Type", () =>
     withTestDb(async (db) => {
-      const { organization, member } = await setup(db)
+      const { organization, types, member } = await setup(db)
       await createCatalogItem(db, organization, { tags: ["support", "basic"] })
       await createCatalogItem(db, organization, { tags: ["support"] })
       await createCatalogItem(db, organization, {
-        kind: "add_on",
+        type: "Add-on",
         tags: ["addon-only"],
       })
-      expect(await member.catalogItem.tags({ kind: "product" })).toEqual([
-        "basic",
-        "support",
-      ])
+      expect(
+        await member.catalogItem.tags({ catalogTypeId: types.product.id })
+      ).toEqual(["basic", "support"])
     }))
 })
 
@@ -255,7 +330,7 @@ describe("catalogItem.update", () => {
     withTestDb(async (db) => {
       const { organization, admin } = await setup(db)
       const item = await createCatalogItem(db, organization, {
-        kind: "add_on",
+        type: "Add-on",
         name: "Code Review",
         description: "Extra review",
         tags: ["review"],
@@ -277,7 +352,7 @@ describe("catalogItem.update", () => {
       })
     }))
 
-  it("keeps Products billed Each", () =>
+  it("keeps the Billing Unit one its Catalog Type allows", () =>
     withTestDb(async (db) => {
       const { organization, admin } = await setup(db)
       const item = await createCatalogItem(db, organization)

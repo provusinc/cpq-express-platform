@@ -13,6 +13,7 @@ import { defaultLineItemQuantity } from "@workspace/domain/pricing"
 import { changeLineItemStart } from "@workspace/domain/schedule"
 
 import { writeAllocations } from "../allocations"
+import { listCatalogTypes } from "../catalog-types"
 import { notFound } from "../errors"
 import {
   isoDateInput,
@@ -95,8 +96,9 @@ async function lineAllocations(scope: OrganizationScope, lineId: string) {
 
 /**
  * The sources for `lineItem.add`, validated: every id must be this
- * Organization's item of that kind (NOT_FOUND otherwise) and active
- * (PRECONDITION_FAILED: inactive items stay on Quotes but can't be added).
+ * Organization's item of that kind (NOT_FOUND otherwise) and active, with
+ * a Catalog Item's Catalog Type active too (PRECONDITION_FAILED: inactive
+ * items stay on Quotes but can't be added).
  */
 async function loadSources(
   scope: OrganizationScope,
@@ -108,7 +110,7 @@ async function loadSources(
   const roleIds = items
     .filter((i) => i.sourceKind === "resource_role")
     .map((i) => i.id)
-  const [catalog, roles] = await Promise.all([
+  const [catalog, roles, types] = await Promise.all([
     catalogIds.length
       ? scope.findMany(catalogItems, {
           where: inArray(catalogItems.id, catalogIds),
@@ -119,7 +121,9 @@ async function loadSources(
           where: inArray(resourceRoles.id, roleIds),
         })
       : [],
+    catalogIds.length ? listCatalogTypes(scope) : [],
   ])
+  const typeById = new Map(types.map((t) => [t.id, t]))
   const catalogById = new Map(catalog.map((c) => [c.id, c]))
   const roleById = new Map(roles.map((r) => [r.id, r]))
   return items.map((item) => {
@@ -139,10 +143,15 @@ async function loadSources(
       }
     }
     const catalogItem = catalogById.get(item.id)
-    if (!catalogItem || catalogItem.kind !== item.sourceKind) {
-      throw notFound("Catalog Item")
-    }
+    if (!catalogItem) throw notFound("Catalog Item")
     if (!catalogItem.active) throw inactive(catalogItem.name)
+    const type = typeById.get(catalogItem.catalogTypeId)
+    if (!type?.active) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `“${catalogItem.name}” is a ${type?.singular ?? "Catalog Item"} and that Catalog Type is inactive, so it can't be added to a Quote.`,
+      })
+    }
     return {
       sourceKind: item.sourceKind,
       catalogItemId: catalogItem.id,

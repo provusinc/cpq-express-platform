@@ -9,13 +9,14 @@ import { and, desc, eq, schema } from "@workspace/db"
 import { notFound } from "../errors"
 import { organizationProcedure } from "../trpc"
 
-const { costChangeLog, lineItems, quotes, users } = schema
+const { catalogItems, costChangeLog, lineItems, quotes, users } = schema
 
 export const quoteCostChangeLogProcedures = {
   /**
    * Why the Quote's margins moved: one entry per Line Item whose Base Rate
    * cost Cost Propagation rewrote, newest first, with the line (its current
-   * name), the source (kind and name at the time), old → new cost, who
+   * name), the source (kind and name at the time; a Catalog Item's current
+   * Catalog Type as `catalogTypeId`), old → new cost, who
    * changed the cost and when. Every member may read it.
    */
   costChangeLog: organizationProcedure
@@ -29,6 +30,7 @@ export const quoteCostChangeLogProcedures = {
           lineItemId: costChangeLog.lineItemId,
           lineName: lineItems.name,
           sourceKind: costChangeLog.sourceKind,
+          catalogTypeId: catalogItems.catalogTypeId,
           sourceId: costChangeLog.sourceId,
           sourceName: costChangeLog.sourceName,
           oldCost: costChangeLog.oldCost,
@@ -42,6 +44,13 @@ export const quoteCostChangeLogProcedures = {
           and(
             eq(lineItems.organizationId, costChangeLog.organizationId),
             eq(lineItems.id, costChangeLog.lineItemId)
+          )
+        )
+        .leftJoin(
+          catalogItems,
+          and(
+            eq(catalogItems.organizationId, lineItems.organizationId),
+            eq(catalogItems.id, lineItems.catalogItemId)
           )
         )
         .innerJoin(users, eq(users.id, costChangeLog.actorId))

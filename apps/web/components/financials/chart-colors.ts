@@ -8,8 +8,13 @@
 export const SERIES = {
   /** Slot 1, blue: revenue / labour. */
   one: { light: "#2a78d6", dark: "#3987e5" },
-  /** Slot 2, orange: cost / Products. */
+  /** Slot 2, orange: cost / the first Catalog Type colour. */
   two: { light: "#eb6834", dark: "#d95926" },
-  /** Slot 3, aqua: margin, headcount / Add-ons. */
+  /** Slot 3, aqua: margin, headcount / the second Catalog Type colour. */
   three: { light: "#1baf7a", dark: "#199e70" },
+  /** Slots 4–7 (yellow, magenta, green, violet): further Catalog Types. */
+  four: { light: "#eda100", dark: "#c98500" },
+  five: { light: "#e87ba4", dark: "#d55181" },
+  six: { light: "#008300", dark: "#008300" },
+  seven: { light: "#4a3aa7", dark: "#9085e9" },
 } as const

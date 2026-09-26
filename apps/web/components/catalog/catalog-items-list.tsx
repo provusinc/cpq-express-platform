@@ -12,7 +12,7 @@ import { createContext, useContext, useDeferredValue, useState } from "react"
 import { toast } from "sonner"
 
 import type { RouterOutputs } from "@workspace/api"
-import type { CatalogItemKind } from "@workspace/domain/enums"
+import { billingUnitsLabel } from "@workspace/domain/catalog"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { DataTableToolbarSection } from "@workspace/ui/components/niko-table/components/data-table-toolbar-section"
@@ -34,7 +34,7 @@ import {
   FacetedFilter,
   SearchFilter,
 } from "@/components/shell/table-toolbar"
-import { useLabels } from "@/components/shell/labels"
+import type { CatalogTypeView } from "@/components/shell/catalog-types"
 import { PageHeader } from "@/components/shell/page-header"
 import { ViewTabs } from "@/components/shell/view-tabs"
 import { formatMoney } from "@/lib/money"
@@ -152,28 +152,31 @@ const BILLING_UNIT_OPTIONS = [
 ]
 
 /**
- * The Products or Add-ons page: filters, paging and, for Admins, create,
- * edit, deactivate and delete. `toolbar` adds page actions (CSV import).
+ * A Catalog Type's page: filters, paging and, for Admins, create, edit,
+ * deactivate and delete (`canManage`; the page passes false for an
+ * inactive type, whose items are read-only). `toolbar` adds page actions
+ * (CSV import).
  */
 export function CatalogItemsList({
-  kind,
+  catalogType,
   canManage,
   currencyCode,
   toolbar,
 }: {
-  kind: CatalogItemKind
+  catalogType: CatalogTypeView
   canManage: boolean
   currencyCode: string
   toolbar?: React.ReactNode
 }) {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
-  const label = useLabels()[kind]
+  const label = catalogType
+  const catalogTypeId = catalogType.id
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())
   const [filters, setFilters] = useState<CatalogItemListInput>(() =>
-    initialCatalogItemListInput(kind)
+    initialCatalogItemListInput(catalogTypeId)
   )
   const input: CatalogItemListInput = {
     ...filters,
@@ -183,7 +186,7 @@ export function CatalogItemsList({
     ...trpc.catalogItem.list.queryOptions(input),
     placeholderData: keepPreviousData,
   })
-  const tags = useQuery(trpc.catalogItem.tags.queryOptions({ kind }))
+  const tags = useQuery(trpc.catalogItem.tags.queryOptions({ catalogTypeId }))
 
   const setFilter = (changes: Partial<CatalogItemListInput>) =>
     setFilters((f) => ({ ...f, ...changes, page: changes.page ?? 1 }))
@@ -264,9 +267,9 @@ export function CatalogItemsList({
       <PageHeader
         title={label.plural}
         description={
-          kind === "product"
-            ? "Catalog Items sold per unit (billed Each)."
-            : "Supplementary Catalog Items, billed Each or by the Hour."
+          catalogType.active
+            ? `Catalog Items billed ${billingUnitsLabel(catalogType.billingUnits)}.`
+            : "Inactive: these items stay on existing Quotes but can't be added or changed."
         }
       >
         {canManage && toolbar}
@@ -318,7 +321,7 @@ export function CatalogItemsList({
                 placeholder="Search name or description"
                 className="w-full flex-none sm:w-64"
               />
-              {kind === "add_on" && (
+              {catalogType.billingUnits.length > 1 && (
                 <FacetedFilter
                   accessorKey="billingUnit"
                   options={BILLING_UNIT_OPTIONS}
@@ -349,7 +352,9 @@ export function CatalogItemsList({
                 title: `No ${label.plural} yet`,
                 description: canManage
                   ? `Create your first ${label.singular} or import a CSV.`
-                  : `An Admin adds ${label.plural} here.`,
+                  : catalogType.active
+                    ? `An Admin adds ${label.plural} here.`
+                    : `${label.plural} is inactive.`,
                 filteredTitle: `No ${label.plural} match`,
                 filteredDescription: "Try another search or clear the filters.",
                 action: canManage ? (
@@ -374,7 +379,7 @@ export function CatalogItemsList({
       {canManage && (
         <>
           <CatalogItemDialog
-            kind={kind}
+            catalogType={catalogType}
             open={dialog !== null}
             onOpenChange={(open) => !open && setDialog(null)}
             item={dialog?.item}

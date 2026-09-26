@@ -18,7 +18,8 @@
  *
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
  * `createSession`, `createOrganization`, `createMembership`, `createMember`,
- * and per area `createCustomer`, `customerClassification`, `createContact`, `createCatalogItem`,
+ * and per area `createCustomer`, `customerClassification`, `createContact`, `createCatalogItem`
+ * (of a Catalog Type by name, `catalogTypeNamed`), `createCatalogType`,
  * `createResourceRole`, `createQuote`, `createQuoteStatus`,
  * `createApprovalStep`, `setQuoteStage`.
  *
@@ -57,7 +58,9 @@ export { createMemoryMailer, createMemoryStorage }
 export {
   createApprovalStep,
   createCustomer,
+  catalogTypeNamed,
   createCatalogItem,
+  createCatalogType,
   createContact,
   createInvitation,
   createMember,

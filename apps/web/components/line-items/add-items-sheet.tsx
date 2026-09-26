@@ -5,7 +5,7 @@ import { PackageSearchIcon, SearchIcon } from "lucide-react"
 import { useDeferredValue, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import type { CatalogItemKind, SourceKind } from "@workspace/domain/enums"
+import type { SourceKind } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import {
@@ -38,8 +38,10 @@ import {
   EmptyMedia,
 } from "@/components/shell/empty"
 import { FilterSelect } from "@/components/shell/filter-select"
+import { useActiveCatalogTypes } from "@/components/shell/catalog-types"
+import type { CatalogTypeView } from "@/components/shell/catalog-types"
 import { useLabels } from "@/components/shell/labels"
-import { SOURCE_KIND_TONES } from "@/components/shell/tints"
+import { catalogTypeTone, LABOUR_TONE } from "@/components/shell/tints"
 import { formatMoney } from "@/lib/money"
 import type { PhaseOption } from "@/lib/phase-tree"
 import { useTRPC } from "@/trpc/react"
@@ -61,8 +63,14 @@ const BILLING_OPTIONS = [
 ] as const
 
 /**
- * The Add Items sheet: tabs for Products, Add-ons and Resource Roles (with
- * the Organization's labels; hidden terms have no tab), each with filters
+ * A tab of the Add Items sheet: an active Catalog Type's id, or
+ * "resource_role".
+ */
+export type AddItemsTab = string
+
+/**
+ * The Add Items sheet: a tab per active Catalog Type (named and coloured by
+ * the type, in order) plus Resource Roles (Label Override), each with filters
  * and an infinitely scrolling list of active items. Items picked on any
  * tab are added together, into the chosen Phase (any level; `phaseOptions`
  * in tree order), as one `lineItem.add`. The Phase is controlled, so "Add
@@ -91,16 +99,32 @@ export function AddItemsSheet({
     done: () => void
   ) => void
   /** The tab it opens on (default: the first). */
-  initialTab?: SourceKind
+  initialTab?: AddItemsTab
 }) {
   const labels = useLabels()
-  const tabs = (["product", "add_on", "resource_role"] as const).filter(
-    (term) => labels[term].enabled
-  )
-  const [tab, setTab] = useState<SourceKind>(
-    initialTab && tabs.includes(initialTab)
+  const catalogTypes = useActiveCatalogTypes()
+  const tabs: {
+    value: AddItemsTab
+    label: string
+    dot: string
+    type?: CatalogTypeView
+  }[] = [
+    ...catalogTypes.map((type) => ({
+      value: type.id,
+      label: type.plural,
+      dot: catalogTypeTone(type.colourIndex).dot,
+      type,
+    })),
+    {
+      value: "resource_role",
+      label: labels.resource_role.plural,
+      dot: LABOUR_TONE.dot,
+    },
+  ]
+  const [tab, setTab] = useState<AddItemsTab>(
+    initialTab && tabs.some((t) => t.value === initialTab)
       ? initialTab
-      : (tabs[0] ?? "resource_role")
+      : tabs[0]!.value
   )
   const [selection, setSelection] = useState<Selection>(new Map())
 
@@ -133,36 +157,33 @@ export function AddItemsSheet({
         <SheetHeader>
           <SheetTitle>Add items</SheetTitle>
           <SheetDescription>
-            Pick {tabs.map((t) => labels[t].plural).join(", ")} to add as Line
-            Items. Prices and costs are copied from the catalog now.
+            Pick {tabs.map((t) => t.label).join(", ")} to add as Line Items.
+            Prices and costs are copied from the catalog now.
           </SheetDescription>
         </SheetHeader>
         <Tabs
           value={tab}
-          onValueChange={(value) => setTab(value as SourceKind)}
+          onValueChange={(value) => setTab(value as AddItemsTab)}
           className="min-h-0 flex-1 px-4"
         >
           <TabsList className="w-full">
-            {tabs.map((term) => (
-              <TabsTrigger key={term} value={term}>
+            {tabs.map((t) => (
+              <TabsTrigger key={t.value} value={t.value} className="min-w-0">
                 <span
                   aria-hidden
-                  className={cn(
-                    "size-2 shrink-0 rounded-full",
-                    SOURCE_KIND_TONES[term].dot
-                  )}
+                  className={cn("size-2 shrink-0 rounded-full", t.dot)}
                 />
-                {labels[term].plural}
+                <span className="truncate">{t.label}</span>
               </TabsTrigger>
             ))}
           </TabsList>
-          {tabs.map((term) => (
+          {tabs.map((t) => (
             <TabsContent
-              key={term}
-              value={term}
+              key={t.value}
+              value={t.value}
               className="flex min-h-0 flex-col gap-2"
             >
-              {term === "resource_role" ? (
+              {!t.type ? (
                 <ResourceRolePicker
                   currency={currency}
                   selection={selection}
@@ -170,7 +191,7 @@ export function AddItemsSheet({
                 />
               ) : (
                 <CatalogItemPicker
-                  kind={term}
+                  catalogType={t.type}
                   currency={currency}
                   selection={selection}
                   onToggle={toggle}
@@ -226,27 +247,29 @@ function SearchInput({
 }
 
 function CatalogItemPicker({
-  kind,
+  catalogType,
   currency,
   selection,
   onToggle,
 }: {
-  kind: CatalogItemKind
+  catalogType: CatalogTypeView
   currency: string
   selection: Selection
   onToggle: (item: Picked, on: boolean) => void
 }) {
   const trpc = useTRPC()
-  const labels = useLabels()
+  const catalogTypeId = catalogType.id
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search.trim())
   const [tags, setTags] = useState<string[]>([])
   const [billingUnit, setBillingUnit] = useState<"each" | "hour">()
-  const tagOptions = useQuery(trpc.catalogItem.tags.queryOptions({ kind }))
+  const tagOptions = useQuery(
+    trpc.catalogItem.tags.queryOptions({ catalogTypeId })
+  )
   const list = useInfiniteQuery(
     trpc.catalogItem.listForPicker.infiniteQueryOptions(
       {
-        kind,
+        catalogTypeId,
         ...(deferredSearch ? { search: deferredSearch } : {}),
         ...(tags.length ? { tags } : {}),
         ...(billingUnit ? { billingUnit } : {}),
@@ -260,7 +283,7 @@ function CatalogItemPicker({
     <>
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
-          label={`Search ${labels[kind].plural}`}
+          label={`Search ${catalogType.plural}`}
           value={search}
           onChange={setSearch}
         />
@@ -269,7 +292,7 @@ function CatalogItemPicker({
           selected={tags}
           onChange={setTags}
         />
-        {kind === "add_on" && (
+        {catalogType.billingUnits.length > 1 && (
           <FilterSelect
             label="Billing unit"
             allLabel="Any unit"
@@ -285,10 +308,14 @@ function CatalogItemPicker({
         hasMore={list.hasNextPage}
         fetchingMore={list.isFetchingNextPage}
         onLoadMore={() => void list.fetchNextPage()}
-        empty={`No active ${labels[kind].plural} match.`}
+        empty={`No active ${catalogType.plural} match.`}
       >
         {rows.map((row) => {
-          const item = { sourceKind: kind, id: row.id, name: row.name }
+          const item = {
+            sourceKind: "catalog_item" as const,
+            id: row.id,
+            name: row.name,
+          }
           return (
             <PickerRow
               key={row.id}

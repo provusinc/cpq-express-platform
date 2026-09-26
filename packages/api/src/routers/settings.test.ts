@@ -77,8 +77,6 @@ describe("reads are open to every member", () => {
       })
       expect(await caller.settings.labels()).toMatchObject({
         resource_role: { singular: "Resource Role", plural: "Resource Roles" },
-        product: { singular: "Product", enabled: true },
-        add_on: { plural: "Add-ons", enabled: true },
         phase: { singular: "Phase" },
       })
       expect(await caller.settings.profile()).toMatchObject({
@@ -115,7 +113,7 @@ describe("settings.manage is Admin-only", () => {
       }),
     "settings.updateLabels": () =>
       caller.settings.updateLabels({
-        overrides: [{ term: "phase", singular: "Workstream", enabled: true }],
+        overrides: [{ term: "phase", singular: "Workstream" }],
       }),
     "settings.requestLogoUpload": () =>
       caller.settings.requestLogoUpload({ contentType: "image/png", size: 10 }),
@@ -299,7 +297,7 @@ describe("Hours Per Day and deletable Stages", () => {
 })
 
 describe("Label Overrides", () => {
-  it("renames terms, hides Products and Add-ons, and resets to canonical", () =>
+  it("renames terms and resets to canonical", () =>
     withTestDb(async (db) => {
       const { acme, caller } = await acmeWithAdmin(db)
       const labels = await caller.settings.updateLabels({
@@ -310,18 +308,11 @@ describe("Label Overrides", () => {
             plural: "Consultants",
           },
           { term: "phase", singular: "Workstream", plural: "Workstreams" },
-          { term: "add_on", singular: "", plural: "", enabled: false },
         ],
       })
       expect(labels).toEqual({
-        resource_role: {
-          singular: "Consultant",
-          plural: "Consultants",
-          enabled: true,
-        },
-        product: { singular: "Product", plural: "Products", enabled: true },
-        add_on: { singular: "Add-on", plural: "Add-ons", enabled: false },
-        phase: { singular: "Workstream", plural: "Workstreams", enabled: true },
+        resource_role: { singular: "Consultant", plural: "Consultants" },
+        phase: { singular: "Workstream", plural: "Workstreams" },
       })
 
       // Any member sees them.
@@ -336,7 +327,6 @@ describe("Label Overrides", () => {
       expect(reset.resource_role).toEqual({
         singular: "Resource Role",
         plural: "Resource Roles",
-        enabled: true,
       })
       expect(reset.phase.singular).toBe("Workstream")
       expect(
@@ -344,24 +334,19 @@ describe("Label Overrides", () => {
           .select()
           .from(labelOverrides)
           .where(eq(labelOverrides.organizationId, acme.id))
-      ).toHaveLength(3)
+      ).toHaveLength(2)
     }))
 
   it.each([
     [
-      "hiding Resource Roles",
-      [{ term: "resource_role" as const, enabled: false }],
-    ],
-    ["hiding Phases", [{ term: "phase" as const, enabled: false }]],
-    [
       "a name over 40 characters",
-      [{ term: "product" as const, singular: "x".repeat(41) }],
+      [{ term: "phase" as const, singular: "x".repeat(41) }],
     ],
     [
       "the same term twice",
       [
-        { term: "product" as const, singular: "Item" },
-        { term: "product" as const, singular: "Thing" },
+        { term: "phase" as const, singular: "Item" },
+        { term: "phase" as const, singular: "Thing" },
       ],
     ],
   ])("refuses %s", (_what, overrides) =>
@@ -370,24 +355,35 @@ describe("Label Overrides", () => {
       await expect(
         caller.settings.updateLabels({ overrides })
       ).rejects.toMatchObject({ code: "BAD_REQUEST" })
-      expect((await caller.settings.labels()).product.singular).toBe("Product")
+      expect((await caller.settings.labels()).phase.singular).toBe("Phase")
     })
   )
+
+  it("refuses the Catalog Type terms (named directly now)", () =>
+    withTestDb(async (db) => {
+      const { caller } = await acmeWithAdmin(db)
+      await expect(
+        caller.settings.updateLabels({
+          // @ts-expect-error: "product" is no Label Override term any more.
+          overrides: [{ term: "product", singular: "Widget" }],
+        })
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+    }))
 
   it("keeps each Organization's labels to itself", () =>
     withTestDb(async (db) => {
       const { caller } = await acmeWithAdmin(db)
       await caller.settings.updateLabels({
-        overrides: [{ term: "product", singular: "Widget", plural: "Widgets" }],
+        overrides: [{ term: "phase", singular: "Widget", plural: "Widgets" }],
       })
       const globex = await createOrganization(db)
       const { user } = await createMember(db, globex, { role: "admin" })
       const other = organizationCaller(db, { organization: globex, user })
-      expect((await other.settings.labels()).product.singular).toBe("Product")
+      expect((await other.settings.labels()).phase.singular).toBe("Phase")
       await other.settings.updateLabels({
-        overrides: [{ term: "product", singular: "Gadget" }],
+        overrides: [{ term: "phase", singular: "Gadget" }],
       })
-      expect((await caller.settings.labels()).product.singular).toBe("Widget")
+      expect((await caller.settings.labels()).phase.singular).toBe("Widget")
     }))
 })
 

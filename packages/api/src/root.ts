@@ -2,6 +2,7 @@ import { customerRouter } from "./routers/customer"
 import { allocationRouter } from "./routers/allocation"
 import { authRouter } from "./routers/auth"
 import { catalogItemRouter } from "./routers/catalog-item"
+import { catalogTypeRouter } from "./routers/catalog-type"
 import { contactRouter } from "./routers/contact"
 import { dashboardRouter } from "./routers/dashboard"
 import { healthRouter } from "./routers/health"
@@ -29,6 +30,7 @@ export const appRouter = createTRPCRouter({
   allocation: allocationRouter,
   auth: authRouter,
   catalogItem: catalogItemRouter,
+  catalogType: catalogTypeRouter,
   contact: contactRouter,
   dashboard: dashboardRouter,
   health: healthRouter,

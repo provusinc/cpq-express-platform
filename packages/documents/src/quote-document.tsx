@@ -327,6 +327,9 @@ function LineRow({
     <View style={styles.row} wrap={false}>
       <View style={[styles.colItem, { paddingLeft: indent }]}>
         <Text>{line.name}</Text>
+        {line.typeName && (
+          <Text style={styles.description}>{line.typeName}</Text>
+        )}
         {!compact && line.description && (
           <Text style={styles.description}>{line.description}</Text>
         )}

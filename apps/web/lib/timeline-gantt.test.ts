@@ -129,9 +129,9 @@ describe("allocationHeat", () => {
     expect(segments[1]!.to).toBe(1)
   })
 
-  it("has none for Products, Add-ons and lines by the Each", () => {
+  it("has none for Catalog Items and lines by the Each", () => {
     expect(
-      allocationHeat({ ...role, sourceKind: "product" }, settings)
+      allocationHeat({ ...role, sourceKind: "catalog_item" }, settings)
     ).toEqual([])
     expect(
       allocationHeat({ ...role, billingUnit: "each" as const }, settings)

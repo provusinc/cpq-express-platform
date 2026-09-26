@@ -77,19 +77,7 @@ export interface TermLabel {
 /** The canonical names, shown when an Organization hasn't overridden a term. */
 export const DEFAULT_LABELS: Record<LabelTerm, TermLabel> = {
   resource_role: { singular: "Resource Role", plural: "Resource Roles" },
-  product: { singular: "Product", plural: "Products" },
-  add_on: { singular: "Add-on", plural: "Add-ons" },
   phase: { singular: "Phase", plural: "Phases" },
-}
-
-/**
- * Terms an Organization may hide entirely (it doesn't sell them). Resource
- * Roles and Phases are the backbone of a Quote, so they can only be renamed.
- */
-export const HIDEABLE_LABEL_TERMS: readonly LabelTerm[] = ["product", "add_on"]
-
-export function canHideTerm(term: LabelTerm): boolean {
-  return HIDEABLE_LABEL_TERMS.includes(term)
 }
 
 export const LABEL_MAX_LENGTH = 40
@@ -99,15 +87,15 @@ export interface LabelOverride {
   term: LabelTerm
   singular: string | null
   plural: string | null
-  enabled: boolean
 }
 
-/** Every term's display names and whether it is shown. */
-export type Labels = Record<LabelTerm, TermLabel & { enabled: boolean }>
+/** Every term's display names. */
+export type Labels = Record<LabelTerm, TermLabel>
 
 /**
  * The labels the UI shows: each term's override where one is set, the
- * canonical name otherwise. Terms that can't be hidden are always enabled.
+ * canonical name otherwise. (Catalog Types are named directly and take no
+ * Label Override.)
  */
 export function resolveLabels(
   overrides: readonly LabelOverride[] = []
@@ -121,7 +109,6 @@ export function resolveLabels(
         {
           singular: override?.singular || DEFAULT_LABELS[term].singular,
           plural: override?.plural || DEFAULT_LABELS[term].plural,
-          enabled: canHideTerm(term) ? (override?.enabled ?? true) : true,
         },
       ]
     })
@@ -132,8 +119,8 @@ export type LabelOverrideCheck =
   | { ok: true; value: LabelOverride }
   | {
       ok: false
-      reason: "label_too_long" | "term_not_hideable"
-      field: "singular" | "plural" | "enabled"
+      reason: "label_too_long"
+      field: "singular" | "plural"
       message: string
     }
 
@@ -146,7 +133,6 @@ export function checkLabelOverride(input: {
   term: LabelTerm
   singular?: string | null
   plural?: string | null
-  enabled?: boolean
 }): LabelOverrideCheck {
   const names = { singular: input.singular, plural: input.plural }
   const normalized: Record<"singular" | "plural", string | null> = {
@@ -166,16 +152,7 @@ export function checkLabelOverride(input: {
     normalized[field] =
       name === "" || name === DEFAULT_LABELS[input.term][field] ? null : name
   }
-  const enabled = input.enabled ?? true
-  if (!enabled && !canHideTerm(input.term)) {
-    return {
-      ok: false,
-      reason: "term_not_hideable",
-      field: "enabled",
-      message: `${DEFAULT_LABELS[input.term].plural} can be renamed but not hidden.`,
-    }
-  }
-  return { ok: true, value: { term: input.term, ...normalized, enabled } }
+  return { ok: true, value: { term: input.term, ...normalized } }
 }
 
 // ─── Logo ───────────────────────────────────────────────────────────────────

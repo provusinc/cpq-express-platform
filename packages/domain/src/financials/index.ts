@@ -396,11 +396,15 @@ export function buildFinancials(input: FinancialsInput): FinancialsResult {
   }
 }
 
-/** The item types of the Summary's breakdown, in display order. */
-export const ITEM_TYPES = ["resource_role", "product", "add_on"] as const
-
+/**
+ * One item type of the breakdown: labour (Resource Roles) or one Catalog
+ * Type. `key` is "resource_role" for labour, else the Catalog Type's id.
+ */
 export interface ItemTypeBreakdown {
+  key: string
   sourceKind: SourceKind
+  /** The Catalog Type (null for labour). */
+  catalogTypeId: string | null
   lineCount: number
   /** Σ line totals (before the Quote Discount). */
   revenue: string
@@ -412,24 +416,46 @@ export interface ItemTypeBreakdown {
   shareOfSubtotal: string
 }
 
+/** A line as the breakdown reads it. */
+export interface ItemTypeLine extends Pick<
+  FinancialLine,
+  "sourceKind" | "lineTotal" | "unitCost" | "quantity"
+> {
+  /** The line's Catalog Type (through its Catalog Item); null for labour. */
+  catalogTypeId: string | null
+}
+
+/** The breakdown key of a line: "resource_role", or its Catalog Type's id. */
+export const itemTypeKey = (line: {
+  sourceKind: SourceKind
+  catalogTypeId: string | null
+}) =>
+  line.sourceKind === "resource_role"
+    ? "resource_role"
+    : (line.catalogTypeId ?? "catalog_item")
+
 /**
- * The Summary's item-type breakdown (labour = Resource Roles, Products,
- * Add-ons): each type's revenue, cost and own margin before the Quote
- * Discount, and its share of the Subtotal. Every type is listed, empty ones
- * with zeros.
+ * The item-type breakdown: labour (Resource Roles) first, then each of
+ * `catalogTypeIds` in the given order (the Organization's Catalog Types),
+ * then any other type the lines use. Each row has the type's revenue, cost
+ * and own margin before the Quote Discount, and its share of the Subtotal.
+ * Every listed type appears, empty ones with zeros.
  */
 export function breakdownByItemType(
-  lines: readonly Pick<
-    FinancialLine,
-    "sourceKind" | "lineTotal" | "unitCost" | "quantity"
-  >[]
+  lines: readonly ItemTypeLine[],
+  catalogTypeIds: readonly string[] = []
 ): ItemTypeBreakdown[] {
   const subtotal = lines.reduce(
     (acc, l) => acc.plus(new Decimal(l.lineTotal)),
     new Decimal(0)
   )
-  return ITEM_TYPES.map((kind) => {
-    const mine = lines.filter((l) => l.sourceKind === kind)
+  const keys = ["resource_role", ...catalogTypeIds]
+  for (const line of lines) {
+    const key = itemTypeKey(line)
+    if (!keys.includes(key)) keys.push(key)
+  }
+  return keys.map((key) => {
+    const mine = lines.filter((l) => itemTypeKey(l) === key)
     const revenue = mine.reduce(
       (acc, l) => acc.plus(new Decimal(l.lineTotal)),
       new Decimal(0)
@@ -439,8 +465,11 @@ export function breakdownByItemType(
       new Decimal(0)
     )
     const margin = revenue.minus(cost)
+    const labour = key === "resource_role"
     return {
-      sourceKind: kind,
+      key,
+      sourceKind: labour ? "resource_role" : "catalog_item",
+      catalogTypeId: labour ? null : key,
       lineCount: mine.length,
       revenue: toMoneyString(revenue),
       cost: toMoneyString(cost),

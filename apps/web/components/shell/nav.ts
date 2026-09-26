@@ -4,7 +4,6 @@ import {
   FileTextIcon,
   LayoutDashboardIcon,
   PackageIcon,
-  PackagePlusIcon,
   SettingsIcon,
   UserCogIcon,
   UsersIcon,
@@ -13,6 +12,8 @@ import type { LucideIcon } from "lucide-react"
 
 import type { LabelTerm } from "@workspace/domain/enums"
 import type { Labels } from "@workspace/domain/settings"
+
+import { catalogTypeHref } from "@/lib/catalog-routes"
 
 export interface NavItem {
   label: string
@@ -23,11 +24,10 @@ export interface NavItem {
   adminOnly?: boolean
   /** Shown only to Approvers (the page and API check again). */
   approverOnly?: boolean
-  /**
-   * The domain term the entry lists: its label is the term's plural Label
-   * Override, and a hidden term (Products, Add-ons) hides the entry.
-   */
+  /** The domain term the entry lists: its label is the term's plural Label Override. */
   term?: LabelTerm
+  /** The icon's colour class (an item type's `navIcon` tone). */
+  iconClass?: string
   /** The sidebar section the entry sits in. */
   section: NavSection
 }
@@ -62,20 +62,6 @@ export const NAV_ITEMS: NavItem[] = [
     section: "Quoting",
   },
   {
-    label: "Products",
-    href: "/products",
-    icon: PackageIcon,
-    term: "product",
-    section: "Catalog",
-  },
-  {
-    label: "Add-ons",
-    href: "/add-ons",
-    icon: PackagePlusIcon,
-    term: "add_on",
-    section: "Catalog",
-  },
-  {
     label: "Resource Roles",
     href: "/resource-roles",
     icon: UserCogIcon,
@@ -102,11 +88,38 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   },
 ]
 
-/** `items` as the Organization sees them: relabelled, hidden terms left out. */
-export function labelNavItems(items: NavItem[], labels: Labels): NavItem[] {
+/** A Catalog Type's entry: its plural name, in its colour. */
+export interface CatalogTypeNavFacts {
+  id: string
+  plural: string
+  iconClass: string
+}
+
+/**
+ * `items` as the Organization sees them: relabelled by Label Overrides,
+ * with one entry per active Catalog Type (in order) at the top of the
+ * Catalog section, before Resource Roles.
+ */
+export function labelNavItems(
+  items: NavItem[],
+  labels: Labels,
+  catalogTypes: readonly CatalogTypeNavFacts[],
+  labourIconClass?: string
+): NavItem[] {
+  const typeItems: NavItem[] = catalogTypes.map((type) => ({
+    label: type.plural,
+    href: catalogTypeHref(type.id),
+    icon: PackageIcon,
+    iconClass: type.iconClass,
+    section: "Catalog",
+  }))
   return items.flatMap((item) => {
     if (!item.term) return [item]
-    const label = labels[item.term]
-    return label.enabled ? [{ ...item, label: label.plural }] : []
+    const entry = {
+      ...item,
+      label: labels[item.term].plural,
+      iconClass: item.term === "resource_role" ? labourIconClass : undefined,
+    }
+    return item.term === "resource_role" ? [...typeItems, entry] : [entry]
   })
 }

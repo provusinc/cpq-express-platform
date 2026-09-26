@@ -38,7 +38,7 @@ async function setup(db: Db) {
     owner: members.member.user,
   })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     name: "Gateway",
     price: "100",
     cost: "60",
@@ -91,7 +91,7 @@ async function addLines(
     quoteId,
     phaseId,
     items: Array.from({ length: n }, () => ({
-      sourceKind: "product" as const,
+      sourceKind: "catalog_item" as const,
       id: productId,
     })),
   })

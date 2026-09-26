@@ -1,22 +1,12 @@
 import { sql } from "drizzle-orm"
-import {
-  boolean,
-  check,
-  numeric,
-  pgEnum,
-  text,
-  unique,
-} from "drizzle-orm/pg-core"
+import { check, numeric, pgEnum, text, unique } from "drizzle-orm/pg-core"
 
 import { LABEL_TERMS } from "@workspace/domain/enums"
 import {
   DEFAULT_DELETABLE_STAGES,
   DELETABLE_STAGE_OPTIONS,
 } from "@workspace/domain/policy"
-import {
-  HIDEABLE_LABEL_TERMS,
-  HOURS_PER_DAY_MAX,
-} from "@workspace/domain/settings"
+import { HOURS_PER_DAY_MAX } from "@workspace/domain/settings"
 
 import { timestamps } from "../columns"
 import { organizationTable } from "../organization-table"
@@ -63,9 +53,9 @@ export const labelTermEnum = pgEnum("label_term", LABEL_TERMS)
 
 /**
  * An Organization's own display name for a domain term (glossary: Label
- * Override), at most one per term. `null` names mean the canonical name;
- * `enabled = false` hides the term (Products and Add-ons only). Changes UI
- * wording only: code and API keep the canonical terms.
+ * Override), at most one per term (Resource Role, Phase). `null` names mean
+ * the canonical name. Changes UI wording only: code and API keep the
+ * canonical terms. Catalog Types are named directly (`catalog_types`).
  */
 export const labelOverrides = organizationTable(
   "label_overrides",
@@ -73,17 +63,12 @@ export const labelOverrides = organizationTable(
     term: labelTermEnum().notNull(),
     singular: text(),
     plural: text(),
-    enabled: boolean().notNull().default(true),
     ...timestamps(),
   },
   (t) => [
     unique("label_overrides_organization_id_term_key").on(
       t.organizationId,
       t.term
-    ),
-    check(
-      "label_overrides_only_hideable_disabled",
-      sql`${t.enabled} or ${t.term} in (${list(HIDEABLE_LABEL_TERMS)})`
     ),
   ]
 )

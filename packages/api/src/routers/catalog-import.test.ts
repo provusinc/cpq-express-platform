@@ -4,6 +4,8 @@ import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 import {
+  catalogTypeNamed,
+  createCatalogType,
   createMember,
   createOrganization,
   organizationCaller,
@@ -18,6 +20,8 @@ async function setup(db: Db) {
   const manager = await createMember(db, organization, { role: "manager" })
   return {
     organization,
+    product: await catalogTypeNamed(db, organization, "Product"),
+    addOn: await catalogTypeNamed(db, organization, "Add-on"),
     admin: organizationCaller(db, { organization, user: admin.user }),
     manager: organizationCaller(db, { organization, user: manager.user }),
   }
@@ -65,20 +69,17 @@ const roleRow = (overrides: Record<string, string> = {}) => ({
 describe("catalogItem.validateImport", () => {
   it("reports per-row errors without saving anything", () =>
     withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      const { organization, product, addOn, admin } = await setup(db)
       const result = await admin.catalogItem.validateImport({
+        catalogTypeId: product.id,
         rows: [
           itemRow(),
           itemRow({ Name: "Hourly Product", "Billing Unit": "Hour" }),
           itemRow({ Name: "No Price", Price: "" }),
           itemRow({ Name: "Bad Cost", Cost: "12.5.0" }),
-          itemRow({ Name: "", Type: "Service", "Is Active": "maybe" }),
-          itemRow({
-            Name: "Project Management",
-            Type: "Add On",
-            Price: "$1,125.00",
-            "Billing Unit": "hour",
-          }),
+          itemRow({ Name: "", "Billing Unit": "Daily", "Is Active": "maybe" }),
+          // A Type column is ignored: the type is the page's.
+          itemRow({ Name: "Elsewhere", Type: "Add-on", Price: "$1,125.00" }),
         ],
       })
       expect(result).toMatchObject({ validCount: 2, errorCount: 4 })
@@ -88,71 +89,91 @@ describe("catalogItem.validateImport", () => {
         ["Billing Unit"],
         ["Price"],
         ["Cost"],
-        ["Name", "Type", "Is Active"],
+        ["Name", "Billing Unit", "Is Active"],
         [],
       ])
-      expect(result.rows[1]!.errors[0]!.message).toMatch(
-        /Product is always billed Each/
+      expect(result.rows[1]!.errors[0]!.message).toBe(
+        "Products are billed Each, not Hour."
+      )
+      expect(result.rows[4]!.errors[1]!.message).toBe(
+        "Billing Unit must be Each (got “Daily”)."
       )
       expect(result.rows[2]!.errors[0]!.message).toBe("Price is required.")
       expect(result.rows[0]).toMatchObject({
         row: 1,
         values: {
-          kind: "product",
           name: "Basic Support Package",
           price: "75.0000",
           tags: ["support", "basic"],
           active: true,
         },
       })
-      expect(result.rows[5]!.values).toMatchObject({
-        kind: "add_on",
-        price: "1125.0000",
-        billingUnit: "hour",
+      expect(result.rows[5]!.values).toMatchObject({ price: "1125.0000" })
+      const hourly = await admin.catalogItem.validateImport({
+        catalogTypeId: addOn.id,
+        rows: [itemRow({ "Billing Unit": "hour" })],
       })
+      expect(hourly.rows[0]!.values).toMatchObject({ billingUnit: "hour" })
       expect(await itemsOf(db, organization.id)).toEqual([])
     }))
 
-  it("fills a blank Type from the page's kind and matches headers loosely", () =>
+  it("defaults a blank Billing Unit from the type and matches headers loosely", () =>
     withTestDb(async (db) => {
-      const { admin } = await setup(db)
-      const result = await admin.catalogItem.validateImport({
-        defaultKind: "add_on",
-        rows: [
-          { name: "Code Review", PRICE: "50", cost: "30", is_active: "no" },
-        ],
+      const { organization, addOn, admin } = await setup(db)
+      const services = await createCatalogType(db, organization, {
+        billingUnits: ["hour"],
       })
-      expect(result.rows[0]).toMatchObject({
+      const row = {
+        name: "Code Review",
+        PRICE: "50",
+        cost: "30",
+        is_active: "no",
+      }
+      expect(
+        (
+          await admin.catalogItem.validateImport({
+            catalogTypeId: addOn.id,
+            rows: [row],
+          })
+        ).rows[0]
+      ).toMatchObject({
         errors: [],
-        values: {
-          kind: "add_on",
-          billingUnit: "each",
-          active: false,
-          tags: [],
-        },
+        values: { billingUnit: "each", active: false, tags: [] },
       })
+      expect(
+        (
+          await admin.catalogItem.validateImport({
+            catalogTypeId: services.id,
+            rows: [row],
+          })
+        ).rows[0]!.values
+      ).toMatchObject({ billingUnit: "hour" })
     }))
 
   it("is for Admins only", () =>
     withTestDb(async (db) => {
-      const { manager } = await setup(db)
+      const { product, manager } = await setup(db)
       await expect(
-        manager.catalogItem.validateImport({ rows: [itemRow()] })
+        manager.catalogItem.validateImport({
+          catalogTypeId: product.id,
+          rows: [itemRow()],
+        })
       ).rejects.toMatchObject({ code: "FORBIDDEN" })
     }))
 })
 
 describe("catalogItem.import", () => {
-  it("inserts every row when all are valid", () =>
+  it("inserts every row, of the page's Catalog Type, when all are valid", () =>
     withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      const { organization, addOn, admin } = await setup(db)
       expect(
         await admin.catalogItem.import({
+          catalogTypeId: addOn.id,
           rows: [
             itemRow(),
             itemRow({
               Name: "Code Review",
-              Type: "Add-on",
+              Type: "Product",
               "Billing Unit": "Hour",
               "Is Active": "false",
             }),
@@ -162,7 +183,7 @@ describe("catalogItem.import", () => {
       expect(
         (await itemsOf(db, organization.id)).map((i) => ({
           name: i.name,
-          kind: i.kind,
+          catalogTypeId: i.catalogTypeId,
           billingUnit: i.billingUnit,
           price: i.price,
           active: i.active,
@@ -170,14 +191,14 @@ describe("catalogItem.import", () => {
       ).toEqual([
         {
           name: "Basic Support Package",
-          kind: "product",
+          catalogTypeId: addOn.id,
           billingUnit: "each",
           price: "75.0000",
           active: true,
         },
         {
           name: "Code Review",
-          kind: "add_on",
+          catalogTypeId: addOn.id,
           billingUnit: "hour",
           price: "75.0000",
           active: false,
@@ -187,12 +208,14 @@ describe("catalogItem.import", () => {
 
   it("imports nothing when any row is invalid", () =>
     withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      const { organization, product, admin } = await setup(db)
       const rows = Array.from({ length: 20 }, (_, i) =>
         itemRow({ Name: `Item ${i}` })
       )
       rows[17] = itemRow({ Name: "Broken", Price: "-3" })
-      await expect(admin.catalogItem.import({ rows })).rejects.toMatchObject({
+      await expect(
+        admin.catalogItem.import({ catalogTypeId: product.id, rows })
+      ).rejects.toMatchObject({
         code: "BAD_REQUEST",
         message: expect.stringMatching(/^1 of 20 rows have errors/),
       })
@@ -201,33 +224,63 @@ describe("catalogItem.import", () => {
 
   it("imports large files in one transaction", () =>
     withTestDb(async (db) => {
-      const { organization, admin } = await setup(db)
+      const { organization, product, admin } = await setup(db)
       const rows = Array.from({ length: 1201 }, (_, i) =>
         itemRow({ Name: `Item ${i}` })
       )
-      expect(await admin.catalogItem.import({ rows })).toEqual({
-        imported: 1201,
-      })
+      expect(
+        await admin.catalogItem.import({ catalogTypeId: product.id, rows })
+      ).toEqual({ imported: 1201 })
       expect(await itemsOf(db, organization.id)).toHaveLength(1201)
+    }))
+
+  it("refuses an inactive Catalog Type", () =>
+    withTestDb(async (db) => {
+      const { organization, admin } = await setup(db)
+      const retired = await createCatalogType(db, organization, {
+        active: false,
+      })
+      await expect(
+        admin.catalogItem.import({
+          catalogTypeId: retired.id,
+          rows: [itemRow()],
+        })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+      expect(await itemsOf(db, organization.id)).toEqual([])
     }))
 
   it("stays within the caller's Organization and is for Admins only", () =>
     withTestDb(async (db) => {
-      const { organization, admin, manager } = await setup(db)
+      const { organization, product, admin, manager } = await setup(db)
       await expect(
-        manager.catalogItem.import({ rows: [itemRow()] })
+        manager.catalogItem.import({
+          catalogTypeId: product.id,
+          rows: [itemRow()],
+        })
       ).rejects.toMatchObject({ code: "FORBIDDEN" })
       const other = await createOrganization(db)
-      await admin.catalogItem.import({ rows: [itemRow()] })
+      await admin.catalogItem.import({
+        catalogTypeId: product.id,
+        rows: [itemRow()],
+      })
       expect(await itemsOf(db, other.id)).toEqual([])
       expect(await itemsOf(db, organization.id)).toHaveLength(1)
+      // Another Organization's type is not found.
+      const theirs = await catalogTypeNamed(db, other, "Product")
+      await expect(
+        admin.catalogItem.import({
+          catalogTypeId: theirs.id,
+          rows: [itemRow()],
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      expect(await itemsOf(db, other.id)).toEqual([])
     }))
 
   it("rejects an empty file", () =>
     withTestDb(async (db) => {
-      const { admin } = await setup(db)
+      const { product, admin } = await setup(db)
       await expect(
-        admin.catalogItem.import({ rows: [] })
+        admin.catalogItem.import({ catalogTypeId: product.id, rows: [] })
       ).rejects.toMatchObject({ code: "BAD_REQUEST" })
     }))
 })

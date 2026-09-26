@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { eq, schema } from "@workspace/db"
 import { QUOTE_STAGES } from "@workspace/domain/enums"
 import type { QuoteStage } from "@workspace/domain/enums"
+import { DEFAULT_CATALOG_TYPES } from "@workspace/domain/catalog"
 import { DEFAULT_CUSTOMER_CLASSIFICATIONS } from "@workspace/domain/customers"
 import { RESERVED_SLUGS } from "@workspace/domain/organizations"
 
@@ -140,6 +141,31 @@ describe("platform.createOrganization", () => {
         ...DEFAULT_CUSTOMER_CLASSIFICATIONS.industry,
       ])
       expect(values.every((v) => v.retiredAt === null)).toBe(true)
+    }))
+
+  it("gives the new Organization the default Catalog Types", () =>
+    withTestDb(async (db) => {
+      const { caller } = await platformCaller(db)
+      const { organization } = await caller.platform.createOrganization({
+        name: "Initech",
+        slug: "initech",
+        currencyCode: "USD",
+      })
+      const types = await db
+        .select()
+        .from(schema.catalogTypes)
+        .where(eq(schema.catalogTypes.organizationId, organization.id))
+        .orderBy(schema.catalogTypes.sequence)
+      expect(
+        types.map((t) => [t.singular, t.plural, t.billingUnits, t.active])
+      ).toEqual(
+        DEFAULT_CATALOG_TYPES.map((t) => [
+          t.singular,
+          t.plural,
+          [...t.billingUnits],
+          true,
+        ])
+      )
     }))
 
   it.each([...RESERVED_SLUGS])("rejects the reserved slug %s", (slug) =>

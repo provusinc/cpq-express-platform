@@ -128,7 +128,6 @@ const labelOverrideInput = z
     term: z.enum(LABEL_TERMS),
     singular: z.string().nullish(),
     plural: z.string().nullish(),
-    enabled: z.boolean().default(true),
   })
   .transform((override, ctx) => {
     const check = checkLabelOverride(override)
@@ -269,8 +268,8 @@ export const settingsRouter = createTRPCRouter({
 
   /**
    * Saves Label Overrides for the given terms (others are left as they are).
-   * Blank names mean the canonical name; only Products and Add-ons can be
-   * hidden.
+   * Blank names mean the canonical name. (Catalog Types are named directly
+   * and take none.)
    */
   updateLabels: manageSettings
     .input(labelsInput)
@@ -289,7 +288,6 @@ export const settingsRouter = createTRPCRouter({
             set: {
               singular: sql`excluded.singular`,
               plural: sql`excluded.plural`,
-              enabled: sql`excluded.enabled`,
               updatedAt: new Date(),
             },
           })

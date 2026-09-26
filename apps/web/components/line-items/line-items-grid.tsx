@@ -85,7 +85,7 @@ import {
   selectableRows,
 } from "@/components/shell/data-table"
 import { useLabels } from "@/components/shell/labels"
-import { PHASE_TINT_CLASSES, SourceKindTag } from "@/components/shell/tints"
+import { ItemTypeTag, PHASE_TINT_CLASSES } from "@/components/shell/tints"
 import { formatDate } from "@/lib/format"
 import { formatMoney, isMoneyInput, trimMoney } from "@/lib/money"
 import { phaseTints } from "@/lib/phase-tints"
@@ -304,7 +304,7 @@ function NameCell({ row }: Cell) {
         onSave={(name) => name && onUpdate({ id: line.id, name })}
       />
       <span className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
-        <SourceKindTag kind={line.sourceKind} />
+        <ItemTypeTag line={line} />
         {line.plannerManaged && (
           <Badge variant="secondary" className="h-4 px-1 text-[10px]">
             <CalendarClockIcon />

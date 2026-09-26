@@ -42,42 +42,18 @@ describe("checkHoursPerDay", () => {
 describe("resolveLabels", () => {
   it("uses the canonical names without overrides", () => {
     expect(resolveLabels()).toEqual({
-      resource_role: {
-        singular: "Resource Role",
-        plural: "Resource Roles",
-        enabled: true,
-      },
-      product: { singular: "Product", plural: "Products", enabled: true },
-      add_on: { singular: "Add-on", plural: "Add-ons", enabled: true },
-      phase: { singular: "Phase", plural: "Phases", enabled: true },
+      resource_role: { singular: "Resource Role", plural: "Resource Roles" },
+      phase: { singular: "Phase", plural: "Phases" },
     })
   })
 
   it("applies overrides and falls back per name", () => {
     const labels = resolveLabels([
-      {
-        term: "resource_role",
-        singular: "Consultant",
-        plural: null,
-        enabled: true,
-      },
-      { term: "add_on", singular: null, plural: null, enabled: false },
+      { term: "resource_role", singular: "Consultant", plural: null },
     ])
     expect(labels.resource_role).toEqual({
       singular: "Consultant",
       plural: "Resource Roles",
-      enabled: true,
-    })
-    expect(labels.add_on.enabled).toBe(false)
-  })
-
-  it("never hides Resource Roles or Phases", () => {
-    const labels = resolveLabels([
-      { term: "phase", singular: "Workstream", plural: null, enabled: false },
-    ])
-    expect(labels.phase).toMatchObject({
-      singular: "Workstream",
-      enabled: true,
     })
   })
 })
@@ -92,27 +68,13 @@ describe("checkLabelOverride", () => {
       })
     ).toEqual({
       ok: true,
-      value: {
-        term: "phase",
-        singular: "Work stream",
-        plural: null,
-        enabled: true,
-      },
+      value: { term: "phase", singular: "Work stream", plural: null },
     })
-  })
-
-  it.each([
-    ["product", true],
-    ["add_on", true],
-    ["resource_role", false],
-    ["phase", false],
-  ] as const)("hiding %s is allowed: %s", (term, allowed) => {
-    expect(checkLabelOverride({ term, enabled: false }).ok).toBe(allowed)
   })
 
   it("refuses names over 40 characters", () => {
     expect(
-      checkLabelOverride({ term: "product", plural: "x".repeat(41) })
+      checkLabelOverride({ term: "phase", plural: "x".repeat(41) })
     ).toMatchObject({ ok: false, reason: "label_too_long", field: "plural" })
   })
 })

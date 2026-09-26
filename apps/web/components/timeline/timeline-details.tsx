@@ -16,7 +16,7 @@ import {
 import { Separator } from "@workspace/ui/components/separator"
 
 import type { EditorLine, EditorMilestone } from "@/components/quotes/autosave"
-import { SourceKindTag } from "@/components/shell/tints"
+import { ItemTypeTag } from "@/components/shell/tints"
 import { formatDate, formatDateRange } from "@/lib/format"
 import { formatMoney } from "@/lib/money"
 import type { HeatSegment } from "@/lib/timeline-gantt"
@@ -115,7 +115,7 @@ export function LineDetails({
       <PopoverHeader>
         <PopoverTitle className="truncate">{line.name}</PopoverTitle>
         <PopoverDescription>
-          <SourceKindTag kind={line.sourceKind} />
+          <ItemTypeTag line={line} />
           {phaseName && ` · ${phaseName}`}
         </PopoverDescription>
       </PopoverHeader>

@@ -4,6 +4,7 @@ import { z } from "zod"
 import {
   and,
   count,
+  createDefaultCatalogTypes,
   createDefaultCustomerClassifications,
   createDefaultQuoteStatuses,
   desc,
@@ -110,6 +111,7 @@ export const platformRouter = createTRPCRouter({
         const scope = organizationScope(tx, organization.id)
         await createDefaultQuoteStatuses(scope)
         await createDefaultCustomerClassifications(scope)
+        await createDefaultCatalogTypes(scope)
         const invitation = input.adminEmail
           ? await issueInvitation(
               { ...ctx, db: tx },

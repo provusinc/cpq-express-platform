@@ -84,6 +84,12 @@ export interface QuoteDocumentSnapshot {
     id: string
     phaseId: string | null
     sourceKind: SourceKind
+    /**
+     * What the line is, as printed: its Catalog Type's singular name, or the
+     * Resource Role term (with its Label Override) for labour. Missing on
+     * snapshots taken before Catalog Types.
+     */
+    typeName?: string
     name: string
     description: string | null
     startDate: string

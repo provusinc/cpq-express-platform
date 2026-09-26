@@ -39,7 +39,7 @@ async function setup(db: Db) {
     costRate: "100",
   })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     price: "100",
     cost: "60",
   })
@@ -47,7 +47,7 @@ async function setup(db: Db) {
     quoteId: quote.id,
     items: [
       { sourceKind: "resource_role", id: role.id },
-      { sourceKind: "product", id: product.id },
+      { sourceKind: "catalog_item", id: product.id },
     ],
   })
   const [roleLine, productLine] = added.lines

@@ -114,7 +114,7 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
         weekly: [20, 32, 36, 36, 24, 12],
       },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Code Review",
         quantity: "4",
         phase: "Design",
@@ -146,7 +146,7 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
         weekly: [8, 8, 4, 8, 8, 8, 8, 8, 8, 8, 12],
       },
       {
-        kind: "product",
+        kind: "catalog_item",
         source: "Senior Developer Service",
         quantity: "2",
         notes: "Two on-site weeks",
@@ -171,7 +171,7 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
         weekly: [12, 16, 16, 16, 8],
       },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Quality Assurance Testing",
         quantity: "160",
         unitPrice: "90.00",
@@ -191,7 +191,7 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   },
   "TechStart – Support retainer": {
     lines: [
-      { kind: "product", source: "Premium Support Plan", quantity: "12" },
+      { kind: "catalog_item", source: "Premium Support Plan", quantity: "12" },
       { kind: "resource_role", source: "Project Manager", quantity: "120" },
     ],
     discount: { kind: "amount", value: "500" },
@@ -199,12 +199,12 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "Global Mfg – Line automation": {
     lines: [
       { kind: "resource_role", source: "DevOps Engineer", quantity: "480" },
-      { kind: "product", source: "DevOps Consulting Service" },
+      { kind: "catalog_item", source: "DevOps Consulting Service" },
     ],
   },
   "Healthcare – Records migration": {
     lines: [
-      { kind: "product", source: "Database Migration Service" },
+      { kind: "catalog_item", source: "Database Migration Service" },
       {
         kind: "resource_role",
         source: "Database Administrator",
@@ -216,14 +216,14 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "Retail – Store pilot": {
     lines: [
       { kind: "resource_role", source: "UX Designer", quantity: "40" },
-      { kind: "product", source: "UI/UX Design Package" },
+      { kind: "catalog_item", source: "UI/UX Design Package" },
     ],
   },
   "Acme Corp – Analytics add-on": {
     lines: [
       { kind: "resource_role", source: "Data Analyst", quantity: "160" },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Data Analytics Dashboard Prep",
         quantity: "3",
       },
@@ -239,7 +239,11 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
     lines: [
       { kind: "resource_role", source: "UX Designer", quantity: "200" },
       { kind: "resource_role", source: "Software Engineer", quantity: "480" },
-      { kind: "add_on", source: "Quality Assurance Testing", quantity: "80" },
+      {
+        kind: "catalog_item",
+        source: "Quality Assurance Testing",
+        quantity: "80",
+      },
     ],
   },
   "Healthcare – Patient portal": {
@@ -252,7 +256,11 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "TechStart – Cloud migration": {
     lines: [
       { kind: "resource_role", source: "DevOps Engineer", quantity: "320" },
-      { kind: "product", source: "DevOps Consulting Service", quantity: "3" },
+      {
+        kind: "catalog_item",
+        source: "DevOps Consulting Service",
+        quantity: "3",
+      },
     ],
   },
   "Acme Corp – Data warehouse": {
@@ -269,7 +277,7 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
     lines: [
       { kind: "resource_role", source: "Data Analyst", quantity: "120" },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Data Analytics Dashboard Prep",
         quantity: "4",
       },
@@ -278,13 +286,17 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "Retail – POS integration": {
     lines: [
       { kind: "resource_role", source: "Software Engineer", quantity: "320" },
-      { kind: "product", source: "Senior Developer Service", quantity: "4" },
+      {
+        kind: "catalog_item",
+        source: "Senior Developer Service",
+        quantity: "4",
+      },
     ],
   },
   "Acme Corp – Integration sprint": {
     lines: [
       {
-        kind: "product",
+        kind: "catalog_item",
         source: "Agile Product Management Sprint",
         quantity: "2",
       },
@@ -294,7 +306,11 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   },
   "Healthcare – Compliance audit": {
     lines: [
-      { kind: "product", source: "Cybersecurity Audit Package", quantity: "2" },
+      {
+        kind: "catalog_item",
+        source: "Cybersecurity Audit Package",
+        quantity: "2",
+      },
       {
         kind: "resource_role",
         source: "Software Engineer",
@@ -306,9 +322,9 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   },
   "TechStart – Pen test": {
     lines: [
-      { kind: "product", source: "Cybersecurity Audit Package" },
+      { kind: "catalog_item", source: "Cybersecurity Audit Package" },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Cybersecurity Vulnerability Scan",
         quantity: "3",
       },
@@ -328,8 +344,8 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   },
   "Acme Corp – Support renewal": {
     lines: [
-      { kind: "product", source: "Premium Support Plan", quantity: "12" },
-      { kind: "product", source: "Basic Support Package", quantity: "12" },
+      { kind: "catalog_item", source: "Premium Support Plan", quantity: "12" },
+      { kind: "catalog_item", source: "Basic Support Package", quantity: "12" },
     ],
   },
   "Retail – Analytics add-on": {
@@ -344,12 +360,12 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   "Retail – Store pilot rollout": {
     lines: [
       { kind: "resource_role", source: "UX Designer", quantity: "80" },
-      { kind: "product", source: "UI/UX Design Package", quantity: "2" },
+      { kind: "catalog_item", source: "UI/UX Design Package", quantity: "2" },
     ],
   },
   "Healthcare – Records migration phase 2": {
     lines: [
-      { kind: "product", source: "Database Migration Service" },
+      { kind: "catalog_item", source: "Database Migration Service" },
       {
         kind: "resource_role",
         source: "Software Engineer",
@@ -372,9 +388,9 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
   },
   "TechStart – Security review": {
     lines: [
-      { kind: "product", source: "Cybersecurity Audit Package" },
+      { kind: "catalog_item", source: "Cybersecurity Audit Package" },
       {
-        kind: "add_on",
+        kind: "catalog_item",
         source: "Cybersecurity Vulnerability Scan",
         quantity: "2",
       },
@@ -553,11 +569,10 @@ async function findSource(db: Db, organizationId: string, line: SeedLine) {
     .where(
       and(
         eq(catalogItems.organizationId, organizationId),
-        eq(catalogItems.kind, line.kind),
         eq(catalogItems.name, line.source)
       )
     )
   if (!item)
-    throw new Error(`Seed Line Items: no ${line.kind} “${line.source}”.`)
+    throw new Error(`Seed Line Items: no Catalog Item “${line.source}”.`)
   return item
 }

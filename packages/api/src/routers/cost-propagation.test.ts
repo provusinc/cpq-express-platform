@@ -30,7 +30,7 @@ async function setup(db: Db) {
   const as = (who: typeof admin) =>
     organizationCaller(db, { organization, user: who.user })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     name: "Gateway",
     price: "100",
     cost: "60",
@@ -49,7 +49,7 @@ async function setup(db: Db) {
     await as(member).lineItem.add({
       quoteId: quote.id,
       items: [
-        { sourceKind: "product", id: product.id },
+        { sourceKind: "catalog_item", id: product.id },
         { sourceKind: "resource_role", id: role.id },
       ],
     })
@@ -118,7 +118,7 @@ describe("Cost Propagation from a Catalog Item", () => {
       expect(await logOf(db, draft.id)).toMatchObject([
         {
           lineItemId: gateway!.id,
-          sourceKind: "product",
+          sourceKind: "catalog_item",
           sourceId: product.id,
           sourceName: "Gateway",
           oldCost: "60.0000",
@@ -182,7 +182,7 @@ describe("Cost Propagation from a Catalog Item", () => {
       const two = await quoteWithLines("draft", "Two")
       await as(member).lineItem.add({
         quoteId: two.id,
-        items: [{ sourceKind: "product", id: product.id }],
+        items: [{ sourceKind: "catalog_item", id: product.id }],
       })
       const result = await as(admin).catalogItem.update({
         id: product.id,
@@ -192,7 +192,7 @@ describe("Cost Propagation from a Catalog Item", () => {
       expect(await logOf(db, one.id)).toHaveLength(1)
       expect(await logOf(db, two.id)).toHaveLength(2)
       const gateways = (await linesOf(db, two.id)).filter(
-        (l) => l.sourceKind === "product"
+        (l) => l.sourceKind === "catalog_item"
       )
       expect(gateways.map((l) => l.unitCost)).toEqual(["0.0000", "0.0000"])
     }))

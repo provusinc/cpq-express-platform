@@ -26,7 +26,7 @@ const quantity = () => numeric({ precision: 18, scale: 3 })
 /** A calendar date, read and written as an ISO `yyyy-MM-dd` string (`IsoDate`). */
 const isoDate = () => date({ mode: "string" })
 
-/** What a Line Item was added from (glossary: Product, Add-on, Resource Role). */
+/** What a Line Item was added from (glossary: Catalog Item, Resource Role). */
 export const sourceKindEnum = pgEnum("source_kind", SOURCE_KINDS)
 /** The bucket an Allocation covers (week, month, quarter). */
 export const periodTypeEnum = pgEnum("period_type", PERIOD_TYPES)
@@ -77,7 +77,8 @@ export type NewPhase = typeof phases.$inferInsert
 
 /**
  * A single priced row on a Quote (glossary: Line Item), sourced from a
- * Catalog Item (`sourceKind` product / add_on → `catalogItemId`) or a
+ * Catalog Item (`sourceKind` catalog_item → `catalogItemId`; its Catalog
+ * Type is reached through the item) or a
  * Resource Role (`resource_role` → `resourceRoleId`); a check constraint
  * requires exactly the matching reference. Sources can't be deleted while a
  * Line Item references them (ON DELETE RESTRICT; the API answers with an
@@ -141,8 +142,7 @@ export const lineItems = organizationTable(
     ),
     check(
       "line_items_billing_unit_matches_kind",
-      sql`(${t.sourceKind} <> 'resource_role' or ${t.billingUnit} = 'hour')
-        and (${t.sourceKind} <> 'product' or ${t.billingUnit} = 'each')`
+      sql`${t.sourceKind} <> 'resource_role' or ${t.billingUnit} = 'hour'`
     ),
     check("line_items_dates_ordered", sql`${t.endDate} >= ${t.startDate}`),
     check("line_items_quantity_non_negative", sql`${t.quantity} >= 0`),

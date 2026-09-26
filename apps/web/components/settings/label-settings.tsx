@@ -14,7 +14,6 @@ import { z } from "zod"
 import { LABEL_TERMS } from "@workspace/domain/enums"
 import type { LabelTerm } from "@workspace/domain/enums"
 import {
-  canHideTerm,
   checkLabelOverride,
   DEFAULT_LABELS,
   LABEL_MAX_LENGTH,
@@ -32,7 +31,6 @@ import {
   FieldSet,
 } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import { Switch } from "@workspace/ui/components/switch"
 
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
@@ -40,7 +38,6 @@ import { useTRPC } from "@/trpc/react"
 const termSchema = z.object({
   singular: z.string(),
   plural: z.string(),
-  enabled: z.boolean(),
 })
 
 /** Every term's names, checked with the same rule as `settings.updateLabels`. */
@@ -73,14 +70,12 @@ const toForm = (labels: Labels): FormValues =>
 
 const DESCRIPTIONS: Record<LabelTerm, string> = {
   resource_role: "Kinds of labour you sell by the hour, e.g. “Consultant”.",
-  product: "Catalog Items sold per unit.",
-  add_on: "Catalog Items sold per unit or per hour.",
   phase: "Groupings of Line Items within a Quote, e.g. “Workstream”.",
 }
 
 /**
  * Settings → Labels: Label Overrides. Renames terms across the UI (never
- * their meaning) and hides Products or Add-ons the Organization doesn't sell.
+ * their meaning). Catalog Types are named directly, so they have none here.
  */
 export function LabelSettings() {
   const trpc = useTRPC()
@@ -152,27 +147,6 @@ export function LabelSettings() {
                 />
               ))}
             </div>
-            {canHideTerm(term) && (
-              <Controller
-                name={`${term}.enabled`}
-                control={form.control}
-                render={({ field }) => (
-                  <Field orientation="horizontal">
-                    <Switch
-                      id={`label-${term}-enabled`}
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                    <FieldLabel
-                      htmlFor={`label-${term}-enabled`}
-                      className="font-normal"
-                    >
-                      We sell {DEFAULT_LABELS[term].plural}
-                    </FieldLabel>
-                  </Field>
-                )}
-              />
-            )}
           </FieldSet>
         ))}
         <div>

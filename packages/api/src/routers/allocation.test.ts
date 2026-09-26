@@ -47,13 +47,13 @@ async function setup(
     costRate: "100",
   })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     name: "Gateway",
     price: "100",
     cost: "60",
   })
   const addOn = await createCatalogItem(db, organization, {
-    kind: "add_on",
+    type: "Add-on",
     name: "Training",
     price: "80",
     cost: "50",
@@ -65,7 +65,7 @@ async function setup(
 async function addLines(
   caller: TestCaller,
   quoteId: string,
-  items: { sourceKind: "product" | "add_on" | "resource_role"; id: string }[]
+  items: { sourceKind: "catalog_item" | "resource_role"; id: string }[]
 ) {
   return (await caller.lineItem.add({ quoteId, items })).lines
 }
@@ -266,8 +266,8 @@ describe("allocation.setRange", () => {
         quote.id,
         [
           { sourceKind: "resource_role", id: role.id },
-          { sourceKind: "product", id: product.id },
-          { sourceKind: "add_on", id: addOn.id },
+          { sourceKind: "catalog_item", id: product.id },
+          { sourceKind: "catalog_item", id: addOn.id },
         ]
       )
       for (const other of [productLine!, addOnLine!]) {

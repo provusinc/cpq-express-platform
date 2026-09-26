@@ -1,10 +1,24 @@
 import { and, eq } from "drizzle-orm"
 
+import { DEFAULT_CATALOG_TYPES } from "@workspace/domain/catalog"
+
+import { ensureCatalogType } from "../catalog-types"
 import type { Db } from "../index"
+import { organizationScope } from "../organization-scope"
 import { catalogItems, resourceRoles } from "../schema"
 import type { NewCatalogItem, NewResourceRole, Organization } from "../schema"
 
-type SeedItem = Omit<NewCatalogItem, "organizationId" | "id">
+/** The default Catalog Type an item belongs to (its index in `DEFAULT_CATALOG_TYPES`). */
+const PRODUCT = 0
+const ADD_ON = 1
+
+type SeedItem = Omit<
+  NewCatalogItem,
+  "organizationId" | "id" | "catalogTypeId"
+> & {
+  /** Index of its default Catalog Type in `DEFAULT_CATALOG_TYPES`. */
+  type: number
+}
 type SeedRole = Omit<NewResourceRole, "organizationId" | "id">
 
 const product = (
@@ -14,7 +28,7 @@ const product = (
   cost: string,
   tags: string[]
 ): SeedItem => ({
-  kind: "product",
+  type: PRODUCT,
   name,
   description,
   price,
@@ -31,7 +45,7 @@ const addOn = (
   billingUnit: "each" | "hour",
   tags: string[]
 ): SeedItem => ({
-  kind: "add_on",
+  type: ADD_ON,
   name,
   description,
   price,
@@ -306,20 +320,28 @@ export const SEED_RESOURCE_ROLES: SeedRole[] = [
 ]
 
 /**
- * Idempotent: Catalog Items are matched by (kind, name) and Resource Roles
- * by name within the Organization, then reset to these values (active).
+ * Idempotent: the default Catalog Types are found by name (created when
+ * missing), Catalog Items are matched by (Catalog Type, name) and Resource
+ * Roles by name within the Organization, then reset to these values
+ * (active).
  */
 export async function seedCatalog(db: Db, organization: Organization) {
   const organizationId = organization.id
-  for (const item of SEED_CATALOG_ITEMS) {
-    const values = { ...item, active: true }
+  const scope = organizationScope(db, organizationId)
+  const types = []
+  for (const type of DEFAULT_CATALOG_TYPES) {
+    types.push(await ensureCatalogType(scope, type))
+  }
+  for (const { type, ...item } of SEED_CATALOG_ITEMS) {
+    const catalogTypeId = types[type]!.id
+    const values = { ...item, catalogTypeId, active: true }
     const [existing] = await db
       .select({ id: catalogItems.id })
       .from(catalogItems)
       .where(
         and(
           eq(catalogItems.organizationId, organizationId),
-          eq(catalogItems.kind, item.kind),
+          eq(catalogItems.catalogTypeId, catalogTypeId),
           eq(catalogItems.name, item.name)
         )
       )

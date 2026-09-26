@@ -49,14 +49,14 @@ async function setup(db: Db, quoteOverrides: { currencyCode?: string } = {}) {
     ...quoteOverrides,
   })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     name: "Gateway",
     description: "Edge device",
     price: "100",
     cost: "60",
   })
   const addOn = await createCatalogItem(db, organization, {
-    kind: "add_on",
+    type: "Add-on",
     name: "Training",
     price: "80",
     cost: "50",
@@ -88,7 +88,7 @@ async function addProduct(
 ) {
   const result = await caller.lineItem.add({
     quoteId,
-    items: [{ sourceKind: "product", id: productId }],
+    items: [{ sourceKind: "catalog_item", id: productId }],
   })
   return result.lines[0]!
 }
@@ -100,8 +100,8 @@ describe("lineItem.add", () => {
       const result = await caller("member").lineItem.add({
         quoteId: quote.id,
         items: [
-          { sourceKind: "product", id: product.id },
-          { sourceKind: "add_on", id: addOn.id },
+          { sourceKind: "catalog_item", id: product.id },
+          { sourceKind: "catalog_item", id: addOn.id },
           { sourceKind: "resource_role", id: role.id },
         ],
       })
@@ -114,7 +114,7 @@ describe("lineItem.add", () => {
       expect(result.lines[0]).toMatchObject({
         quoteId: quote.id,
         phaseId: null,
-        sourceKind: "product",
+        sourceKind: "catalog_item",
         catalogItemId: product.id,
         resourceRoleId: null,
         description: "Edge device",
@@ -191,8 +191,8 @@ describe("lineItem.add", () => {
       const second = await caller("member").lineItem.add({
         quoteId: quote.id,
         items: [
-          { sourceKind: "product", id: product.id },
-          { sourceKind: "product", id: product.id },
+          { sourceKind: "catalog_item", id: product.id },
+          { sourceKind: "catalog_item", id: product.id },
         ],
       })
       expect(second.lines).toHaveLength(2)
@@ -214,7 +214,7 @@ describe("lineItem.add", () => {
       const result = await caller("member").lineItem.add({
         quoteId: quote.id,
         phaseId: phase!.id,
-        items: [{ sourceKind: "product", id: product.id }],
+        items: [{ sourceKind: "catalog_item", id: product.id }],
       })
       expect(result.lines[0]!.phaseId).toBe(phase!.id)
 
@@ -225,7 +225,7 @@ describe("lineItem.add", () => {
         caller("member").lineItem.add({
           quoteId: other.id,
           phaseId: phase!.id,
-          items: [{ sourceKind: "product", id: product.id }],
+          items: [{ sourceKind: "catalog_item", id: product.id }],
         })
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
     }))
@@ -241,17 +241,22 @@ describe("lineItem.add", () => {
         caller("member").lineItem.add({
           quoteId: quote.id,
           items: [
-            { sourceKind: "product", id: product.id },
-            { sourceKind: "product", id: retired.id },
+            { sourceKind: "catalog_item", id: product.id },
+            { sourceKind: "catalog_item", id: retired.id },
           ],
         })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+      // An item of an inactive Catalog Type can't be added either.
+      await db
+        .update(schema.catalogTypes)
+        .set({ active: false })
+        .where(eq(schema.catalogTypes.id, addOn.catalogTypeId))
       await expect(
         caller("member").lineItem.add({
           quoteId: quote.id,
-          items: [{ sourceKind: "product", id: addOn.id }],
+          items: [{ sourceKind: "catalog_item", id: addOn.id }],
         })
-      ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
       await expect(
         caller("member").lineItem.add({
           quoteId: quote.id,
@@ -271,7 +276,7 @@ describe("lineItem.add", () => {
       await expect(
         caller.lineItem.add({
           quoteId: own.id,
-          items: [{ sourceKind: "product", id: product.id }],
+          items: [{ sourceKind: "catalog_item", id: product.id }],
         })
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
       await expect(
@@ -377,7 +382,7 @@ describe("quote.setDiscount", () => {
       })
       const added = await caller("member").lineItem.add({
         quoteId: quote.id,
-        items: [{ sourceKind: "product", id: product.id }],
+        items: [{ sourceKind: "catalog_item", id: product.id }],
       })
       expect(added.totals).toMatchObject({
         subtotal: "200.0000",
@@ -637,9 +642,9 @@ describe("lineItem.delete / restore", () => {
       const added = await caller("member").lineItem.add({
         quoteId: quote.id,
         items: [
-          { sourceKind: "product", id: product.id },
+          { sourceKind: "catalog_item", id: product.id },
           { sourceKind: "resource_role", id: role.id },
-          { sourceKind: "product", id: product.id },
+          { sourceKind: "catalog_item", id: product.id },
         ],
       })
       const [keep, roleLine, other] = added.lines
@@ -762,7 +767,7 @@ describe("quote.editor", () => {
         quoteId: quote.id,
         items: [
           { sourceKind: "resource_role", id: role.id },
-          { sourceKind: "product", id: product.id },
+          { sourceKind: "catalog_item", id: product.id },
         ],
       })
       // Any member may read any Quote.
@@ -789,7 +794,7 @@ describe("permissions and the lock", () => {
       () =>
         caller.lineItem.add({
           quoteId,
-          items: [{ sourceKind: "product", id: ids.productId }],
+          items: [{ sourceKind: "catalog_item", id: ids.productId }],
         }),
       () =>
         caller.lineItem.update({ quoteId, id: ids.lineId, name: "Changed" }),
@@ -872,13 +877,13 @@ describe("permissions and the lock", () => {
       await expect(
         caller("manager").lineItem.add({
           quoteId: managersQuote.id,
-          items: [{ sourceKind: "product", id: product.id }],
+          items: [{ sourceKind: "catalog_item", id: product.id }],
         })
       ).rejects.toMatchObject({ code: "FORBIDDEN" })
       await expect(
         caller("otherManager").lineItem.add({
           quoteId: managersQuote.id,
-          items: [{ sourceKind: "product", id: product.id }],
+          items: [{ sourceKind: "catalog_item", id: product.id }],
         })
       ).resolves.toBeTruthy()
     }))
@@ -960,7 +965,7 @@ describe("sources in use", () => {
 describe("pickers", () => {
   it("pages active Catalog Items by name with a cursor", () =>
     withTestDb(async (db) => {
-      const { organization, caller } = await setup(db)
+      const { organization, caller, product } = await setup(db)
       for (const name of ["Alpha", "bravo", "Charlie", "Delta"]) {
         await createCatalogItem(db, organization, { name, tags: ["kit"] })
       }
@@ -970,7 +975,7 @@ describe("pickers", () => {
         tags: ["kit"],
       })
       const first = await caller("member").catalogItem.listForPicker({
-        kind: "product",
+        catalogTypeId: product.catalogTypeId,
         tags: ["kit"],
         limit: 3,
       })
@@ -981,7 +986,7 @@ describe("pickers", () => {
       ])
       expect(first.nextCursor).toBe(3)
       const second = await caller("member").catalogItem.listForPicker({
-        kind: "product",
+        catalogTypeId: product.catalogTypeId,
         tags: ["kit"],
         limit: 3,
         cursor: first.nextCursor,
@@ -1011,12 +1016,14 @@ describe("pickers", () => {
 
   it("refuses non-members on the Organization's subdomain", () =>
     withTestDb(async (db) => {
-      const { organization } = await setup(db)
+      const { organization, product } = await setup(db)
       const outsider = await createOrganization(db)
       const { user } = await createMember(db, outsider, { role: "admin" })
       const caller = organizationCaller(db, { organization, user })
       await expect(
-        caller.catalogItem.listForPicker({ kind: "product" })
+        caller.catalogItem.listForPicker({
+          catalogTypeId: product.catalogTypeId,
+        })
       ).rejects.toMatchObject({ code: "NOT_FOUND" })
       await expect(caller.resourceRole.listForPicker({})).rejects.toMatchObject(
         { code: "NOT_FOUND" }
@@ -1052,7 +1059,7 @@ describe("tenancy isolation", () => {
             case "lineItem.add":
               return c.lineItem.add({
                 quoteId: quote.id,
-                items: [{ sourceKind: "product", id: product.id }],
+                items: [{ sourceKind: "catalog_item", id: product.id }],
               })
             case "lineItem.update":
               return c.lineItem.update({

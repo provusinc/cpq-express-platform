@@ -10,6 +10,7 @@ import type {
 } from "@workspace/domain/enums"
 import { nextStage } from "@workspace/domain/stages"
 import {
+  createDefaultCatalogTypes,
   createDefaultCustomerClassifications,
   createDefaultQuoteStatuses,
   createInvitationToken,
@@ -18,6 +19,7 @@ import {
   organizationScope,
   schema,
   stageEntryStatus,
+  sql,
   uuidv7,
 } from "@workspace/db"
 import type { Db } from "@workspace/db"
@@ -94,6 +96,7 @@ export async function createOrganization(
   await createDefaultCustomerClassifications(
     organizationScope(db, organization!.id)
   )
+  await createDefaultCatalogTypes(organizationScope(db, organization!.id))
   return organization!
 }
 
@@ -249,23 +252,78 @@ export async function createContact(
 
 type NewCatalogItem = Omit<
   typeof schema.catalogItems.$inferInsert,
-  "organizationId"
->
+  "organizationId" | "catalogTypeId"
+> & { catalogTypeId?: string }
 
-/** Inserts a Catalog Item (a Product at 100 / 60 unless overridden). */
+/**
+ * The Organization's Catalog Type named `singular` (ignoring case), e.g.
+ * the default "Product" or "Add-on".
+ */
+export async function catalogTypeNamed(
+  db: Db,
+  organization: { id: string },
+  singular: string
+) {
+  const [type] = await organizationScope(db, organization.id).findMany(
+    schema.catalogTypes,
+    {
+      where: sql`lower(${schema.catalogTypes.singular}) = lower(${singular})`,
+      limit: 1,
+    }
+  )
+  if (!type) throw new Error(`No Catalog Type “${singular}”.`)
+  return type
+}
+
+/** Inserts a Catalog Type after the Organization's others (Each, active). */
+export async function createCatalogType(
+  db: Db,
+  organization: { id: string },
+  overrides: Partial<
+    Omit<typeof schema.catalogTypes.$inferInsert, "organizationId">
+  > = {}
+) {
+  const singular = overrides.singular ?? `Type ${uuidv7().slice(-8)}`
+  const [type] = await db
+    .insert(schema.catalogTypes)
+    .values({
+      singular,
+      plural: `${singular}s`,
+      billingUnits: ["each"],
+      colourIndex: 2,
+      sequence: 10,
+      ...overrides,
+      organizationId: organization.id,
+    })
+    .returning()
+  return type!
+}
+
+/**
+ * Inserts a Catalog Item at 100 / 60 unless overridden, of the Catalog Type
+ * `type` names (default: "Product") unless `catalogTypeId` is given.
+ */
 export async function createCatalogItem(
   db: Db,
   organization: { id: string },
-  overrides: Partial<NewCatalogItem> = {}
+  {
+    type = "Product",
+    ...overrides
+  }: Partial<NewCatalogItem> & {
+    type?: string
+  } = {}
 ) {
+  const catalogTypeId =
+    overrides.catalogTypeId ??
+    (await catalogTypeNamed(db, organization, type)).id
   const [item] = await db
     .insert(schema.catalogItems)
     .values({
-      kind: "product",
       name: `Item ${uuidv7().slice(-12)}`,
       price: "100",
       cost: "60",
       ...overrides,
+      catalogTypeId,
       organizationId: organization.id,
     })
     .returning()

@@ -3,29 +3,83 @@ import {
   boolean,
   check,
   index,
+  integer,
   numeric,
   pgEnum,
   text,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core"
 
-import { BILLING_UNITS, CATALOG_ITEM_KINDS } from "@workspace/domain/enums"
+import { CATALOG_TYPE_COLOUR_COUNT } from "@workspace/domain/catalog"
+import { BILLING_UNITS } from "@workspace/domain/enums"
 
 import { timestamps } from "../columns"
-import { organizationTable } from "../organization-table"
+import { organizationReference, organizationTable } from "../organization-table"
 
 /** Money columns are numeric(19,4), read back as strings (ADR-0002). */
 const money = () => numeric({ precision: 19, scale: 4 })
 
-export const catalogItemKindEnum = pgEnum(
-  "catalog_item_kind",
-  CATALOG_ITEM_KINDS
-)
 export const billingUnitEnum = pgEnum("billing_unit", BILLING_UNITS)
 
 /**
+ * An Organization-defined kind of Catalog Item (glossary: Catalog Type,
+ * ADR-0005). Every Organization starts with Product and Add-on
+ * (`createDefaultCatalogTypes`), which are ordinary rows: no code branches
+ * on a particular type.
+ *
+ * - `singular` / `plural` are its names in UI copy (unique per Organization,
+ *   ignoring case); they replace the old Product / Add-on Label Overrides.
+ * - `billingUnits` are the Billing Units its items may use (non-empty; the
+ *   API checks an item's unit against it with `checkCatalogItemBillingUnit`).
+ * - `colourIndex` picks its chart colour: the categorical series after labour
+ *   (0 → series 2, … 5 → series 7).
+ * - `active = false`: its items are listed read-only and can't be added to
+ *   Quotes; it has no nav entry or Add Items tab.
+ * - `sequence` orders the nav, the Add Items tabs and the Mix breakdown.
+ */
+export const catalogTypes = organizationTable(
+  "catalog_types",
+  {
+    singular: text().notNull(),
+    plural: text().notNull(),
+    billingUnits: billingUnitEnum().array().notNull(),
+    colourIndex: integer().notNull(),
+    active: boolean().notNull().default(true),
+    sequence: integer().notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("catalog_types_organization_id_singular_key").on(
+      t.organizationId,
+      sql`lower(${t.singular})`
+    ),
+    index().on(t.organizationId, t.sequence),
+    check(
+      "catalog_types_names_not_blank",
+      sql`btrim(${t.singular}) <> '' and btrim(${t.plural}) <> ''`
+    ),
+    check(
+      "catalog_types_billing_units_not_empty",
+      sql`cardinality(${t.billingUnits}) > 0`
+    ),
+    check(
+      "catalog_types_colour_index_range",
+      sql`${t.colourIndex} >= 0 and ${t.colourIndex} < ${sql.raw(String(CATALOG_TYPE_COLOUR_COUNT))}`
+    ),
+    check("catalog_types_sequence_non_negative", sql`${t.sequence} >= 0`),
+  ]
+)
+
+export type CatalogType = typeof catalogTypes.$inferSelect
+export type NewCatalogType = typeof catalogTypes.$inferInsert
+
+/**
  * Something the Organization sells at a list price and cost (glossary:
- * Catalog Item): a Product, always billed Each, or an Add-on, billed Each or
- * Hour. Inactive items stay on existing Quotes but can't be added.
+ * Catalog Item), of exactly one Catalog Type (composite FK, RESTRICT). Its
+ * Billing Unit must be one its type allows (checked by the API with the
+ * domain's `checkCatalogItemBillingUnit`). Inactive items stay on existing
+ * Quotes but can't be added.
  *
  * Once Line Items exist they reference Catalog Items with ON DELETE
  * RESTRICT, and deleting a used item is refused with an "in use" error.
@@ -33,7 +87,7 @@ export const billingUnitEnum = pgEnum("billing_unit", BILLING_UNITS)
 export const catalogItems = organizationTable(
   "catalog_items",
   {
-    kind: catalogItemKindEnum().notNull(),
+    catalogTypeId: uuid().notNull(),
     name: text().notNull(),
     description: text(),
     price: money().notNull(),
@@ -47,13 +101,12 @@ export const catalogItems = organizationTable(
     ...timestamps(),
   },
   (t) => [
-    check(
-      "catalog_items_product_billed_each",
-      sql`${t.kind} <> 'product' OR ${t.billingUnit} = 'each'`
+    organizationReference(t, t.catalogTypeId, catalogTypes).onDelete(
+      "restrict"
     ),
     check("catalog_items_price_non_negative", sql`${t.price} >= 0`),
     check("catalog_items_cost_non_negative", sql`${t.cost} >= 0`),
-    index().on(t.organizationId, t.kind, t.active),
+    index().on(t.organizationId, t.catalogTypeId, t.active),
     index("catalog_items_tags_index").using("gin", t.tags),
   ]
 )

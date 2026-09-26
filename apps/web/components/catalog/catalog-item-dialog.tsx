@@ -8,7 +8,12 @@ import { toast } from "sonner"
 import { z } from "zod"
 
 import type { RouterOutputs } from "@workspace/api"
-import type { CatalogItemKind } from "@workspace/domain/enums"
+import {
+  billingUnitsLabel,
+  defaultBillingUnit,
+} from "@workspace/domain/catalog"
+import { BILLING_UNITS } from "@workspace/domain/enums"
+import type { BillingUnit } from "@workspace/domain/enums"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -39,8 +44,10 @@ import { isMoneyInput, trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
-import { useLabels } from "@/components/shell/labels"
+import type { CatalogTypeView } from "@/components/shell/catalog-types"
+
 import { savedMessage } from "./cost-propagation"
+import { BILLING_UNIT_LABELS } from "./labels"
 
 type CatalogItem = RouterOutputs["catalogItem"]["byId"]
 
@@ -59,18 +66,16 @@ const itemSchema = z.object({
 })
 type ItemValues = z.infer<typeof itemSchema>
 
-const BILLING_UNIT_ITEMS = [
-  { value: "each", label: "Each" },
-  { value: "hour", label: "Hour" },
-]
-
-function toValues(item?: CatalogItem | null): ItemValues {
+function toValues(
+  type: CatalogTypeView,
+  item?: CatalogItem | null
+): ItemValues {
   return {
     name: item?.name ?? "",
     description: item?.description ?? "",
     price: item ? trimMoney(item.price) : "",
     cost: item ? trimMoney(item.cost) : "",
-    billingUnit: item?.billingUnit ?? "each",
+    billingUnit: item?.billingUnit ?? defaultBillingUnit(type),
     tags: item?.tags.join(", ") ?? "",
   }
 }
@@ -81,14 +86,17 @@ const splitTags = (tags: string) =>
     .map((t) => t.trim())
     .filter(Boolean)
 
-/** Create or edit a Product or Add-on (Admins only; the API re-checks). */
+/**
+ * Create or edit an item of a Catalog Type (Admins only; the API re-checks),
+ * billed by one of the type's Billing Units.
+ */
 export function CatalogItemDialog({
-  kind,
+  catalogType,
   open,
   onOpenChange,
   item,
 }: {
-  kind: CatalogItemKind
+  catalogType: CatalogTypeView
   open: boolean
   onOpenChange: (open: boolean) => void
   item?: CatalogItem | null
@@ -97,14 +105,21 @@ export function CatalogItemDialog({
   const queryClient = useQueryClient()
   const form = useForm<ItemValues>({
     resolver: zodResolver(itemSchema),
-    defaultValues: toValues(item),
+    defaultValues: toValues(catalogType, item),
   })
   useEffect(() => {
-    if (open) form.reset(toValues(item))
-  }, [open, item, form])
+    if (open) form.reset(toValues(catalogType, item))
+  }, [open, item, form, catalogType])
 
-  const labels = useLabels()
-  const label = labels[kind]
+  const label = catalogType
+  // The type's units, plus the item's own should the type no longer allow it.
+  const units: BillingUnit[] = BILLING_UNITS.filter(
+    (u) => catalogType.billingUnits.includes(u) || item?.billingUnit === u
+  )
+  const unitItems = units.map((u) => ({
+    value: u,
+    label: BILLING_UNIT_LABELS[u],
+  }))
   const onSuccess = async (data: object) => {
     toast.success(
       item ? savedMessage(label.singular, data) : `${label.singular} created.`
@@ -124,11 +139,13 @@ export function CatalogItemDialog({
   const onSubmit = form.handleSubmit((values) => {
     const input = {
       ...values,
-      billingUnit: kind === "product" ? ("each" as const) : values.billingUnit,
+      billingUnit: units.includes(values.billingUnit)
+        ? values.billingUnit
+        : defaultBillingUnit(catalogType),
       tags: splitTags(values.tags),
     }
     if (item) update.mutate({ id: item.id, ...input })
-    else create.mutate({ kind, ...input })
+    else create.mutate({ catalogTypeId: catalogType.id, ...input })
   })
 
   const text = (
@@ -166,9 +183,7 @@ export function CatalogItemDialog({
             {item ? `Edit ${label.singular}` : `New ${label.singular}`}
           </DialogTitle>
           <DialogDescription>
-            {kind === "product"
-              ? `${label.plural} are always billed Each.`
-              : `${label.plural} are billed Each or by the Hour.`}{" "}
+            {`${label.plural} are billed ${billingUnitsLabel(catalogType.billingUnits)}.`}{" "}
             Price changes never alter existing Quotes.
           </DialogDescription>
         </DialogHeader>
@@ -191,7 +206,7 @@ export function CatalogItemDialog({
               {text("price", "Price", { inputMode: "decimal" })}
               {text("cost", "Cost", { inputMode: "decimal" })}
             </div>
-            {kind === "add_on" && (
+            {units.length > 1 && (
               <Controller
                 name="billingUnit"
                 control={form.control}
@@ -201,7 +216,7 @@ export function CatalogItemDialog({
                       Billing unit
                     </FieldLabel>
                     <Select
-                      items={BILLING_UNIT_ITEMS}
+                      items={unitItems}
                       value={field.value}
                       onValueChange={(v) => v && field.onChange(v)}
                     >
@@ -209,7 +224,7 @@ export function CatalogItemDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {BILLING_UNIT_ITEMS.map((u) => (
+                        {unitItems.map((u) => (
                           <SelectItem key={u.value} value={u.value}>
                             {u.label}
                           </SelectItem>

@@ -69,7 +69,8 @@ _Avoid_: price book, product list
 
 **Catalog Type**:
 An Organization-defined kind of Catalog Item (e.g. "Services", "Materials", "Expenses"),
-with its own name and the Billing Units its items may use. Every Organization starts with
+with its own name, the Billing Units its items may use, a colour and an active switch (an
+inactive type's items stay on Quotes but can't be added). Every Organization starts with
 **Product** and **Add-on**, which are ordinary Catalog Types it may rename, deactivate or
 delete. A type in use can only be deactivated.
 _Avoid_: category, item type, kind

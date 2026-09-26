@@ -41,7 +41,7 @@ async function setup(db: Db) {
     validUntil: "2026-11-30",
   })
   const product = await createCatalogItem(db, organization, {
-    kind: "product",
+    type: "Product",
     price: "100",
     cost: "60",
   })
@@ -52,7 +52,7 @@ async function setup(db: Db) {
   const added = await caller.lineItem.add({
     quoteId: quote.id,
     items: [
-      { sourceKind: "product", id: product.id },
+      { sourceKind: "catalog_item", id: product.id },
       { sourceKind: "resource_role", id: role.id },
     ],
   })

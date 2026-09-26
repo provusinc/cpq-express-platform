@@ -34,6 +34,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/shell/empty"
+import { useActiveCatalogTypes } from "@/components/shell/catalog-types"
 import { useLabels } from "@/components/shell/labels"
 import {
   nestRows,
@@ -66,6 +67,7 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
   const quote = useQuote(quoteId)
   const editor = useQuoteEditor(quoteId)
   const labels = useLabels()
+  const catalogTypes = useActiveCatalogTypes()
   const phaseTerm = labels.phase
   const commands = useLineItemCommands(quoteId)
   const readOnly = !quote.permissions.canEdit
@@ -150,10 +152,10 @@ export function LineItemsTab({ quoteId }: { quoteId: string }) {
     setAdding(true)
   }
 
-  const sellables = (["product", "add_on", "resource_role"] as const)
-    .filter((t) => labels[t].enabled)
-    .map((t) => labels[t].plural)
-    .join(", ")
+  const sellables = [
+    ...catalogTypes.map((t) => t.plural),
+    labels.resource_role.plural,
+  ].join(", ")
 
   const deletingPhase = deleting ? phaseById.get(deleting) : undefined
   const deletingRollup = deleting ? rollups[deleting] : undefined

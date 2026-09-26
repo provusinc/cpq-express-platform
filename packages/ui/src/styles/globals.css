@@ -65,10 +65,15 @@
   --color-neutral: var(--neutral);
   --color-neutral-soft: var(--neutral-soft);
   --color-neutral-ink: var(--neutral-ink);
-  /* Categorical series (charts, Gantt bars), the SERIES order. */
+  /* Categorical series (charts, Gantt bars), the SERIES order: labour is
+     slot 1, a Catalog Type slot 2 + its colour index (at most 6 types). */
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
   /* Phase tints, cycled by top-level order: a light fill, its ink for text,
      and a saturated mark for dots, row edges, tree guides and rollups. */
   --color-phase-1: var(--phase-1);
@@ -146,6 +151,10 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
   --phase-1: oklch(0.925 0.03 224);
   --phase-1-ink: oklch(0.36 0.07 224);
   --phase-1-mark: oklch(0.6 0.13 224);
@@ -223,6 +232,10 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
   --phase-1: oklch(0.33 0.045 224);
   --phase-1-ink: oklch(0.9 0.04 220);
   --phase-1-mark: oklch(0.72 0.13 224);

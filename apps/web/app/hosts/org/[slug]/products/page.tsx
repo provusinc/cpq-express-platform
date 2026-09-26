@@ -1,39 +1,11 @@
-import type { Metadata } from "next"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
-import { CatalogItemsList } from "@/components/catalog/catalog-items-list"
-import { CsvImportButton } from "@/components/catalog/csv-import-dialog"
-import { initialCatalogItemListInput } from "@/components/catalog/list-input"
-import { getLabels } from "@/components/shell/get-labels"
-import { organizationAccess } from "@/lib/organization-access"
-import { HydrateClient, prefetch, prefetchNow, trpc } from "@/trpc/server"
+import { getCatalogTypes } from "@/components/shell/get-catalog-types"
+import { catalogTypeHref, legacyCatalogType } from "@/lib/catalog-routes"
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { product } = await getLabels()
-  return { title: `${product.plural} · CPQ Express` }
-}
-
-export default async function ProductsPage() {
-  // Hidden in Settings → Labels: the Organization doesn't sell them.
-  if (!(await getLabels()).product.enabled) notFound()
-  const access = await organizationAccess("catalog.manage")
-  // The list reads it with `useQuery`: settle it before rendering.
-  await prefetchNow(
-    trpc.catalogItem.list.queryOptions(initialCatalogItemListInput("product"))
-  )
-  prefetch(trpc.catalogItem.tags.queryOptions({ kind: "product" }))
-  return (
-    <HydrateClient>
-      <CatalogItemsList
-        kind="product"
-        canManage={access.allowed}
-        currencyCode={access.currencyCode}
-        toolbar={
-          <CsvImportButton
-            target={{ type: "catalogItems", defaultKind: "product" }}
-          />
-        }
-      />
-    </HydrateClient>
-  )
+/** The old Products page: now a Catalog Type's page (#30). */
+export default async function LegacyCatalogPage() {
+  const type = legacyCatalogType(await getCatalogTypes(), "product")
+  if (!type) notFound()
+  redirect(catalogTypeHref(type.id))
 }

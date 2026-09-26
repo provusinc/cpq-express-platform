@@ -49,7 +49,7 @@ async function setup(db: Db) {
     cost: "60",
   })
   const addOn = await createCatalogItem(db, organization, {
-    kind: "add_on",
+    type: "Add-on",
     name: "Support",
     price: "20",
     cost: "5",
@@ -75,7 +75,7 @@ async function setup(db: Db) {
     await owner.lineItem.add({
       quoteId: quote.id,
       phaseId: backend,
-      items: [{ sourceKind: "product", id: product.id }],
+      items: [{ sourceKind: "catalog_item", id: product.id }],
     })
   ).lines
   await owner.lineItem.update({
@@ -100,7 +100,7 @@ async function setup(db: Db) {
   })
   await owner.lineItem.add({
     quoteId: quote.id,
-    items: [{ sourceKind: "add_on", id: addOn.id }],
+    items: [{ sourceKind: "catalog_item", id: addOn.id }],
   })
   await owner.milestone.create({
     quoteId: quote.id,

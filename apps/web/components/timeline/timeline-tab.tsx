@@ -9,7 +9,8 @@ import { useQuoteEditor } from "@/components/quotes/autosave"
 import type { EditorMilestone } from "@/components/quotes/autosave"
 import { useQuote } from "@/components/quotes/use-quote"
 import { useLabels } from "@/components/shell/labels"
-import { SOURCE_KIND_TONES } from "@/components/shell/tints"
+import { useCatalogTypes } from "@/components/shell/catalog-types"
+import { catalogTypeTone, LABOUR_TONE } from "@/components/shell/tints"
 import { useTRPC } from "@/trpc/react"
 
 import { useMilestoneCommands } from "./commands"
@@ -34,6 +35,7 @@ export function TimelineTab({ quoteId }: { quoteId: string }) {
     trpc.settings.quoting.queryOptions()
   ).data
   const labels = useLabels()
+  const catalogTypes = useCatalogTypes()
   const commands = useMilestoneCommands(quoteId)
   const readOnly = !quote.permissions.canEdit
   const [editing, setEditing] = useState<EditorMilestone | "new" | null>(null)
@@ -59,9 +61,23 @@ export function TimelineTab({ quoteId }: { quoteId: string }) {
     })
   }
 
-  const legend = (["resource_role", "product", "add_on"] as const).filter(
-    (kind) => labels[kind].enabled || lines.some((l) => l.sourceKind === kind)
-  )
+  // Labour and every active Catalog Type; an inactive one only when used.
+  const legend = [
+    {
+      key: "resource_role",
+      bar: LABOUR_TONE.bar,
+      name: labels.resource_role.singular,
+    },
+    ...catalogTypes
+      .filter(
+        (type) => type.active || lines.some((l) => l.catalogTypeId === type.id)
+      )
+      .map((type) => ({
+        key: type.id,
+        bar: catalogTypeTone(type.colourIndex).bar,
+        name: type.singular,
+      })),
+  ]
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -87,12 +103,10 @@ export function TimelineTab({ quoteId }: { quoteId: string }) {
           onAddMilestone={readOnly ? undefined : () => setEditing("new")}
         />
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          {legend.map((kind) => (
-            <span key={kind} className="flex items-center gap-1.5">
-              <span
-                className={cn("h-2.5 w-4 border", SOURCE_KIND_TONES[kind].bar)}
-              />
-              {labels[kind].singular}
+          {legend.map((entry) => (
+            <span key={entry.key} className="flex items-center gap-1.5">
+              <span className={cn("h-2.5 w-4 border", entry.bar)} />
+              {entry.name}
             </span>
           ))}
           {lines.some((l) => l.sourceKind === "resource_role") && (

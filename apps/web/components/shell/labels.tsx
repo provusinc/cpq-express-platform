@@ -25,8 +25,8 @@ export function LabelsProvider({
 /**
  * The display names for domain terms in UI copy:
  * `useLabels().resource_role.plural` → "Consultants" (or "Resource Roles").
- * `enabled` is false for a hidden Product or Add-on term. Code, routes and
- * API keep the canonical terms; only wording changes.
+ * Code, routes and API keep the canonical terms; only wording changes.
+ * Catalog Types are named directly (`useCatalogTypes()`).
  */
 export function useLabels(): Labels {
   return useContext(LabelsContext)

@@ -13,7 +13,12 @@ import {
   schema,
   sql,
 } from "@workspace/db"
-import { BILLING_UNITS, CATALOG_ITEM_KINDS } from "@workspace/domain/enums"
+import {
+  checkCatalogItemBillingUnit,
+  defaultBillingUnit,
+} from "@workspace/domain/catalog"
+import type { BillingUnit } from "@workspace/domain/enums"
+import { BILLING_UNITS } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
 
 import {
@@ -21,6 +26,8 @@ import {
   parseCatalogItemRow,
   summarize,
 } from "../catalog-import"
+import { loadCatalogType } from "../catalog-types"
+import type { CatalogTypeView } from "../catalog-types"
 import { propagateCost } from "../cost-propagation"
 import { inUseError, notFound } from "../errors"
 import { lineItemSourceUsage } from "../line-items"
@@ -39,7 +46,7 @@ import {
   permittedProcedure,
 } from "../trpc"
 
-const { catalogItems, lineItems } = schema
+const { catalogItems, catalogTypes, lineItems } = schema
 
 /** Only Admins manage the catalog (domain policy "catalog.manage"). */
 const manageProcedure = permittedProcedure("catalog.manage")
@@ -54,10 +61,25 @@ export function normalizeTags(tags: readonly string[]) {
   return [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))]
 }
 
-export const PRODUCT_BILLED_EACH =
-  "A Product is always billed Each; only Add-ons can be billed by the Hour."
+/** BAD_REQUEST unless the Catalog Type allows the Billing Unit. */
+function assertBillingUnit(type: CatalogTypeView, unit: BillingUnit) {
+  const check = checkCatalogItemBillingUnit(type, unit)
+  if (!check.ok) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: check.message })
+  }
+}
 
-/** CatalogItem fields a user edits (kind is fixed at creation). */
+/** PRECONDITION_FAILED for an inactive Catalog Type: its items are read-only. */
+function assertTypeActive(type: CatalogTypeView) {
+  if (!type.active) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `The Catalog Type “${type.plural}” is inactive, so no items can be added to it.`,
+    })
+  }
+}
+
+/** CatalogItem fields a user edits (the Catalog Type is fixed at creation). */
 const itemFields = {
   name: requiredText(200),
   description: optionalText(2000),
@@ -67,12 +89,10 @@ const itemFields = {
   tags: tagsInput,
 }
 
-const kindFilter = z.enum(CATALOG_ITEM_KINDS)
-
 const importInput = z.object({
   rows: importRowsInput,
-  /** Fills a blank Type: the page the import started from. */
-  defaultKind: kindFilter.optional(),
+  /** The Catalog Type every row gets: the page the import started from. */
+  catalogTypeId: z.uuid(),
 })
 
 /** Rows inserted per statement during an import. */
@@ -83,14 +103,15 @@ export const PICKER_PAGE_SIZE = 30
 
 export const catalogItemRouter = createTRPCRouter({
   /**
-   * One page of Products or Add-ons, by name. Filters: `search` (name,
-   * description), `billingUnit`, `status`, price range (inclusive) and
-   * `tags` (items carrying all of them).
+   * One page of one Catalog Type's items, by name (NOT_FOUND for another
+   * Organization's type). Filters: `search` (name, description),
+   * `billingUnit`, `status`, price range (inclusive) and `tags` (items
+   * carrying all of them).
    */
   list: organizationProcedure
     .input(
       z.object({
-        kind: kindFilter,
+        catalogTypeId: z.uuid(),
         search: z.string().trim().max(200).optional(),
         billingUnit: z.enum(BILLING_UNITS).optional(),
         status: activeFilter,
@@ -101,10 +122,11 @@ export const catalogItemRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
+      await loadCatalogType(ctx.scope, input.catalogTypeId)
       // Every filter but the status: the status tabs count under these.
       const others = ctx.scope.where(
         catalogItems,
-        eq(catalogItems.kind, input.kind),
+        eq(catalogItems.catalogTypeId, input.catalogTypeId),
         input.search
           ? or(
               ilike(catalogItems.name, containsPattern(input.search)),
@@ -162,15 +184,15 @@ export const catalogItemRouter = createTRPCRouter({
     }),
 
   /**
-   * The Add Items sheet's list: active Products or Add-ons by name, in
-   * pages for infinite scroll. `cursor` is the offset of the next page
+   * The Add Items sheet's list: one Catalog Type's active items by name
+   * (none while the type is inactive), in pages for infinite scroll. `cursor` is the offset of the next page
    * (from the previous page's `nextCursor`, null at the end). Filters:
    * `search` (name, description), `billingUnit`, `tags` (all of them).
    */
   listForPicker: organizationProcedure
     .input(
       z.object({
-        kind: kindFilter,
+        catalogTypeId: z.uuid(),
         search: z.string().trim().max(200).optional(),
         billingUnit: z.enum(BILLING_UNITS).optional(),
         tags: tagsInput.optional(),
@@ -183,7 +205,7 @@ export const catalogItemRouter = createTRPCRouter({
       const rows = await ctx.scope.db
         .select({
           id: catalogItems.id,
-          kind: catalogItems.kind,
+          catalogTypeId: catalogItems.catalogTypeId,
           name: catalogItems.name,
           description: catalogItems.description,
           price: catalogItems.price,
@@ -191,10 +213,18 @@ export const catalogItemRouter = createTRPCRouter({
           tags: catalogItems.tags,
         })
         .from(catalogItems)
+        .innerJoin(
+          catalogTypes,
+          and(
+            eq(catalogTypes.organizationId, catalogItems.organizationId),
+            eq(catalogTypes.id, catalogItems.catalogTypeId)
+          )
+        )
         .where(
           ctx.scope.where(
             catalogItems,
-            eq(catalogItems.kind, input.kind),
+            ctx.scope.where(catalogTypes, eq(catalogTypes.active, true)),
+            eq(catalogItems.catalogTypeId, input.catalogTypeId),
             eq(catalogItems.active, true),
             input.search
               ? or(
@@ -220,14 +250,19 @@ export const catalogItemRouter = createTRPCRouter({
       }
     }),
 
-  /** The tags in use on this kind of Catalog Item, alphabetically. */
+  /** The tags in use on one Catalog Type's items, alphabetically. */
   tags: organizationProcedure
-    .input(z.object({ kind: kindFilter }))
+    .input(z.object({ catalogTypeId: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.scope.db
         .selectDistinct({ tag: sql<string>`unnest(${catalogItems.tags})` })
         .from(catalogItems)
-        .where(ctx.scope.where(catalogItems, eq(catalogItems.kind, input.kind)))
+        .where(
+          ctx.scope.where(
+            catalogItems,
+            eq(catalogItems.catalogTypeId, input.catalogTypeId)
+          )
+        )
         .orderBy(sql`1`)
       return rows.map((r) => r.tag)
     }),
@@ -241,24 +276,31 @@ export const catalogItemRouter = createTRPCRouter({
       return item
     }),
 
-  /** Creates a Product (always Each) or an Add-on (Each or Hour). Admins only. */
+  /**
+   * Creates an item of an active Catalog Type, billed by one of the type's
+   * Billing Units (default: Each when allowed). Admins only.
+   */
   create: manageProcedure
     .input(
-      z
-        .object({
-          kind: kindFilter,
-          ...itemFields,
-          billingUnit: itemFields.billingUnit.default("each"),
-          tags: itemFields.tags.default([]),
-          active: z.boolean().default(true),
-        })
-        .refine((v) => v.kind !== "product" || v.billingUnit === "each", {
-          message: PRODUCT_BILLED_EACH,
-          path: ["billingUnit"],
-        })
+      z.object({
+        catalogTypeId: z.uuid(),
+        ...itemFields,
+        billingUnit: itemFields.billingUnit.optional(),
+        tags: itemFields.tags.default([]),
+        active: z.boolean().default(true),
+      })
     )
     .mutation(({ ctx, input }) =>
-      ctx.scope.insert(catalogItems, stripUndefined(input))
+      ctx.scope.transaction(async (scope) => {
+        const type = await loadCatalogType(scope, input.catalogTypeId)
+        assertTypeActive(type)
+        const billingUnit = input.billingUnit ?? defaultBillingUnit(type)
+        assertBillingUnit(type, billingUnit)
+        return scope.insert(
+          catalogItems,
+          stripUndefined({ ...input, billingUnit })
+        )
+      })
     ),
 
   /**
@@ -279,11 +321,11 @@ export const catalogItemRouter = createTRPCRouter({
       ctx.scope.transaction(async (scope) => {
         const item = await scope.findById(catalogItems, id)
         if (!item) throw notFound("Catalog Item")
-        if (item.kind === "product" && changes.billingUnit === "hour") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: PRODUCT_BILLED_EACH,
-          })
+        if (changes.billingUnit && changes.billingUnit !== item.billingUnit) {
+          assertBillingUnit(
+            await loadCatalogType(scope, item.catalogTypeId),
+            changes.billingUnit
+          )
         }
         const updated = (await scope.update(
           catalogItems,
@@ -293,7 +335,11 @@ export const catalogItemRouter = createTRPCRouter({
         const costPropagation = new Decimal(item.cost).equals(updated.cost)
           ? { quotes: 0, lineItems: 0 }
           : await propagateCost(scope, {
-              source: { kind: item.kind, id: item.id, name: updated.name },
+              source: {
+                kind: "catalog_item",
+                id: item.id,
+                name: updated.name,
+              },
               cost: updated.cost,
               actorId: ctx.user.id,
             })
@@ -357,36 +403,46 @@ export const catalogItemRouter = createTRPCRouter({
    */
   validateImport: manageProcedure
     .input(importInput)
-    .mutation(({ input }) =>
-      summarize(
-        input.rows.map((row, i) =>
-          parseCatalogItemRow(row, i, input.defaultKind)
-        )
+    .mutation(async ({ ctx, input }) => {
+      const type = await loadCatalogType(ctx.scope, input.catalogTypeId)
+      return summarize(
+        input.rows.map((row, i) => parseCatalogItemRow(row, i, type))
       )
-    ),
+    }),
 
   /**
-   * Imports Products and Add-ons from CSV rows, all or nothing: the rows are
-   * re-validated and, if any has an error, nothing is saved (BAD_REQUEST);
-   * otherwise every row is inserted in one transaction. Admins only.
+   * Imports items of one active Catalog Type (the page's) from CSV rows,
+   * all or nothing: the rows are re-validated and, if any has an error,
+   * nothing is saved (BAD_REQUEST); otherwise every row is inserted in one
+   * transaction. Admins only.
    */
-  import: manageProcedure.input(importInput).mutation(({ ctx, input }) => {
-    const results = input.rows.map((row, i) =>
-      parseCatalogItemRow(row, i, input.defaultKind)
-    )
-    const { errorCount } = summarize(results)
-    if (errorCount > 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `${errorCount} of ${results.length} rows have errors, so nothing was imported. Fix them and upload the file again.`,
-      })
-    }
-    const values = results.map((r) => r.values!)
-    return ctx.scope.transaction(async (scope) => {
-      for (let i = 0; i < values.length; i += IMPORT_CHUNK) {
-        await scope.insertMany(catalogItems, values.slice(i, i + IMPORT_CHUNK))
+  import: manageProcedure
+    .input(importInput)
+    .mutation(async ({ ctx, input }) => {
+      const type = await loadCatalogType(ctx.scope, input.catalogTypeId)
+      assertTypeActive(type)
+      const results = input.rows.map((row, i) =>
+        parseCatalogItemRow(row, i, type)
+      )
+      const { errorCount } = summarize(results)
+      if (errorCount > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `${errorCount} of ${results.length} rows have errors, so nothing was imported. Fix them and upload the file again.`,
+        })
       }
-      return { imported: values.length }
-    })
-  }),
+      const values = results.map((r) => ({
+        ...r.values!,
+        catalogTypeId: type.id,
+      }))
+      return ctx.scope.transaction(async (scope) => {
+        for (let i = 0; i < values.length; i += IMPORT_CHUNK) {
+          await scope.insertMany(
+            catalogItems,
+            values.slice(i, i + IMPORT_CHUNK)
+          )
+        }
+        return { imported: values.length }
+      })
+    }),
 })

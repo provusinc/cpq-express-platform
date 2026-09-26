@@ -111,6 +111,11 @@ export type LineItemView = Omit<LineItemRow, "organizationId" | "createdAt"> & {
    * (`amount` at quantity scale). Empty when not planner-managed.
    */
   allocations: Allocation[]
+  /**
+   * The line's Catalog Type, reached through its Catalog Item (null for a
+   * Resource Role line). Names and colours come from `catalogType.list`.
+   */
+  catalogTypeId: string | null
 }
 
 /** What every editor command returns (see the module comment). */
@@ -127,13 +132,29 @@ export interface EditorResult {
 
 export function toLineItemView(
   row: LineItemRow,
-  lineAllocations: readonly Allocation[]
+  lineAllocations: readonly Allocation[],
+  catalogTypeId: string | null
 ): LineItemView {
   return {
     ...omit(row, "organizationId", "createdAt"),
     plannerManaged: lineAllocations.length > 0,
     allocations: [...lineAllocations],
+    catalogTypeId,
   }
+}
+
+/** The Catalog Type of each of `catalogItemIds`. */
+export async function catalogTypeIdsByItem(
+  scope: OrganizationScope,
+  catalogItemIds: readonly string[]
+): Promise<Map<string, string>> {
+  const ids = [...new Set(catalogItemIds)]
+  if (ids.length === 0) return new Map()
+  const rows = await scope.db
+    .select({ id: catalogItems.id, catalogTypeId: catalogItems.catalogTypeId })
+    .from(catalogItems)
+    .where(scope.where(catalogItems, inArray(catalogItems.id, ids)))
+  return new Map(rows.map((r) => [r.id, r.catalogTypeId]))
 }
 
 /** A copy of `value` without `keys`. */
@@ -185,16 +206,31 @@ export async function allocationsByLine(
   return byLine
 }
 
-/** Views of `rows`, with their Allocations (and so `plannerManaged`) looked up. */
+/**
+ * Views of `rows`, with their Allocations (and so `plannerManaged`) and
+ * Catalog Types looked up.
+ */
 export async function lineItemViews(
   scope: OrganizationScope,
   rows: LineItemRow[]
 ): Promise<LineItemView[]> {
-  const byLine = await allocationsByLine(
-    scope,
-    rows.map((r) => r.id)
+  const [byLine, typeByItem] = await Promise.all([
+    allocationsByLine(
+      scope,
+      rows.map((r) => r.id)
+    ),
+    catalogTypeIdsByItem(
+      scope,
+      rows.flatMap((r) => (r.catalogItemId ? [r.catalogItemId] : []))
+    ),
+  ])
+  return rows.map((row) =>
+    toLineItemView(
+      row,
+      byLine.get(row.id) ?? [],
+      row.catalogItemId ? (typeByItem.get(row.catalogItemId) ?? null) : null
+    )
   )
-  return rows.map((row) => toLineItemView(row, byLine.get(row.id) ?? []))
 }
 
 /**

@@ -40,7 +40,9 @@ import { renderQuoteDocument } from "@workspace/documents/server"
 import { organizationObjectKey } from "@workspace/storage"
 import type { ObjectStorage } from "@workspace/storage"
 
+import { listCatalogTypes } from "./catalog-types"
 import { notFound } from "./errors"
+import { catalogTypeIdsByItem } from "./line-items"
 import type { QuoteRow } from "./quotes"
 import { getDocumentSettings, getLabels } from "./settings"
 
@@ -152,6 +154,14 @@ export async function buildQuoteDocumentSnapshot(
     getLabels(scope),
     findQuoteStatus(scope, quote.statusId),
   ])
+  const [typeByItem, types] = await Promise.all([
+    catalogTypeIdsByItem(
+      scope,
+      lineRows.flatMap((l) => (l.catalogItemId ? [l.catalogItemId] : []))
+    ),
+    listCatalogTypes(scope),
+  ])
+  const typeById = new Map(types.map((t) => [t.id, t]))
   return {
     schemaVersion: 1,
     generatedAt: generatedAt.toISOString(),
@@ -203,6 +213,11 @@ export async function buildQuoteDocumentSnapshot(
       id: l.id,
       phaseId: l.phaseId,
       sourceKind: l.sourceKind,
+      typeName:
+        l.sourceKind === "resource_role"
+          ? labels.resource_role.singular
+          : (typeById.get(typeByItem.get(l.catalogItemId ?? "") ?? "")
+              ?.singular ?? ""),
       name: l.name,
       description: l.description,
       startDate: l.startDate,

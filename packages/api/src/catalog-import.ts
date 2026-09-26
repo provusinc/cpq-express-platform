@@ -5,14 +5,21 @@
  * validate (preview) and import commands apply exactly the same rules.
  *
  * Templates (headers are matched ignoring case, spaces and punctuation):
- * - Products / Add-ons: Name, Type, Description, Price, Cost, Billing Unit,
- *   Tags, Is Active
+ * - Catalog Items (one Catalog Type per import, the page's): Name,
+ *   Description, Price, Cost, Billing Unit, Tags, Is Active. A Type column
+ *   is ignored: the type comes from the page.
  * - Resource Roles: Name, Description, Bill Rate, Cost Rate,
  *   Location Country, Location State, Location City, Is Active
  */
 import { z } from "zod"
 
-import type { CatalogItemKind } from "@workspace/domain/enums"
+import {
+  billingUnitsLabel,
+  checkCatalogItemBillingUnit,
+  defaultBillingUnit,
+} from "@workspace/domain/catalog"
+import type { CatalogTypeRules } from "@workspace/domain/catalog"
+import type { BillingUnit } from "@workspace/domain/enums"
 import { toMoneyString } from "@workspace/domain/money"
 
 import { isMoney } from "./inputs"
@@ -41,12 +48,11 @@ export interface RowResult<T> {
 }
 
 export interface CatalogItemImportValues {
-  kind: CatalogItemKind
   name: string
   description: string | null
   price: string
   cost: string
-  billingUnit: "each" | "hour"
+  billingUnit: BillingUnit
   tags: string[]
   active: boolean
 }
@@ -128,36 +134,30 @@ function parseName(raw: string, errors: CellError[]) {
 
 const optional = (raw: string) => (raw === "" ? null : raw)
 
-function parseKind(
+function parseBillingUnit(
   raw: string,
-  defaultKind: CatalogItemKind | undefined,
+  type: CatalogTypeRules,
   errors: CellError[]
-): CatalogItemKind | null {
-  const key = headerKey(raw)
-  if (key === "" && defaultKind) return defaultKind
-  if (key === "product") return "product"
-  if (key === "addon") return "add_on"
-  errors.push({
-    column: "Type",
-    message:
-      raw === ""
-        ? "Type is required (Product or Add-on)."
-        : `Type must be Product or Add-on (got “${raw}”).`,
-  })
-  return null
-}
-
-function parseBillingUnit(raw: string, errors: CellError[]) {
+): BillingUnit | null {
   const value = raw.toLowerCase()
-  if (value === "" || value === "each") return "each" as const
-  if (value === "hour" || value === "hours" || value === "hourly") {
-    return "hour" as const
+  let unit: BillingUnit
+  if (value === "") return defaultBillingUnit(type)
+  if (value === "each") unit = "each"
+  else if (value === "hour" || value === "hours" || value === "hourly") {
+    unit = "hour"
+  } else {
+    errors.push({
+      column: "Billing Unit",
+      message: `Billing Unit must be ${billingUnitsLabel(type.billingUnits)} (got “${raw}”).`,
+    })
+    return null
   }
-  errors.push({
-    column: "Billing Unit",
-    message: `Billing Unit must be Each or Hour (got “${raw}”).`,
-  })
-  return null
+  const check = checkCatalogItemBillingUnit(type, unit)
+  if (!check.ok) {
+    errors.push({ column: "Billing Unit", message: check.message })
+    return null
+  }
+  return unit
 }
 
 /** Tags are separated by semicolons (or "|"), trimmed and lower-cased. */
@@ -173,28 +173,25 @@ function parseTags(raw: string) {
 }
 
 /**
- * One Products/Add-ons row. `defaultKind` fills a blank Type (the page the
- * import was started from).
+ * One Catalog Items row, for items of `type` (the page the import was
+ * started from): a blank Billing Unit takes the type's default, any other
+ * must be one the type allows.
  */
 export function parseCatalogItemRow(
   row: Record<string, string>,
   index: number,
-  defaultKind?: CatalogItemKind
+  type: CatalogTypeRules
 ): RowResult<CatalogItemImportValues> {
   const get = cells(row)
   const errors: CellError[] = []
   const name = parseName(get("Name"), errors)
-  const kind = parseKind(get("Type", "Kind"), defaultKind, errors)
   const price = parseMoney(get("Price", "List Price"), "Price", errors)
   const cost = parseMoney(get("Cost"), "Cost", errors)
-  const billingUnit = parseBillingUnit(get("Billing Unit", "Unit"), errors)
-  if (kind === "product" && billingUnit === "hour") {
-    errors.push({
-      column: "Billing Unit",
-      message:
-        "A Product is always billed Each; only Add-ons can be billed by the Hour.",
-    })
-  }
+  const billingUnit = parseBillingUnit(
+    get("Billing Unit", "Unit"),
+    type,
+    errors
+  )
   const active = parseActive(get("Is Active", "Active"), errors)
   const description = optional(get("Description"))
   return {
@@ -203,7 +200,6 @@ export function parseCatalogItemRow(
     values:
       errors.length === 0
         ? {
-            kind: kind!,
             name,
             description,
             price: price!,

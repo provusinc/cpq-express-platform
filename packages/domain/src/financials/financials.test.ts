@@ -21,7 +21,7 @@ import {
  */
 
 const line = (overrides: Partial<FinancialLine> = {}): FinancialLine => ({
-  sourceKind: "product",
+  sourceKind: "catalog_item",
   startDate: "2026-10-01",
   endDate: "2026-10-31",
   lineTotal: "0",
@@ -155,8 +155,8 @@ describe("calendar-day proration (old portal behaviour)", () => {
   it("counts hours only for Resource Roles", () => {
     const result = run({
       lines: [
-        line({ sourceKind: "product", quantity: "10", lineTotal: "10" }),
-        line({ sourceKind: "add_on", quantity: "20", lineTotal: "10" }),
+        line({ sourceKind: "catalog_item", quantity: "10", lineTotal: "10" }),
+        line({ sourceKind: "catalog_item", quantity: "20", lineTotal: "10" }),
         line({
           sourceKind: "resource_role",
           startDate: "2026-10-01",
@@ -362,30 +362,38 @@ describe("v1 rules", () => {
 })
 
 describe("breakdownByItemType", () => {
-  it("sums each item type's revenue, cost and own margin", () => {
-    const rows = breakdownByItemType([
-      {
-        sourceKind: "resource_role",
-        lineTotal: "600",
-        unitCost: "4",
-        quantity: "100",
-      },
-      {
-        sourceKind: "resource_role",
-        lineTotal: "200",
-        unitCost: "1",
-        quantity: "100",
-      },
-      {
-        sourceKind: "product",
-        lineTotal: "200",
-        unitCost: "150",
-        quantity: "1",
-      },
-    ])
+  it("sums labour and each Catalog Type's revenue, cost and own margin", () => {
+    const rows = breakdownByItemType(
+      [
+        {
+          sourceKind: "resource_role",
+          catalogTypeId: null,
+          lineTotal: "600",
+          unitCost: "4",
+          quantity: "100",
+        },
+        {
+          sourceKind: "resource_role",
+          catalogTypeId: null,
+          lineTotal: "200",
+          unitCost: "1",
+          quantity: "100",
+        },
+        {
+          sourceKind: "catalog_item",
+          catalogTypeId: "hardware",
+          lineTotal: "200",
+          unitCost: "150",
+          quantity: "1",
+        },
+      ],
+      ["hardware", "services"]
+    )
     expect(rows).toEqual([
       {
+        key: "resource_role",
         sourceKind: "resource_role",
+        catalogTypeId: null,
         lineCount: 2,
         revenue: "800.0000",
         cost: "500.0000",
@@ -394,7 +402,9 @@ describe("breakdownByItemType", () => {
         shareOfSubtotal: "80.0000",
       },
       {
-        sourceKind: "product",
+        key: "hardware",
+        sourceKind: "catalog_item",
+        catalogTypeId: "hardware",
         lineCount: 1,
         revenue: "200.0000",
         cost: "150.0000",
@@ -403,7 +413,9 @@ describe("breakdownByItemType", () => {
         shareOfSubtotal: "20.0000",
       },
       {
-        sourceKind: "add_on",
+        key: "services",
+        sourceKind: "catalog_item",
+        catalogTypeId: "services",
         lineCount: 0,
         revenue: "0.0000",
         cost: "0.0000",
@@ -411,6 +423,26 @@ describe("breakdownByItemType", () => {
         marginPct: "0.0000",
         shareOfSubtotal: "0.0000",
       },
+    ])
+  })
+
+  it("appends a type the lines use that isn't listed", () => {
+    const rows = breakdownByItemType(
+      [
+        {
+          sourceKind: "catalog_item",
+          catalogTypeId: "retired",
+          lineTotal: "10",
+          unitCost: "5",
+          quantity: "1",
+        },
+      ],
+      ["hardware"]
+    )
+    expect(rows.map((r) => [r.key, r.lineCount])).toEqual([
+      ["resource_role", 0],
+      ["hardware", 0],
+      ["retired", 1],
     ])
   })
 })

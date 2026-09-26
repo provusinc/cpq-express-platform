@@ -17,6 +17,7 @@ export {
 export { organizationScope } from "./organization-scope"
 export { createInvitationToken, hashInvitationToken } from "./invitation-token"
 export { recomputeQuoteTotals } from "./quote-totals"
+export { createDefaultCatalogTypes, ensureCatalogType } from "./catalog-types"
 export {
   createDefaultCustomerClassifications,
   ensureCustomerClassification,

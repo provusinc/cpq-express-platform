@@ -345,7 +345,7 @@ describe("changeQuoteDates — lines that aren't planner-managed", () => {
     [
       "a Product",
       roleLine({
-        sourceKind: "product",
+        sourceKind: "catalog_item",
         billingUnit: "each",
         quantity: 100,
         allocations: [],
@@ -353,7 +353,7 @@ describe("changeQuoteDates — lines that aren't planner-managed", () => {
     ],
     [
       "an hourly Add-on",
-      roleLine({ sourceKind: "add_on", quantity: 100, allocations: [] }),
+      roleLine({ sourceKind: "catalog_item", quantity: 100, allocations: [] }),
     ],
     [
       "a Resource Role line without Allocations",
@@ -541,7 +541,7 @@ describe("changeLineItemStart", () => {
 
   it("a line that isn't planner-managed moves its dates and keeps its quantity", () => {
     const product = roleLine({
-      sourceKind: "product",
+      sourceKind: "catalog_item",
       billingUnit: "each",
       quantity: 5,
       allocations: [],

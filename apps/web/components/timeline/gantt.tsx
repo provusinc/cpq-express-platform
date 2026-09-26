@@ -47,7 +47,8 @@ import type {
   EditorMilestone,
   EditorPhase,
 } from "@/components/quotes/autosave"
-import { PHASE_TINT_CLASSES, SOURCE_KIND_TONES } from "@/components/shell/tints"
+import { useCatalogTypes } from "@/components/shell/catalog-types"
+import { itemTone, PHASE_TINT_CLASSES } from "@/components/shell/tints"
 import { useHydrated } from "@/components/shell/use-hydrated"
 import { formatDate, formatDateRange, formatMonthDay } from "@/lib/format"
 import { phaseTints } from "@/lib/phase-tints"
@@ -322,6 +323,7 @@ export function TimelineGantt({
   const resources: GanttResource[] = timelineTree(phases, lines)
   const lineById = new Map(lines.map((l) => [l.id, l]))
   const tints = phaseTints(phases)
+  const catalogTypes = useCatalogTypes()
 
   const events: GanttEvent<TimelineEventData>[] = [
     ...lines.map(
@@ -330,7 +332,7 @@ export function TimelineGantt({
         title: line.name,
         ...daySpan(line.startDate, line.endDate),
         allDay: true,
-        color: SOURCE_KIND_TONES[line.sourceKind].colour,
+        color: itemTone(line, catalogTypes).colour,
         resourceId: line.id,
         readOnly: true,
         data: {

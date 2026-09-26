@@ -27,7 +27,6 @@ import { OrganizationSwitcher } from "./organization-switcher"
 import { useNavItems, useShell } from "./shell-context"
 import type { ShellOrganization, ShellUser } from "./types"
 import { UserMenu } from "./user-menu"
-import { navIconClass } from "./tints"
 
 const SECTIONS: NavSection[] = [...NAV_SECTIONS, "Organization"]
 
@@ -101,7 +100,7 @@ function NavMenu({ items }: { items: NavItem[] }) {
               tooltip={item.label}
               className="relative font-normal text-sidebar-foreground/85 data-active:bg-background data-active:font-medium data-active:text-sidebar-accent-foreground data-active:shadow-panel [&>svg]:text-sidebar-foreground/60 data-active:[&>svg]:text-primary"
             >
-              <item.icon className={navIconClass(item.term)} />
+              <item.icon className={item.iconClass} />
               <span>{item.label}</span>
             </SidebarMenuButton>
             {item.approverOnly && <ApprovalCount />}

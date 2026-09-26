@@ -16,6 +16,8 @@ import { isOrganizationObjectKey } from "@workspace/storage"
 import { generateQuoteDocument, QUOTE_DOCUMENT_AREA } from "../documents"
 import { ORGANIZATION_SLUG_HEADER } from "../headers"
 import {
+  catalogTypeNamed,
+  createCatalogItem,
   createCustomer,
   createContact,
   createMember,
@@ -368,6 +370,32 @@ describe("quoteDocument.generate", () => {
 })
 
 describe("quoteDocument.list and previewSnapshot", () => {
+  it("labels each line by its Catalog Type's name, or the Resource Role term", () =>
+    withTestDb(async (db) => {
+      const { organization, caller, quote } = await setup(db)
+      const type = await catalogTypeNamed(db, organization, "Add-on")
+      await db
+        .update(schema.catalogTypes)
+        .set({ singular: "Service", plural: "Services" })
+        .where(eq(schema.catalogTypes.id, type.id))
+      const item = await createCatalogItem(db, organization, {
+        catalogTypeId: type.id,
+        name: "Training",
+      })
+      await caller("member").lineItem.add({
+        quoteId: quote.id,
+        items: [{ sourceKind: "catalog_item", id: item.id }],
+      })
+      const { snapshot } = await caller("member").quoteDocument.previewSnapshot(
+        { quoteId: quote.id }
+      )
+      expect(snapshot.lines.map((l) => [l.name, l.typeName])).toEqual([
+        ["Engineer", "Resource Role"],
+        ["Engineer", "Resource Role"],
+        ["Training", "Service"],
+      ])
+    }))
+
   it("lists newest first with who may delete", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
@@ -650,6 +678,9 @@ describe("versions under concurrency", () => {
         .where(
           eq(schema.customerClassifications.organizationId, organization.id)
         )
+      await root
+        .delete(schema.catalogTypes)
+        .where(eq(schema.catalogTypes.organizationId, organization.id))
       await root
         .delete(organizations)
         .where(eq(organizations.id, organization.id))

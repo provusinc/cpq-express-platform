@@ -10,7 +10,6 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 
-import type { CatalogItemKind } from "@workspace/domain/enums"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -35,20 +34,30 @@ import {
   LocalTableRoot,
 } from "@/components/shell/data-table"
 import { parseCsvRecords } from "@/lib/csv"
+import type { CatalogTypeView } from "@/components/shell/catalog-types"
 import { useLabels } from "@/components/shell/labels"
 import { trimMoney } from "@/lib/money"
 import { errorMessage } from "@/lib/trpc-errors"
 import { useTRPC } from "@/trpc/react"
 
 import {
-  CATALOG_ITEM_TEMPLATE,
+  catalogItemTemplate,
   downloadCsv,
   RESOURCE_ROLE_TEMPLATE,
 } from "./import-templates"
 
-/** What the dialog imports: Catalog Items (from a kind's page) or Resource Roles. */
+/**
+ * What the dialog imports: one Catalog Type's items (from its page; every
+ * row gets that type) or Resource Roles.
+ */
 export type ImportTarget =
-  | { type: "catalogItems"; defaultKind: CatalogItemKind }
+  | {
+      type: "catalogItems"
+      catalogType: Pick<
+        CatalogTypeView,
+        "id" | "singular" | "plural" | "billingUnits"
+      >
+    }
   | { type: "resourceRoles" }
 
 interface PreviewRow {
@@ -129,12 +138,12 @@ function CsvImportDialog({
   const queryClient = useQueryClient()
   const template =
     target.type === "catalogItems"
-      ? CATALOG_ITEM_TEMPLATE
+      ? catalogItemTemplate(target.catalogType)
       : RESOURCE_ROLE_TEMPLATE
   const labels = useLabels()
   const noun =
     target.type === "catalogItems"
-      ? "Catalog Items"
+      ? target.catalogType.plural
       : labels.resource_role.plural
 
   const [fileName, setFileName] = useState<string | null>(null)
@@ -199,14 +208,14 @@ function CsvImportDialog({
     if (target.type === "catalogItems") {
       const result = await validateItems.mutateAsync({
         rows,
-        defaultKind: target.defaultKind,
+        catalogTypeId: target.catalogType.id,
       })
       setPreview(
         result.rows.map((r, i) => ({
           row: r.row,
           name: r.values?.name ?? rows[i]?.Name ?? "",
           summary: r.values
-            ? `${labels[r.values.kind].singular} · ${trimMoney(r.values.price)} / ${r.values.billingUnit === "hour" ? "hour" : "each"}`
+            ? `${target.catalogType.singular} · ${trimMoney(r.values.price)} / ${r.values.billingUnit === "hour" ? "hour" : "each"}`
             : "",
           errors: r.errors,
         }))
@@ -232,7 +241,10 @@ function CsvImportDialog({
   const onImport = () => {
     setProblem(null)
     if (target.type === "catalogItems") {
-      importItems.mutate({ rows: records, defaultKind: target.defaultKind })
+      importItems.mutate({
+        rows: records,
+        catalogTypeId: target.catalogType.id,
+      })
     } else {
       importRoles.mutate({ rows: records })
     }

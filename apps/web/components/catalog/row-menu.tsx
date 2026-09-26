@@ -29,7 +29,7 @@ export const ManagedRowActionsContext = createContext<ManagedRowActions | null>(
 
 /**
  * Edit, Deactivate or Reactivate, and Delete — the "…" menu and the
- * right-click menu of a Products, Add-ons or Resource Roles row (Admins).
+ * right-click menu of a Catalog Item or Resource Role row (Admins).
  */
 export function ManagedRowMenu() {
   const actions = useContext(ManagedRowActionsContext)!

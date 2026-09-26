@@ -82,13 +82,13 @@ export type PeriodType = (typeof PERIOD_TYPES)[number]
 export const BILLING_UNITS = ["each", "hour"] as const
 export type BillingUnit = (typeof BILLING_UNITS)[number]
 
-/** What a Line Item was added from. Only `resource_role` lines have Allocations. */
-export const SOURCE_KINDS = ["product", "add_on", "resource_role"] as const
+/**
+ * What a Line Item was added from: a Catalog Item (whose Catalog Type is
+ * Organization data, reached through the item) or a Resource Role. Only
+ * `resource_role` lines have Allocations.
+ */
+export const SOURCE_KINDS = ["catalog_item", "resource_role"] as const
 export type SourceKind = (typeof SOURCE_KINDS)[number]
-
-/** Catalog Item kinds (a Resource Role is not a Catalog Item). */
-export const CATALOG_ITEM_KINDS = ["product", "add_on"] as const
-export type CatalogItemKind = (typeof CATALOG_ITEM_KINDS)[number]
 
 /** How the Quote Discount was entered; the entered one stays authoritative. */
 export const DISCOUNT_KINDS = ["percent", "amount"] as const
@@ -135,12 +135,8 @@ export const CUSTOMER_CLASSIFICATION_KIND_LABELS: Record<
 
 /**
  * Domain terms an Organization may rename with a Label Override. Code and API
- * always use these canonical terms; only UI copy changes.
+ * always use these canonical terms; only UI copy changes. Catalog Types are
+ * named directly and take none.
  */
-export const LABEL_TERMS = [
-  "resource_role",
-  "product",
-  "add_on",
-  "phase",
-] as const
+export const LABEL_TERMS = ["resource_role", "phase"] as const
 export type LabelTerm = (typeof LABEL_TERMS)[number]

@@ -324,8 +324,9 @@ export async function createQuote(
 /**
  * Appends an Approval Step for `action` to `quote`'s history, as if taken
  * from the one Stage that allows it (e.g. `reject`: In Approval → Draft),
- * with the default Status names. Only the history changes, not the Quote:
- * insert the Quote in the step's target Stage. `createdAt` defaults to now.
+ * with the default Status names. A `status_change` stays in `stage`
+ * (default Draft). Only the history changes, not the Quote: insert the Quote
+ * in the step's target Stage. `createdAt` defaults to now.
  *
  *   const quote = await createQuote(db, acme, { owner })  // Draft
  *   await createApprovalStep(db, quote, { action: "reject", actor: approver })  // Rejected
@@ -338,15 +339,22 @@ export async function createApprovalStep(
     actor,
     comment = null,
     createdAt,
+    stage = "draft",
   }: {
     action: ApprovalStepAction
     actor: { id: string }
     comment?: string | null
     createdAt?: Date
+    /** The Stage a `status_change` happens in. */
+    stage?: QuoteStage
   }
 ) {
-  const fromStage = QUOTE_STAGES.find((stage) => nextStage(stage, action))!
-  const toStage = nextStage(fromStage, action)!
+  const fromStage =
+    action === "status_change"
+      ? stage
+      : QUOTE_STAGES.find((from) => nextStage(from, action))!
+  const toStage =
+    action === "status_change" ? stage : nextStage(fromStage, action)!
   const scope = organizationScope(db, quote.organizationId)
   const [from, to] = await Promise.all([
     stageEntryStatus(scope, fromStage),
@@ -368,6 +376,35 @@ export async function createApprovalStep(
     })
     .returning()
   return step!
+}
+
+/**
+ * Adds a Quote Status to `organization`'s `stage`, after the Stage's
+ * existing ones unless `sequence` is given. Returns the row.
+ *
+ *   const legal = await createQuoteStatus(db, acme, { stage: "in_approval", name: "Legal review" })
+ */
+export async function createQuoteStatus(
+  db: Db,
+  organization: { id: string },
+  {
+    stage,
+    name,
+    sequence = 100,
+    colour = null,
+  }: {
+    stage: QuoteStage
+    name: string
+    sequence?: number
+    colour?: string | null
+  }
+) {
+  return organizationScope(db, organization.id).insert(schema.quoteStatuses, {
+    stage,
+    name,
+    sequence,
+    colour,
+  })
 }
 
 /**

@@ -16,6 +16,10 @@ import type { DecimalInput } from "../money"
  * next Submission. Mark as Lost (`mark_lost`) ends a dead deal from Draft,
  * Approved or With Customer (a Quote In Approval is recalled first); only
  * `reopen` leaves Lost, back to Draft. Won is final: nothing leaves it.
+ *
+ * `status_change` is the one Approval Step action outside this table: it
+ * moves a Quote between the Statuses of its current Stage (labelling, in any
+ * order) and leaves the Stage, the lock and Rejected as they were.
  */
 const TRANSITIONS: Readonly<
   Record<QuoteStage, Partial<Record<ApprovalStepAction, QuoteStage>>>
@@ -86,6 +90,21 @@ export function isLocked(stage: QuoteStage): boolean {
   return (LOCKED_STAGES as readonly QuoteStage[]).includes(stage)
 }
 
+/**
+ * The Approval Step action that moves a Quote between the Quote Statuses of
+ * its current Stage. It is not a lifecycle event: `nextStage` never accepts
+ * it, and Rejected looks past it (`isLifecycleAction`).
+ */
+export const STATUS_CHANGE_ACTION = "status_change" satisfies ApprovalStepAction
+
+/**
+ * Whether an Approval Step action is a lifecycle event (every action but a
+ * status change). Rejected reads the latest lifecycle step.
+ */
+export function isLifecycleAction(action: ApprovalStepAction): boolean {
+  return action !== STATUS_CHANGE_ACTION
+}
+
 /** The Approval Step actions that reject a Quote (an Approver, the customer). */
 export const REJECTION_ACTIONS = [
   "reject",
@@ -95,7 +114,10 @@ export const REJECTION_ACTIONS = [
 /**
  * Glossary: Rejected. A fact, not a Status: a Draft Quote whose latest
  * Approval Step is a rejection (by an Approver or by the customer). It ends
- * at the next Submission.
+ * at the next Submission. Status changes don't count: `latestAction` is the
+ * latest step for which `isLifecycleAction` holds, so moving a Rejected
+ * Draft to another Draft Status keeps it Rejected (and a status change
+ * alone never makes a Quote Rejected).
  */
 export function isRejected(quote: {
   stage: QuoteStage
@@ -162,6 +184,60 @@ export function canSubmit(quote: {
 }
 
 // ─── Quote Statuses ─────────────────────────────────────────────────────────
+
+export type TargetStatusCheck =
+  | { ok: true }
+  | {
+      ok: false
+      reason: "other_stage" | "same_status"
+      message: string
+    }
+
+/**
+ * Whether `status` may be the Status a transition into `stage` lands on:
+ * it must be one of that Stage's Statuses (the actor picks it in the
+ * transition dialog; without one the Quote lands on the Stage's first).
+ */
+export function checkEntryStatus(
+  stage: QuoteStage,
+  status: { stage: QuoteStage }
+): TargetStatusCheck {
+  if (status.stage !== stage) {
+    return {
+      ok: false,
+      reason: "other_stage",
+      message: "Pick a Quote Status of the Stage the Quote is moving to.",
+    }
+  }
+  return { ok: true }
+}
+
+/**
+ * Whether a Quote in `quote.stage`, on `quote.statusId`, may move to
+ * `target` with a status change: another Status of the same Stage (any
+ * order). Leaving the Stage takes a lifecycle action instead.
+ */
+export function checkStatusChange(
+  quote: { stage: QuoteStage; statusId: string },
+  target: { id: string; stage: QuoteStage }
+): TargetStatusCheck {
+  if (target.stage !== quote.stage) {
+    return {
+      ok: false,
+      reason: "other_stage",
+      message:
+        "A Quote can only move between the Statuses of its current Stage.",
+    }
+  }
+  if (target.id === quote.statusId) {
+    return {
+      ok: false,
+      reason: "same_status",
+      message: "The Quote is already in this Status.",
+    }
+  }
+  return { ok: true }
+}
 
 /**
  * The Quote Statuses every Organization starts with: exactly one per Stage,

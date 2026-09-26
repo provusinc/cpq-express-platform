@@ -52,6 +52,7 @@ export const QUOTE_ACTIONS = [
   "quote.recordCustomerOutcome",
   "quote.markLost",
   "quote.reopen",
+  "quote.setStatus",
 ] as const
 export type QuoteAction = (typeof QUOTE_ACTIONS)[number]
 
@@ -161,6 +162,8 @@ export function can(
       return canMarkLost(actor, quote)
     case "quote.reopen":
       return canReopen(actor, quote)
+    case "quote.setStatus":
+      return canSetStatus(actor, quote)
   }
 }
 
@@ -270,6 +273,50 @@ function canReopen(actor: Actor, quote: QuoteFacts): Decision {
   return requireTransition(quote, "reopen")
 }
 
+/**
+ * Moving between the Quote Statuses of the current Stage (a status change):
+ * whoever may act in that Stage. Draft: whoever may edit the Quote. In
+ * Approval: Approvers, never on their own Quote (it is labelling, never an
+ * approval). Approved and With Customer: the Owner or an Admin. Won and
+ * Lost: an Admin only.
+ */
+function canSetStatus(actor: Actor, quote: QuoteFacts): Decision {
+  switch (quote.stage) {
+    case "draft":
+      return canEdit(actor, quote)
+    case "in_approval":
+      if (!actor.isApprover) {
+        return deny(
+          "approver_only",
+          "Only an Approver can change the Status of a Quote In Approval."
+        )
+      }
+      if (isOwner(actor, quote)) {
+        return deny(
+          "self_approval",
+          "You can't change the approval Status of your own Quote."
+        )
+      }
+      return ALLOW
+    case "approved":
+    case "with_customer":
+      return actor.role === "admin" || isOwner(actor, quote)
+        ? ALLOW
+        : deny(
+            "owner_or_admin_only",
+            "Only the Quote Owner or an Admin can change this Quote's Status."
+          )
+    case "won":
+    case "lost":
+      return actor.role === "admin"
+        ? ALLOW
+        : deny(
+            "admin_only",
+            "Only an Admin can change the Status of a Won or Lost Quote."
+          )
+  }
+}
+
 function ownerOrAdminFrom(
   actor: Actor,
   quote: QuoteFacts,
@@ -305,6 +352,8 @@ export interface QuotePermissions {
   canRecordCustomerOutcome: boolean
   canMarkLost: boolean
   canReopen: boolean
+  /** May move the Quote between the Statuses of its current Stage. */
+  canSetStatus: boolean
   /**
    * Why the Quote can't be edited (`locked`, or the Role rule), or `null`
    * when it can. The editor shows it as the read-only notice.
@@ -342,6 +391,7 @@ export function quotePermissions(
     canRecordCustomerOutcome: allowed("quote.recordCustomerOutcome"),
     canMarkLost: allowed("quote.markLost"),
     canReopen: allowed("quote.reopen"),
+    canSetStatus: allowed("quote.setStatus"),
     editDenial: edit.allowed
       ? null
       : { reason: edit.reason, message: edit.message },

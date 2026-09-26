@@ -134,6 +134,13 @@
       "when": 1790444170168,
       "tag": "0018_lost_stage_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790445282455,
+      "tag": "0019_status_change_action",
+      "breakpoints": true
     }
   ]
 }

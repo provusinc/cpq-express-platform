@@ -9,7 +9,10 @@ import {
 import {
   availableActions,
   canSubmit,
+  checkEntryStatus,
+  checkStatusChange,
   DEFAULT_QUOTE_STATUSES,
+  isLifecycleAction,
   isLocked,
   isRejected,
   isTerminal,
@@ -94,6 +97,41 @@ describe("isRejected", () => {
     ["approved", "reject", false],
   ] as const)("%s after %s → %s", (stage, latestAction, expected) => {
     expect(isRejected({ stage, latestAction })).toBe(expected)
+  })
+})
+
+describe("status changes", () => {
+  it("never change the Stage and are the one non-lifecycle action", () => {
+    for (const stage of QUOTE_STAGES) {
+      expect(nextStage(stage, "status_change")).toBeNull()
+      expect(availableActions(stage)).not.toContain("status_change")
+    }
+    expect(
+      APPROVAL_STEP_ACTIONS.filter((action) => !isLifecycleAction(action))
+    ).toEqual(["status_change"])
+  })
+
+  it("move only to another Status of the current Stage", () => {
+    const quote = { stage: "in_approval" as const, statusId: "s1" }
+    expect(
+      checkStatusChange(quote, { id: "s2", stage: "in_approval" })
+    ).toEqual({ ok: true })
+    expect(
+      checkStatusChange(quote, { id: "s3", stage: "approved" })
+    ).toMatchObject({ ok: false, reason: "other_stage" })
+    expect(
+      checkStatusChange(quote, { id: "s1", stage: "in_approval" })
+    ).toMatchObject({ ok: false, reason: "same_status" })
+  })
+
+  it("an entry Status must belong to the target Stage", () => {
+    expect(checkEntryStatus("approved", { stage: "approved" })).toEqual({
+      ok: true,
+    })
+    expect(checkEntryStatus("approved", { stage: "draft" })).toMatchObject({
+      ok: false,
+      reason: "other_stage",
+    })
   })
 })
 

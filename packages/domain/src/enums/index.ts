@@ -43,8 +43,10 @@ export const QUOTE_STAGE_LABELS: Record<QuoteStage, string> = {
 }
 
 /**
- * One recorded lifecycle action (an Approval Step). Each is also the event that
- * drives the Quote Stage machine (`@workspace/domain/stages`).
+ * One recorded lifecycle action (an Approval Step). Each but `status_change`
+ * is also an event that drives the Quote Stage machine
+ * (`@workspace/domain/stages`); `status_change` moves a Quote between the
+ * Quote Statuses of its current Stage and never changes the Stage.
  */
 export const APPROVAL_STEP_ACTIONS = [
   "submit",
@@ -56,6 +58,7 @@ export const APPROVAL_STEP_ACTIONS = [
   "customer_rejected",
   "mark_lost",
   "reopen",
+  "status_change",
 ] as const
 export type ApprovalStepAction = (typeof APPROVAL_STEP_ACTIONS)[number]
 

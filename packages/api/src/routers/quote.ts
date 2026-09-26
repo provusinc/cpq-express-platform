@@ -454,38 +454,58 @@ export const quoteRouter = createTRPCRouter({
    * One Quote for the editor: its header fields and totals, its Effort in
    * hours (Σ quantity of the hourly Line Items), Customer, Owner
    * (and whether they are still a member), who changed it last, its Stage
-   * and Quote Status, whether it is Rejected, and what the caller may do to
-   * it (`permissions`, from the domain policy).
+   * and Quote Status, the Statuses of its Stage in order (`stageStatuses`,
+   * what the header's Status menu offers), whether it is Rejected, and what
+   * the caller may do to it (`permissions`, from the domain policy).
    */
   byId: organizationProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const quote = await ctx.scope.findById(quotes, input.id)
       if (!quote) throw notFound("Quote")
-      const [customer, people, facts, settings, [effort], status, rejected] =
-        await Promise.all([
-          ctx.scope.findById(customers, quote.customerId),
-          ctx.scope.db
-            .select({ id: users.id, name: users.name, email: users.email })
-            .from(users)
-            .where(inArray(users.id, [quote.ownerId, quote.updatedById])),
-          quoteFacts(ctx.scope, quote),
-          getOrganizationSettings(ctx.scope),
-          ctx.scope.db
-            .select({
-              hours: sql<string>`coalesce(sum(${lineItems.quantity}), 0)`,
-            })
-            .from(lineItems)
-            .where(
-              ctx.scope.where(
-                lineItems,
-                eq(lineItems.quoteId, quote.id),
-                eq(lineItems.billingUnit, "hour")
-              )
-            ),
-          ctx.scope.findById(quoteStatuses, quote.statusId),
-          isQuoteRejected(ctx.scope, quote.id),
-        ])
+      const [
+        customer,
+        people,
+        facts,
+        settings,
+        [effort],
+        status,
+        rejected,
+        stageStatuses,
+      ] = await Promise.all([
+        ctx.scope.findById(customers, quote.customerId),
+        ctx.scope.db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, [quote.ownerId, quote.updatedById])),
+        quoteFacts(ctx.scope, quote),
+        getOrganizationSettings(ctx.scope),
+        ctx.scope.db
+          .select({
+            hours: sql<string>`coalesce(sum(${lineItems.quantity}), 0)`,
+          })
+          .from(lineItems)
+          .where(
+            ctx.scope.where(
+              lineItems,
+              eq(lineItems.quoteId, quote.id),
+              eq(lineItems.billingUnit, "hour")
+            )
+          ),
+        ctx.scope.findById(quoteStatuses, quote.statusId),
+        isQuoteRejected(ctx.scope, quote.id),
+        ctx.scope.db
+          .select({
+            id: quoteStatuses.id,
+            name: quoteStatuses.name,
+            colour: quoteStatuses.colour,
+          })
+          .from(quoteStatuses)
+          .where(
+            ctx.scope.where(quoteStatuses, eq(quoteStatuses.stage, quote.stage))
+          )
+          .orderBy(asc(quoteStatuses.sequence), asc(quoteStatuses.id)),
+      ])
       const person = (id: string) => people.find((p) => p.id === id)!
       return {
         id: quote.id,
@@ -498,6 +518,7 @@ export const quoteRouter = createTRPCRouter({
           colour: status!.colour,
         },
         rejected,
+        stageStatuses,
         startDate: quote.startDate,
         endDate: quote.endDate,
         validUntil: quote.validUntil,

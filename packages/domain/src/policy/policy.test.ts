@@ -411,6 +411,52 @@ describe("can(quote.markLost / quote.reopen)", () => {
   })
 })
 
+describe("can(quote.setStatus)", () => {
+  it.each<Row>([
+    ["Draft: the Owner", member, quote(member, "draft"), true],
+    ["Draft: a Manager on a Member's", manager, quote(member, "draft"), true],
+    [
+      "Draft: another Member",
+      otherMember,
+      quote(member, "draft"),
+      "not_allowed_to_edit",
+    ],
+    ["In Approval: an Approver", approver, quote(member, "in_approval"), true],
+    [
+      "In Approval: never on their own",
+      approver,
+      quote(approver, "in_approval"),
+      "self_approval",
+    ],
+    [
+      "In Approval: not the Owner",
+      member,
+      quote(member, "in_approval"),
+      "approver_only",
+    ],
+    [
+      "In Approval: not an Admin who isn't an Approver",
+      admin,
+      quote(member, "in_approval"),
+      "approver_only",
+    ],
+    ["Approved: the Owner", member, quote(member, "approved"), true],
+    ["With Customer: an Admin", admin, quote(member, "with_customer"), true],
+    [
+      "With Customer: not an Approver",
+      approver,
+      quote(member, "with_customer"),
+      "owner_or_admin_only",
+    ],
+    ["Won: an Admin", admin, quote(member, "won"), true],
+    ["Won: not the Owner", member, quote(member, "won"), "admin_only"],
+    ["Lost: an Admin", admin, quote(member, "lost"), true],
+    ["Lost: not a Manager", manager, quote(manager, "lost"), "admin_only"],
+  ])("%s", (_name, who, facts, expected) => {
+    expectDecision(can(who, "quote.setStatus", facts), expected)
+  })
+})
+
 describe("Organization actions are Admin-only", () => {
   it.each(
     ORGANIZATION_ACTIONS.flatMap(
@@ -440,6 +486,7 @@ describe("quotePermissions", () => {
       canRecordCustomerOutcome: false,
       canMarkLost: true,
       canReopen: false,
+      canSetStatus: true,
       editDenial: null,
       submitDenial: null,
     })

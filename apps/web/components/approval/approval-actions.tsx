@@ -1,6 +1,6 @@
 "use client"
 
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { UseMutationOptions } from "@tanstack/react-query"
 import {
   CheckIcon,
@@ -15,6 +15,10 @@ import {
 import type { LucideIcon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+
+import type { ApprovalStepAction, QuoteStage } from "@workspace/domain/enums"
+import { QUOTE_STAGE_LABELS } from "@workspace/domain/enums"
+import { nextStage } from "@workspace/domain/stages"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -38,6 +42,13 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from "@workspace/ui/components/radio-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { Textarea } from "@workspace/ui/components/textarea"
 import {
   Tooltip,
@@ -164,6 +175,25 @@ const TRANSITIONS: Record<Transition, TransitionCopy> = {
     done: "Quote reopened to Draft",
     variant: "outline",
   },
+}
+
+/** The Approval Step each transition records (the customer's answer: per outcome). */
+const STEP_ACTIONS: Record<
+  Exclude<Transition, "customerOutcome">,
+  ApprovalStepAction
+> = {
+  submit: "submit",
+  approve: "approve",
+  reject: "reject",
+  recall: "recall",
+  markSent: "mark_sent",
+  markLost: "mark_lost",
+  reopen: "reopen",
+}
+const OUTCOME_ACTIONS: Record<CustomerOutcome, ApprovalStepAction> = {
+  approved: "customer_approved",
+  revise: "customer_rejected",
+  lost: "mark_lost",
 }
 
 /**
@@ -356,10 +386,12 @@ interface TransitionInput {
   comment: string | null
   /** The customer outcome's answer. */
   outcome?: CustomerOutcome
+  /** The picked Status of the target Stage (default: its first). */
+  statusId?: string
 }
 
 /**
- * The transition's mutation, taking `{ id, comment }` whatever the command:
+ * The transition's mutation, taking `{ id, comment, statusId? }` whatever the command:
  * Mark as Sent's comment is its `notes`, the customer outcome's its `note`,
  * Mark as Lost's its `reason`.
  */
@@ -375,28 +407,34 @@ function transitionOptions(
     case "reopen":
       return adapt(
         trpc.quote[transition].mutationOptions(),
-        ({ id, comment }) => ({ id, comment })
+        ({ id, comment, statusId }) => ({ id, comment, statusId })
       )
     case "markLost":
       return adapt(
         trpc.quote.markLost.mutationOptions(),
-        ({ id, comment }) => ({ id, reason: comment ?? "" })
+        ({ id, comment, statusId }) => ({
+          id,
+          reason: comment ?? "",
+          statusId,
+        })
       )
     case "markSent":
       return adapt(
         trpc.quote.markSent.mutationOptions(),
-        ({ id, comment }) => ({
+        ({ id, comment, statusId }) => ({
           id,
           notes: comment,
+          statusId,
         })
       )
     case "customerOutcome":
       return adapt(
         trpc.quote.recordCustomerOutcome.mutationOptions(),
-        ({ id, comment, outcome }) => ({
+        ({ id, comment, outcome, statusId }) => ({
           id,
           outcome: outcome ?? "approved",
           note: comment,
+          statusId,
         })
       )
   }
@@ -414,6 +452,32 @@ function adapt<TData, TError, TVariables>(
   }
 }
 
+/**
+ * The Status a transition into `stage` lands on: the Stage's Statuses
+ * (`quoteStatus.list`, in order) and the picked one, the Stage's first
+ * until the actor picks another. The dialog shows the choice only when the
+ * Stage has more than one Status; `statusId` is null until the list loads
+ * (the API then lands on the first Status itself).
+ */
+function useTargetStatus(stage: QuoteStage | null) {
+  const trpc = useTRPC()
+  const statuses = useQuery(trpc.quoteStatus.list.queryOptions())
+  const options = (statuses.data ?? []).filter((s) => s.stage === stage)
+  const [picked, setPicked] = useState<{
+    stage: QuoteStage | null
+    id: string
+  } | null>(null)
+  const pickedId =
+    picked && picked.stage === stage && options.some((s) => s.id === picked.id)
+      ? picked.id
+      : null
+  return {
+    options,
+    statusId: pickedId ?? options[0]?.id ?? null,
+    setStatusId: (id: string) => setPicked({ stage, id }),
+  }
+}
+
 function TransitionDialog({
   quoteId,
   transition,
@@ -423,6 +487,7 @@ function TransitionDialog({
   transition: Transition
   onOpenChange: (open: boolean) => void
 }) {
+  const quote = useQuote(quoteId)
   const [comment, setComment] = useState("")
   const [outcome, setOutcome] = useState<CustomerOutcome>("approved")
   const command = useTransitionCommand(quoteId, transition)
@@ -430,6 +495,11 @@ function TransitionDialog({
   const copy: TransitionCopy = choosing
     ? { ...TRANSITIONS[transition], ...OUTCOMES[outcome] }
     : TRANSITIONS[transition]
+  const targetStage = nextStage(
+    quote.stage,
+    choosing ? OUTCOME_ACTIONS[outcome] : STEP_ACTIONS[transition]
+  )
+  const target = useTargetStatus(targetStage)
   const text = comment.trim()
   const missing = Boolean(copy.required) && !text
   const confirm = () =>
@@ -438,6 +508,7 @@ function TransitionDialog({
         id: quoteId,
         comment: text || null,
         ...(choosing ? { outcome } : {}),
+        ...(target.statusId ? { statusId: target.statusId } : {}),
       },
       { onSuccess: () => onOpenChange(false) }
     )
@@ -475,6 +546,31 @@ function TransitionDialog({
               ))}
             </RadioGroup>
           </FieldSet>
+        )}
+        {targetStage && target.options.length > 1 && (
+          <Field>
+            <FieldLabel htmlFor="transition-status">
+              {QUOTE_STAGE_LABELS[targetStage]} Status
+            </FieldLabel>
+            <Select
+              items={Object.fromEntries(
+                target.options.map((s) => [s.id, s.name])
+              )}
+              value={target.statusId}
+              onValueChange={(next) => target.setStatusId(next as string)}
+            >
+              <SelectTrigger id="transition-status" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {target.options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
         )}
         <Field>
           <FieldLabel htmlFor="approval-comment">

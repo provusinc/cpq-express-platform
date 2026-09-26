@@ -33,7 +33,7 @@ import { QuoteHeaderActions } from "./quote-actions"
 import { WithQuoteFigures } from "./quote-figures"
 import type { QuoteFigures } from "./quote-figures"
 import { QuoteDatesEditor, TimePeriodControl } from "./quote-schedule"
-import { QuoteStatusBadge } from "./quote-status-badge"
+import { QuoteStatusMenu } from "./quote-status-menu"
 import { useQuote } from "./use-quote"
 import type { Quote } from "./use-quote"
 
@@ -180,12 +180,7 @@ function MetaLine({ quote }: { quote: Quote }) {
   const owner = quote.owner.name ?? quote.owner.email
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-      <QuoteStatusBadge
-        stage={quote.stage}
-        status={quote.status}
-        rejected={quote.rejected}
-        className="shrink-0"
-      />
+      <QuoteStatusMenu quote={quote} className="shrink-0" />
       <Dot />
       <Link
         href={`/customers/${quote.customer.id}`}

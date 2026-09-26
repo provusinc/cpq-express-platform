@@ -2,6 +2,7 @@
 
 import { useSuspenseQuery } from "@tanstack/react-query"
 import {
+  ArrowRightLeftIcon,
   CheckIcon,
   CircleDotIcon,
   CircleOffIcon,
@@ -32,6 +33,7 @@ export const APPROVAL_STEP_LABELS: Record<ApprovalStepAction, string> = {
   customer_rejected: "Customer rejected",
   mark_lost: "Marked as lost",
   reopen: "Reopened",
+  status_change: "Status changed",
 }
 
 const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
@@ -44,12 +46,14 @@ const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
   customer_rejected: XIcon,
   mark_lost: CircleOffIcon,
   reopen: RotateCcwIcon,
+  status_change: ArrowRightLeftIcon,
 }
 
 /**
  * The Quote's approval history (`quote.approvalHistory`): every Approval
  * Step, newest first, with who did it, when, the Status it led to and the
- * comment. The Overview tab prefetches it.
+ * comment. A status change reads "Moved from Finance review to Legal
+ * review". The Overview tab prefetches it.
  */
 export function ApprovalHistory({ quoteId }: { quoteId: string }) {
   const trpc = useTRPC()
@@ -61,7 +65,7 @@ export function ApprovalHistory({ quoteId }: { quoteId: string }) {
   return (
     <OverviewCard
       title="Approval history"
-      description="Submissions, decisions, sending and the customer's answer"
+      description="Submissions, decisions, Status changes, sending and the customer's answer"
     >
       {newestFirst.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -79,7 +83,14 @@ export function ApprovalHistory({ quoteId }: { quoteId: string }) {
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                     <span className="font-medium">
-                      {APPROVAL_STEP_LABELS[step.action]}
+                      {step.action === "status_change" ? (
+                        <>
+                          Moved from {step.fromStatusName} to{" "}
+                          {step.toStatusName}
+                        </>
+                      ) : (
+                        APPROVAL_STEP_LABELS[step.action]
+                      )}
                     </span>
                     <span className="text-muted-foreground">
                       by {step.actor.name ?? step.actor.email}

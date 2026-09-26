@@ -170,6 +170,8 @@ export const dashboardRouter = createTRPCRouter({
             ctx.scope.where(
               approvalSteps,
               eq(approvalSteps.toStage, "won"),
+              // A status change within Won is not a second win.
+              ne(approvalSteps.action, "status_change"),
               gte(approvalSteps.createdAt, since)
             ),
             ctx.scope.where(quotes)

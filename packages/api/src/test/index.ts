@@ -19,7 +19,8 @@
  * Fixtures live in `./fixtures` (re-exported here): `createUser`,
  * `createSession`, `createOrganization`, `createMembership`, `createMember`,
  * and per area `createCustomer`, `createContact`, `createCatalogItem`,
- * `createResourceRole`, `createQuote`.
+ * `createResourceRole`, `createQuote`, `createQuoteStatus`,
+ * `createApprovalStep`, `setQuoteStage`.
  *
  * Email: every caller gets an in-memory `mailer` (default: a fresh one per
  * caller). Pass your own to read what was sent, and `tokenFromEmail` to pull
@@ -63,6 +64,7 @@ export {
   createMembership,
   createOrganization,
   createQuote,
+  createQuoteStatus,
   createResourceRole,
   createSession,
   createUser,

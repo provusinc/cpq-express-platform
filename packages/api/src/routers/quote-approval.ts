@@ -2,7 +2,7 @@
  * The Quote's approval procedures, registered on the `quote` router
  * (`quote.submit`, `quote.approve`, `quote.reject`, `quote.recall`,
  * `quote.markSent`, `quote.recordCustomerOutcome`, `quote.markLost`,
- * `quote.reopen`, `quote.approvalHistory`,
+ * `quote.reopen`, `quote.setStatus`, `quote.approvalHistory`,
  * `quote.awaitingMyApproval`). They live in their
  * own file so the lifecycle stays in one place; see `../approval.ts`.
  */
@@ -14,6 +14,8 @@ import type { ApprovalStepAction } from "@workspace/domain/enums"
 
 import {
   APPROVAL_COMMENT_MAX,
+  changeQuoteStatus,
+  targetStatusInput,
   transitionInput,
   transitionQuote,
 } from "../approval"
@@ -53,7 +55,7 @@ export const quoteApprovalProcedures = {
     .input(transitionInput)
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.submit", (cmd) =>
-        transitionQuote(cmd, "submit", input.comment)
+        transitionQuote(cmd, "submit", input.comment, input.statusId)
       )
     ),
 
@@ -65,7 +67,7 @@ export const quoteApprovalProcedures = {
     .input(transitionInput)
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.approve", (cmd) =>
-        transitionQuote(cmd, "approve", input.comment)
+        transitionQuote(cmd, "approve", input.comment, input.statusId)
       )
     ),
 
@@ -78,7 +80,7 @@ export const quoteApprovalProcedures = {
     .input(transitionInput)
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.reject", (cmd) =>
-        transitionQuote(cmd, "reject", input.comment)
+        transitionQuote(cmd, "reject", input.comment, input.statusId)
       )
     ),
 
@@ -90,7 +92,7 @@ export const quoteApprovalProcedures = {
     .input(transitionInput)
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.recall", (cmd) =>
-        transitionQuote(cmd, "recall", input.comment)
+        transitionQuote(cmd, "recall", input.comment, input.statusId)
       )
     ),
 
@@ -108,6 +110,7 @@ export const quoteApprovalProcedures = {
       z.object({
         id: z.uuid(),
         notes: optionalText(QUOTE_DOCUMENT_NOTES_MAX),
+        statusId: targetStatusInput,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -123,7 +126,8 @@ export const quoteApprovalProcedures = {
             const transition = await transitionQuote(
               cmd,
               "mark_sent",
-              input.notes
+              input.notes,
+              input.statusId
             )
             const { quoteSnapshot, settingsSnapshot, storageKey, ...document } =
               await generateQuoteDocument(cmd.scope, cmd.quote.id, {
@@ -164,6 +168,7 @@ export const quoteApprovalProcedures = {
           id: z.uuid(),
           outcome: z.enum(CUSTOMER_OUTCOMES),
           note: optionalText(APPROVAL_COMMENT_MAX),
+          statusId: targetStatusInput,
         })
         .superRefine((input, ctx) => {
           if (input.outcome === "lost" && !input.note) {
@@ -177,7 +182,12 @@ export const quoteApprovalProcedures = {
     )
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.recordCustomerOutcome", (cmd) =>
-        transitionQuote(cmd, OUTCOME_ACTIONS[input.outcome], input.note)
+        transitionQuote(
+          cmd,
+          OUTCOME_ACTIONS[input.outcome],
+          input.note,
+          input.statusId
+        )
       )
     ),
 
@@ -193,11 +203,36 @@ export const quoteApprovalProcedures = {
       z.object({
         id: z.uuid(),
         reason: requiredText(APPROVAL_COMMENT_MAX),
+        statusId: targetStatusInput,
       })
     )
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.markLost", (cmd) =>
-        transitionQuote(cmd, "mark_lost", input.reason)
+        transitionQuote(cmd, "mark_lost", input.reason, input.statusId)
+      )
+    ),
+
+  /**
+   * A status change: moves the Quote to another Quote Status of its current
+   * Stage (any order; another Stage's Status → BAD_REQUEST), recorded as a
+   * `status_change` Approval Step with both Status names and the optional
+   * comment. Who may do it depends on the Stage (`quote.setStatus` in the
+   * policy): Draft whoever may edit it, In Approval an Approver (never on
+   * their own Quote; it never approves), Approved and With Customer the
+   * Owner or an Admin, Won and Lost an Admin. The Stage, the lock and
+   * Rejected don't change.
+   */
+  setStatus: organizationProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        statusId: z.uuid(),
+        comment: optionalText(APPROVAL_COMMENT_MAX),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.id, "quote.setStatus", (cmd) =>
+        changeQuoteStatus(cmd, input.statusId, input.comment)
       )
     ),
 
@@ -210,7 +245,7 @@ export const quoteApprovalProcedures = {
     .input(transitionInput)
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.reopen", (cmd) =>
-        transitionQuote(cmd, "reopen", input.comment)
+        transitionQuote(cmd, "reopen", input.comment, input.statusId)
       )
     ),
 

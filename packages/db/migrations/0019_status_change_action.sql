@@ -1,0 +1,1 @@
+ALTER TYPE "public"."approval_step_action" ADD VALUE 'status_change';

@@ -42,7 +42,10 @@ import { TRPCError } from "@trpc/server"
 import { eq, recomputeQuoteTotals, schema, sql } from "@workspace/db"
 import type { OrganizationScope, RecomputeResult, SQL } from "@workspace/db"
 import type { Role } from "@workspace/domain/enums"
-import { REJECTION_ACTIONS } from "@workspace/domain/stages"
+import {
+  REJECTION_ACTIONS,
+  STATUS_CHANGE_ACTION,
+} from "@workspace/domain/stages"
 import { can } from "@workspace/domain/policy"
 import type {
   Actor,
@@ -142,8 +145,9 @@ export async function quoteFacts(
 
 /**
  * Glossary: Rejected, in SQL, for the `quotes` row of the surrounding query:
- * the Quote is in Draft and its latest Approval Step is a rejection (by an
- * Approver or the customer; the domain's `isRejected`). Select it
+ * the Quote is in Draft and its latest Approval Step, status changes
+ * skipped, is a rejection (by an Approver or the customer; the domain's
+ * `isRejected`). Select it
  * (`rejected: quoteRejected`) or filter by it. Qualified by hand: drizzle
  * leaves columns bare in a single-table query, which the correlated
  * subquery would misread.
@@ -156,6 +160,7 @@ export const quoteRejected: SQL<boolean> = sql<boolean>`("quotes"."stage" = 'dra
   from "approval_steps" latest
   where latest."organization_id" = "quotes"."organization_id"
     and latest."quote_id" = "quotes"."id"
+    and latest."action" <> ${STATUS_CHANGE_ACTION}
   order by latest."created_at" desc, latest."id" desc
   limit 1
 ), false))`

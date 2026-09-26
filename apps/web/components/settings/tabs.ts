@@ -3,6 +3,7 @@ import {
   ContactRoundIcon,
   FileTextIcon,
   ListChecksIcon,
+  PackageIcon,
   SlidersHorizontalIcon,
   TagsIcon,
 } from "lucide-react"
@@ -41,6 +42,13 @@ export const SETTINGS_TABS = [
     description: "Customer Types and Industries",
     href: "/settings/customer-fields",
     icon: ContactRoundIcon,
+  },
+  {
+    segment: "catalog-types",
+    label: "Catalog types",
+    description: "The kinds of things you sell",
+    href: "/settings/catalog-types",
+    icon: PackageIcon,
   },
   {
     segment: "labels",

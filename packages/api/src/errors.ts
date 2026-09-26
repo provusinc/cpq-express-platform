@@ -5,7 +5,8 @@
  *   Organization's) record.
  * - `inUseError(details)` — CONFLICT when a delete is blocked because other
  *   records reference the target (Customers, Catalog Items and Resource
- *   Roles used by Quotes; Customer Types and Industries used by Customers). The structured details reach the client as
+ *   Roles used by Quotes; Customer Types and Industries used by Customers;
+ *   Catalog Types used by Catalog Items). The structured details reach the client as
  *   `error.data.inUse` (see the errorFormatter in `trpc.ts`):
  *
  *     { kind: "in_use", entity: "customer", name: "Initech",
@@ -24,12 +25,14 @@ export type InUseEntity =
   | "resource_role"
   | "customer_type"
   | "industry"
+  | "catalog_type"
 
 /** What references it, counted (only non-zero counts need be present). */
 export interface InUseCounts {
   quotes?: number
   lineItems?: number
   customers?: number
+  catalogItems?: number
 }
 
 export interface InUseDetails {
@@ -41,7 +44,8 @@ export interface InUseDetails {
   /** A few names of referencing records (e.g. Quote names), for the message. */
   examples: string[]
   /**
-   * The alternative to offer: archive (Customers), deactivate (catalog) or
+   * The alternative to offer: archive (Customers), deactivate (catalog,
+   * Catalog Types) or
    * retire (Customer Types and Industries).
    */
   suggestion: "archive" | "deactivate" | "retire"
@@ -63,6 +67,9 @@ function inUseMessage({ name, counts, examples, suggestion }: InUseDetails) {
   if (counts.quotes) parts.push(plural(counts.quotes, "Quote"))
   if (counts.lineItems) parts.push(plural(counts.lineItems, "Line Item"))
   if (counts.customers) parts.push(plural(counts.customers, "Customer"))
+  if (counts.catalogItems) {
+    parts.push(plural(counts.catalogItems, "Catalog Item"))
+  }
   const used = parts.length > 0 ? parts.join(" and ") : "other records"
   const named = examples.length > 0 ? ` (${examples.join(", ")})` : ""
   const instead = {

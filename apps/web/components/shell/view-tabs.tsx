@@ -9,7 +9,7 @@ export interface ListView<V extends string> {
   label: string
   /** Rows in this view under the list's other filters. */
   count?: number
-  /** A solid colour class for a leading dot (e.g. `STATUS_SOLID`). */
+  /** A solid colour class for a leading dot (e.g. `STAGE_SOLID`). */
   dot?: string
 }
 

@@ -7,8 +7,8 @@ import { DEFAULT_HOURS_PER_DAY } from "../pricing"
 
 /**
  * Organization settings rules: Hours Per Day, Label Overrides and the logo.
- * (The deletable-status rules live in `policy`: `checkDeletableStatuses`,
- * `DELETABLE_STATUS_OPTIONS`, `DEFAULT_DELETABLE_STATUSES`.) The API
+ * (The deletable-Stage rules live in `policy`: `checkDeletableStages`,
+ * `DELETABLE_STAGE_OPTIONS`, `DEFAULT_DELETABLE_STAGES`.) The API
  * validates every settings command with these, and the Settings forms use the
  * same functions so they agree.
  */

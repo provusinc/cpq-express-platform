@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
+import type { QuoteStage } from "@workspace/domain/enums"
+import { LOCKED_STAGES } from "@workspace/domain/stages"
 
 import {
   createMember,
@@ -11,6 +11,7 @@ import {
   createQuote,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 
@@ -210,9 +211,9 @@ describe("milestone.delete / restore", () => {
 })
 
 describe("Milestones and the lock", () => {
-  it.each(LOCKED_STATUSES)(
+  it.each(LOCKED_STAGES)(
     "refuses every Milestone command while %s, even for Admins",
-    (status: QuoteStatus) =>
+    (stage: QuoteStage) =>
       withTestDb(async (db) => {
         const { caller, quote } = await setup(db)
         const c = caller("member")
@@ -234,7 +235,7 @@ describe("Milestones and the lock", () => {
           quoteId: quote.id,
           id: gone.id,
         })
-        await db.update(quotes).set({ status }).where(eq(quotes.id, quote.id))
+        await setQuoteStage(db, quote, stage)
         const before = await milestoneRows(db, quote.id)
         const admin = caller("admin")
         const attempts = [

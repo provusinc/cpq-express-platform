@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm"
 import {
   check,
   date,
+  foreignKey,
   index,
   numeric,
   pgEnum,
@@ -15,7 +16,8 @@ import { timestamps } from "../columns"
 import { organizationReference, organizationTable } from "../organization-table"
 import { customers } from "./customers"
 import { users } from "./auth"
-import { quoteStatusEnum } from "./enums"
+import { quoteStageEnum } from "./enums"
+import { quoteStatuses } from "./quote-statuses"
 
 /** Money is numeric(19,4) and percentages numeric(7,4), read back as strings (ADR-0002). */
 const money = () => numeric({ precision: 19, scale: 4 })
@@ -64,10 +66,17 @@ export const quotes = organizationTable(
     /** Glossary: Quote Start Date / Quote End Date (user-owned). */
     startDate: isoDate().notNull(),
     endDate: isoDate().notNull(),
-    /** Glossary: Valid Until. Informational; never changes the status. */
+    /** Glossary: Valid Until. Informational; never changes the Stage. */
     validUntil: isoDate(),
     timePeriod: timePeriodEnum().notNull().default("months"),
-    status: quoteStatusEnum().notNull().default("draft"),
+    /**
+     * Glossary: Quote Stage, which alone carries lifecycle behaviour, and the
+     * Organization's Quote Status inside it (ADR-0004). One composite FK
+     * keeps them consistent: the Status must be this Organization's and in
+     * this Stage.
+     */
+    stage: quoteStageEnum().notNull(),
+    statusId: uuid().notNull(),
     currencyCode: text().notNull(),
     discountKind: discountKindEnum(),
     discountValue: money(),
@@ -81,6 +90,16 @@ export const quotes = organizationTable(
   },
   (t) => [
     organizationReference(t, t.customerId, customers).onDelete("restrict"),
+    // Not `organizationReference`: the key carries the Stage too.
+    foreignKey({
+      name: "quotes_status_id_fk",
+      columns: [t.organizationId, t.statusId, t.stage],
+      foreignColumns: [
+        quoteStatuses.organizationId,
+        quoteStatuses.id,
+        quoteStatuses.stage,
+      ],
+    }).onDelete("restrict"),
     check("quotes_dates_ordered", sql`${t.endDate} >= ${t.startDate}`),
     check("quotes_currency_code_format", sql`${t.currencyCode} ~ '^[A-Z]{3}$'`),
     check(
@@ -94,7 +113,8 @@ export const quotes = organizationTable(
     // List filters and sorts (every list query is per Organization).
     index().on(t.organizationId, t.createdAt),
     index().on(t.organizationId, t.updatedAt),
-    index().on(t.organizationId, t.status),
+    index().on(t.organizationId, t.stage),
+    index().on(t.organizationId, t.statusId),
     index().on(t.organizationId, t.ownerId),
     // The Customer's Quotes: delete checks and the duplicate-Name warning.
     index("quotes_organization_id_customer_id_name_index").on(

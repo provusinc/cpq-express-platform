@@ -1,7 +1,7 @@
 /**
  * The domain's closed vocabularies, as `const` arrays plus their union types.
  * `db` builds its Postgres enums / check constraints from these and `api`
- * builds its zod enums from them (`z.enum(QUOTE_STATUSES)`), so every layer
+ * builds its zod enums from them (`z.enum(QUOTE_STAGES)`), so every layer
  * spells a value the same way. Values are the stored spelling (snake_case).
  */
 
@@ -16,32 +16,35 @@ export const ROLE_LABELS: Record<Role, string> = {
   member: "Member",
 }
 
-/** Where a Quote stands in its lifecycle. */
-export const QUOTE_STATUSES = [
+/**
+ * The fixed Quote Stages (glossary: Quote Stage, ADR-0004), in lifecycle
+ * order. They alone carry behaviour (locking, approval, Mark as Sent, …);
+ * an Organization's Quote Statuses are labels inside them. Never renamed or
+ * extended.
+ */
+export const QUOTE_STAGES = [
   "draft",
-  "pending_approval",
+  "in_approval",
   "approved",
-  "rejected",
-  "pending_customer_approval",
-  "customer_approved",
-  "customer_rejected",
+  "with_customer",
+  "won",
+  "lost",
 ] as const
-export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
+export type QuoteStage = (typeof QUOTE_STAGES)[number]
 
-/** How a Quote Status is written in UI copy. */
-export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+/** How a Quote Stage is written in UI copy. */
+export const QUOTE_STAGE_LABELS: Record<QuoteStage, string> = {
   draft: "Draft",
-  pending_approval: "Pending Approval",
+  in_approval: "In Approval",
   approved: "Approved",
-  rejected: "Rejected",
-  pending_customer_approval: "Pending Customer Approval",
-  customer_approved: "Customer Approved",
-  customer_rejected: "Customer Rejected",
+  with_customer: "With Customer",
+  won: "Won",
+  lost: "Lost",
 }
 
 /**
  * One recorded lifecycle action (an Approval Step). Each is also the event that
- * drives the Quote Status machine (`@workspace/domain/status`).
+ * drives the Quote Stage machine (`@workspace/domain/stages`).
  */
 export const APPROVAL_STEP_ACTIONS = [
   "submit",

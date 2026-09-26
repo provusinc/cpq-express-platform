@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { QUOTE_STATUSES, type QuoteStatus, type Role } from "../enums"
+import { QUOTE_STAGES, type QuoteStage, type Role } from "../enums"
 import {
   type Actor,
   can,
-  checkDeletableStatuses,
-  DEFAULT_DELETABLE_STATUSES,
-  DELETABLE_STATUS_OPTIONS,
+  checkDeletableStages,
+  DEFAULT_DELETABLE_STAGES,
+  DELETABLE_STAGE_OPTIONS,
   type DenialReason,
   ORGANIZATION_ACTIONS,
   type QuoteFacts,
@@ -29,12 +29,12 @@ const managerApprover = actor("u-manager", "manager", true)
 
 const quote = (
   owner: Actor | { userId: string; role: Role | null },
-  status: QuoteStatus = "draft",
+  stage: QuoteStage = "draft",
   total: string | null = "1000.0000"
 ): QuoteFacts => ({
   ownerId: owner.userId,
   ownerRole: owner.role,
-  status,
+  stage,
   total,
 })
 
@@ -100,37 +100,17 @@ describe("can(quote.edit)", () => {
       quote(member),
       "not_allowed_to_edit",
     ],
-    ["Rejected is editable", member, quote(member, "rejected"), true],
-    [
-      "Customer Rejected is editable",
-      member,
-      quote(member, "customer_rejected"),
-      true,
-    ],
-    [
-      "Pending Approval is locked",
-      member,
-      quote(member, "pending_approval"),
-      "locked",
-    ],
+    ["Draft is editable", member, quote(member, "draft"), true],
+    ["In Approval is locked", member, quote(member, "in_approval"), "locked"],
     [
       "Approved is locked even for Admin",
       admin,
       quote(member, "approved"),
       "locked",
     ],
-    [
-      "Pending Customer Approval is locked",
-      admin,
-      quote(admin, "pending_customer_approval"),
-      "locked",
-    ],
-    [
-      "Customer Approved is locked",
-      admin,
-      quote(admin, "customer_approved"),
-      "locked",
-    ],
+    ["With Customer is locked", admin, quote(admin, "with_customer"), "locked"],
+    ["Won is locked", admin, quote(admin, "won"), "locked"],
+    ["Lost is locked", admin, quote(admin, "lost"), "locked"],
     [
       "Role is checked before the lock",
       member,
@@ -147,7 +127,6 @@ describe("can(quote.edit)", () => {
 describe("can(quote.delete)", () => {
   it.each<Row>([
     ["Owner deletes a Draft", member, quote(member, "draft"), true],
-    ["Owner deletes a Rejected Quote", member, quote(member, "rejected"), true],
     ["Admin deletes anyone's Draft", admin, quote(member, "draft"), true],
     [
       "Manager can't delete a Member's Quote",
@@ -162,71 +141,55 @@ describe("can(quote.delete)", () => {
       "owner_or_admin_only",
     ],
     [
-      "Customer Rejected isn't deletable by default",
+      "Lost isn't deletable by default",
       member,
-      quote(member, "customer_rejected"),
-      "status_not_deletable",
+      quote(member, "lost"),
+      "stage_not_deletable",
     ],
     [
       "Approved is never deletable",
       admin,
       quote(admin, "approved"),
-      "status_not_deletable",
+      "stage_not_deletable",
     ],
   ])("%s (default settings)", (_name, who, facts, expected) => {
     expectDecision(can(who, "quote.delete", facts), expected)
   })
 
-  it("follows the Organization's deletable statuses", () => {
-    const settings = {
-      deletableStatuses: ["customer_rejected"] as QuoteStatus[],
-    }
+  it("follows the Organization's deletable Stages", () => {
+    const settings = { deletableStages: ["lost"] as QuoteStage[] }
     expectDecision(
-      can(member, "quote.delete", quote(member, "customer_rejected"), settings),
+      can(member, "quote.delete", quote(member, "lost"), settings),
       true
     )
     expectDecision(
       can(member, "quote.delete", quote(member, "draft"), settings),
-      "status_not_deletable"
+      "stage_not_deletable"
     )
   })
 
-  it.each([
-    "pending_approval",
-    "approved",
-    "pending_customer_approval",
-    "customer_approved",
-  ] as const)(
+  it.each(["in_approval", "approved", "with_customer", "won"] as const)(
     "never deletes a %s Quote, even if settings list it",
-    (status) => {
-      const settings = { deletableStatuses: [...QUOTE_STATUSES] }
+    (stage) => {
+      const settings = { deletableStages: [...QUOTE_STAGES] }
       expectDecision(
-        can(admin, "quote.delete", quote(admin, status), settings),
-        "status_not_deletable"
+        can(admin, "quote.delete", quote(admin, stage), settings),
+        "stage_not_deletable"
       )
     }
   )
 
-  it("offers only uncommitted statuses as deletable options", () => {
-    expect(DELETABLE_STATUS_OPTIONS).toEqual([
-      "draft",
-      "rejected",
-      "customer_rejected",
-    ])
-    expect(DEFAULT_DELETABLE_STATUSES).toEqual(["draft", "rejected"])
+  it("offers only Draft and Lost as deletable options", () => {
+    expect(DELETABLE_STAGE_OPTIONS).toEqual(["draft", "lost"])
+    expect(DEFAULT_DELETABLE_STAGES).toEqual(["draft"])
   })
 
   it("splits a proposed deletable set into accepted and refused", () => {
     expect(
-      checkDeletableStatuses([
-        "draft",
-        "approved",
-        "draft",
-        "customer_approved",
-      ])
+      checkDeletableStages(["draft", "approved", "draft", "won", "lost"])
     ).toEqual({
-      accepted: ["draft"],
-      refused: ["approved", "customer_approved"],
+      accepted: ["draft", "lost"],
+      refused: ["approved", "won"],
     })
   })
 })
@@ -234,18 +197,6 @@ describe("can(quote.delete)", () => {
 describe("can(quote.submit)", () => {
   it.each<Row>([
     ["Owner submits a Draft", member, quote(member, "draft"), true],
-    [
-      "Owner resubmits a Rejected Quote",
-      member,
-      quote(member, "rejected"),
-      true,
-    ],
-    [
-      "Owner resubmits a Customer Rejected Quote",
-      member,
-      quote(member, "customer_rejected"),
-      true,
-    ],
     [
       "Admin can't submit someone else's Quote",
       admin,
@@ -259,16 +210,16 @@ describe("can(quote.submit)", () => {
       "owner_only",
     ],
     [
-      "Can't submit while Pending Approval",
+      "Can't submit while In Approval",
       member,
-      quote(member, "pending_approval"),
-      "wrong_status",
+      quote(member, "in_approval"),
+      "wrong_stage",
     ],
     [
       "Can't submit an Approved Quote",
       member,
       quote(member, "approved"),
-      "wrong_status",
+      "wrong_stage",
     ],
     ["Null Total", member, quote(member, "draft", null), "total_missing"],
     ["Zero Total", member, quote(member, "draft", "0.0000"), "total_zero"],
@@ -281,7 +232,7 @@ describe("can(quote.submit)", () => {
 // v1 deliberately changed approval: an explicit Approver flag (previously
 // Admins and Managers), and self-approval is forbidden.
 describe("can(quote.approve / quote.reject)", () => {
-  const pending = (owner: Actor) => quote(owner, "pending_approval")
+  const pending = (owner: Actor) => quote(owner, "in_approval")
   it.each<Row>([
     ["Approver approves a colleague's Quote", approver, pending(member), true],
     ["Approver approves an Admin's Quote", approver, pending(admin), true],
@@ -311,16 +262,16 @@ describe("can(quote.approve / quote.reject)", () => {
       "self_approval",
     ],
     [
-      "Only while Pending Approval (Draft)",
+      "Only while In Approval (Draft)",
       approver,
       quote(member, "draft"),
-      "wrong_status",
+      "wrong_stage",
     ],
     [
-      "Only while Pending Approval (Approved)",
+      "Only while In Approval (Approved)",
       approver,
       quote(member, "approved"),
-      "wrong_status",
+      "wrong_stage",
     ],
   ])("%s", (_name, who, facts, expected) => {
     expectDecision(can(who, "quote.approve", facts), expected)
@@ -331,25 +282,25 @@ describe("can(quote.approve / quote.reject)", () => {
 // Ported from portal rbac.ts (ensureCanRecallQuote).
 describe("can(quote.recall)", () => {
   it.each<Row>([
-    ["Owner recalls", member, quote(member, "pending_approval"), true],
-    ["Admin recalls anyone's", admin, quote(member, "pending_approval"), true],
+    ["Owner recalls", member, quote(member, "in_approval"), true],
+    ["Admin recalls anyone's", admin, quote(member, "in_approval"), true],
     [
       "Manager can't recall a Member's",
       manager,
-      quote(member, "pending_approval"),
+      quote(member, "in_approval"),
       "owner_or_admin_only",
     ],
     [
       "Approver can't recall someone else's",
       approver,
-      quote(member, "pending_approval"),
+      quote(member, "in_approval"),
       "owner_or_admin_only",
     ],
     [
-      "Only while Pending Approval",
+      "Only while In Approval",
       member,
       quote(member, "approved"),
-      "wrong_status",
+      "wrong_stage",
     ],
   ])("%s", (_name, who, facts, expected) => {
     expectDecision(can(who, "quote.recall", facts), expected)
@@ -371,48 +322,38 @@ describe("can(quote.markSent / quote.recordCustomerOutcome)", () => {
       quote(member, "approved"),
       "owner_or_admin_only",
     ],
-    ["Only from Approved", member, quote(member, "draft"), "wrong_status"],
+    ["Only from Approved", member, quote(member, "draft"), "wrong_stage"],
     [
       "Not again once sent",
       member,
-      quote(member, "pending_customer_approval"),
-      "wrong_status",
+      quote(member, "with_customer"),
+      "wrong_stage",
     ],
   ])("markSent: %s", (_name, who, facts, expected) => {
     expectDecision(can(who, "quote.markSent", facts), expected)
   })
 
   it.each<Row>([
-    [
-      "Owner records the outcome",
-      member,
-      quote(member, "pending_customer_approval"),
-      true,
-    ],
+    ["Owner records the outcome", member, quote(member, "with_customer"), true],
     [
       "Admin records anyone's outcome",
       admin,
-      quote(member, "pending_customer_approval"),
+      quote(member, "with_customer"),
       true,
     ],
     [
       "Member can't record a colleague's",
       otherMember,
-      quote(member, "pending_customer_approval"),
+      quote(member, "with_customer"),
       "owner_or_admin_only",
     ],
     [
-      "Only from Pending Customer Approval",
+      "Only from With Customer",
       member,
       quote(member, "approved"),
-      "wrong_status",
+      "wrong_stage",
     ],
-    [
-      "Customer Approved is final",
-      admin,
-      quote(member, "customer_approved"),
-      "wrong_status",
-    ],
+    ["Won is final", admin, quote(member, "won"), "wrong_stage"],
   ])("recordCustomerOutcome: %s", (_name, who, facts, expected) => {
     expectDecision(can(who, "quote.recordCustomerOutcome", facts), expected)
   })
@@ -460,20 +401,20 @@ describe("quotePermissions", () => {
   })
 
   it("explains why a locked Quote can't be edited", () => {
-    const p = quotePermissions(admin, quote(member, "pending_approval"))
+    const p = quotePermissions(admin, quote(member, "in_approval"))
     expect(p.canEdit).toBe(false)
     expect(p.canRecall).toBe(true)
     expect(p.editDenial?.reason).toBe("locked")
   })
 
-  it("explains the Role rule, and applies the deletable statuses", () => {
+  it("explains the Role rule, and applies the deletable Stages", () => {
     const p = quotePermissions(otherMember, quote(member), {
-      deletableStatuses: ["rejected"],
+      deletableStages: ["lost"],
     })
     expect(p.editDenial?.reason).toBe("not_allowed_to_edit")
     expect(
       quotePermissions(member, quote(member), {
-        deletableStatuses: ["rejected"],
+        deletableStages: ["lost"],
       }).canDelete
     ).toBe(false)
   })

@@ -3,10 +3,10 @@
  *
  * Every lifecycle command is a `quoteCommand` whose policy action
  * (`quote.submit`, `quote.approve`, …) has already checked who may act and
- * that the Status machine allows it; its body then calls
+ * that the Stage machine allows it; its body then calls
  * `transitionQuote(cmd, stepAction, comment)`, which moves the Quote to
- * `nextStatus(status, stepAction)` and appends the Approval Step, in the
- * command's transaction:
+ * `nextStage(stage, stepAction)` (on that Stage's first Quote Status) and
+ * appends the Approval Step, in the command's transaction:
  *
  *   submit: organizationProcedure
  *     .input(transitionInput)
@@ -16,15 +16,17 @@
  *       )
  *     )
  *
- * Mark as Sent and the customer outcome (#22) use the same helper with
- * `mark_sent` / `customer_approved` / `customer_rejected`.
+ * Mark as Sent and the customer outcome use the same helper with
+ * `mark_sent` / `customer_approved` (→ Won) / `customer_rejected` (→ Draft,
+ * Rejected).
  */
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { schema } from "@workspace/db"
+import { findQuoteStatus, schema, stageEntryStatus } from "@workspace/db"
+import { QUOTE_STAGE_LABELS } from "@workspace/domain/enums"
 import type { ApprovalStepAction } from "@workspace/domain/enums"
-import { nextStatus } from "@workspace/domain/status"
+import { isRejected, nextStage } from "@workspace/domain/stages"
 
 import { optionalText } from "./inputs"
 import type { QuoteCommand } from "./quotes"
@@ -41,43 +43,55 @@ export const transitionInput = z.object({
 })
 
 /**
- * Moves the command's Quote along the Status machine by `action` and
- * records the Approval Step. Returns the Quote's new status (plus
- * `updatedAt`/`updatedById`, like every header command) and the step.
+ * Moves the command's Quote along the Stage machine by `action`, landing it
+ * on the target Stage's first Quote Status, and records the Approval Step
+ * with both Stages and the Status names at the time. Returns the Quote's new
+ * Stage and Status, whether it is now Rejected (a reject or the customer's
+ * "no"), `updatedAt`/`updatedById` like every header command, and the step.
  */
 export async function transitionQuote(
   cmd: QuoteCommand,
   action: ApprovalStepAction,
   comment?: string | null
 ) {
-  const from = cmd.quote.status
-  const to = nextStatus(from, action)
+  const from = cmd.quote.stage
+  const to = nextStage(from, action)
   if (!to) {
     // The policy already refused this; kept so a caller can't skip it.
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "This isn't possible in the Quote's current status.",
+      message: "This isn't possible in the Quote's current Stage.",
     })
   }
-  const quote = await cmd.update({ status: to })
+  const [fromStatus, toStatus] = await Promise.all([
+    findQuoteStatus(cmd.scope, cmd.quote.statusId),
+    stageEntryStatus(cmd.scope, to),
+  ])
+  const quote = await cmd.update({ stage: to, statusId: toStatus.id })
   const step = await cmd.scope.insert(approvalSteps, {
     quoteId: quote.id,
     action,
-    fromStatus: from,
-    toStatus: to,
+    fromStage: from,
+    toStage: to,
+    fromStatusName: fromStatus?.name ?? QUOTE_STAGE_LABELS[from],
+    toStatusName: toStatus.name,
     actorId: cmd.actor.userId,
     comment: comment || null,
   })
   return {
     id: quote.id,
-    status: quote.status,
+    stage: quote.stage,
+    status: { id: toStatus.id, name: toStatus.name },
+    rejected: isRejected({ stage: quote.stage, latestAction: action }),
     updatedAt: quote.updatedAt,
     updatedById: quote.updatedById,
     step: {
       id: step.id,
       action: step.action,
-      fromStatus: step.fromStatus,
-      toStatus: step.toStatus,
+      fromStage: step.fromStage,
+      toStage: step.toStage,
+      fromStatusName: step.fromStatusName,
+      toStatusName: step.toStatusName,
       comment: step.comment,
       createdAt: step.createdAt,
     },

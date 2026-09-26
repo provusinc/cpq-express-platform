@@ -1,7 +1,6 @@
-import type { ApprovalStepAction, QuoteStatus, Role } from "../enums"
-import { QUOTE_STATUSES } from "../enums"
+import type { ApprovalStepAction, QuoteStage, Role } from "../enums"
 import type { DecimalInput } from "../money"
-import { canSubmit, isLocked, LOCKED_STATUSES, nextStatus } from "../status"
+import { canSubmit, isLocked, nextStage } from "../stages"
 
 /**
  * The permission policy: one function, `can`, answers every "may this
@@ -27,15 +26,19 @@ export interface QuoteFacts {
    * Role rules for everyone else (so only Admins can edit them).
    */
   ownerRole: Role | null
-  status: QuoteStatus
+  /** The Quote's Stage (its Status carries no behaviour). */
+  stage: QuoteStage
   /** The persisted Total; only read for `quote.submit`. */
   total?: DecimalInput | null
 }
 
 /** The Organization settings the policy reads. */
 export interface PolicySettings {
-  /** Statuses in which Quotes may be deleted. Committed statuses are ignored. */
-  deletableStatuses: readonly QuoteStatus[]
+  /**
+   * Stages in which Quotes may be deleted (only Draft and Lost can be;
+   * any other Stage is ignored).
+   */
+  deletableStages: readonly QuoteStage[]
 }
 
 export const QUOTE_ACTIONS = [
@@ -67,8 +70,8 @@ export type DenialReason =
   | "approver_only"
   | "self_approval"
   | "locked"
-  | "wrong_status"
-  | "status_not_deletable"
+  | "wrong_stage"
+  | "stage_not_deletable"
   | "total_missing"
   | "total_zero"
   | "total_negative"
@@ -78,31 +81,31 @@ export type Decision =
   | { allowed: false; reason: DenialReason; message: string }
 
 /**
- * Statuses an Admin may put in the deletable set: everything except the
- * committed (locked) statuses.
+ * Stages an Admin may put in the deletable set: Draft ("Draft Quotes may be
+ * deleted") and Lost ("Lost Quotes may be deleted"). Quotes in any other
+ * Stage are committed and can never be deleted.
  */
-export const DELETABLE_STATUS_OPTIONS: readonly QuoteStatus[] =
-  QUOTE_STATUSES.filter((status) => !isLocked(status))
-
-/** The deletable set a new Organization starts with. */
-export const DEFAULT_DELETABLE_STATUSES: readonly QuoteStatus[] = [
+export const DELETABLE_STAGE_OPTIONS = [
   "draft",
-  "rejected",
-]
+  "lost",
+] as const satisfies readonly QuoteStage[]
+
+/** The deletable set a new Organization starts with: Draft on, Lost off. */
+export const DEFAULT_DELETABLE_STAGES: readonly QuoteStage[] = ["draft"]
 
 /**
  * Split a proposed deletable set into what may be kept and what is refused
- * (committed statuses). Settings commands reject when `refused` is non-empty.
+ * (committed Stages). Settings commands reject when `refused` is non-empty.
  */
-export function checkDeletableStatuses(statuses: readonly QuoteStatus[]): {
-  accepted: QuoteStatus[]
-  refused: QuoteStatus[]
+export function checkDeletableStages(stages: readonly QuoteStage[]): {
+  accepted: QuoteStage[]
+  refused: QuoteStage[]
 } {
-  const committed = LOCKED_STATUSES as readonly QuoteStatus[]
-  const unique = [...new Set(statuses)]
+  const options = DELETABLE_STAGE_OPTIONS as readonly QuoteStage[]
+  const unique = [...new Set(stages)]
   return {
-    accepted: unique.filter((s) => !committed.includes(s)),
-    refused: unique.filter((s) => committed.includes(s)),
+    accepted: unique.filter((s) => options.includes(s)),
+    refused: unique.filter((s) => !options.includes(s)),
   }
 }
 
@@ -178,8 +181,8 @@ function canEdit(actor: Actor, quote: QuoteFacts): Decision {
         : "You can edit only your own Quotes."
     )
   }
-  if (isLocked(quote.status)) {
-    return deny("locked", "This Quote is locked in its current status.")
+  if (isLocked(quote.stage)) {
+    return deny("locked", "This Quote is locked in its current Stage.")
   }
   return ALLOW
 }
@@ -195,14 +198,11 @@ function canDelete(
       "Only the Quote Owner or an Admin can delete this Quote."
     )
   }
-  const { accepted } = checkDeletableStatuses(
-    settings?.deletableStatuses ?? DEFAULT_DELETABLE_STATUSES
+  const { accepted } = checkDeletableStages(
+    settings?.deletableStages ?? DEFAULT_DELETABLE_STAGES
   )
-  if (!accepted.includes(quote.status)) {
-    return deny(
-      "status_not_deletable",
-      "Quotes can't be deleted in this status."
-    )
+  if (!accepted.includes(quote.stage)) {
+    return deny("stage_not_deletable", "Quotes can't be deleted in this Stage.")
   }
   return ALLOW
 }
@@ -211,7 +211,7 @@ function canSubmitQuote(actor: Actor, quote: QuoteFacts): Decision {
   if (!isOwner(actor, quote)) {
     return deny("owner_only", "Only the Quote Owner can submit this Quote.")
   }
-  const check = canSubmit({ status: quote.status, total: quote.total })
+  const check = canSubmit({ stage: quote.stage, total: quote.total })
   return check.ok ? ALLOW : deny(check.reason, check.message)
 }
 
@@ -247,8 +247,8 @@ function requireTransition(
   quote: QuoteFacts,
   action: ApprovalStepAction
 ): Decision {
-  return nextStatus(quote.status, action) === null
-    ? deny("wrong_status", "This isn't possible in the Quote's current status.")
+  return nextStage(quote.stage, action) === null
+    ? deny("wrong_stage", "This isn't possible in the Quote's current Stage.")
     : ALLOW
 }
 

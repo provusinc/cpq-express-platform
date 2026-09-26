@@ -16,7 +16,7 @@ import { QuoteValueCard } from "./quote-value-card"
 /**
  * The Dashboard, the Organization's landing page, kept to a glance: the
  * open pipeline value in the header, the four Key Insights that ask for
- * action, one chart of the Quote value created and Customer Approved
+ * action, one chart of the Quote value created and Won
  * over a chosen range, and two short lists —
  * the approval queue that needs the caller and their recent Quotes. Every
  * cell and list links into the Quote list (`?insight=`), the approvals

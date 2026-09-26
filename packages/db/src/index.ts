@@ -17,6 +17,11 @@ export {
 export { organizationScope } from "./organization-scope"
 export { createInvitationToken, hashInvitationToken } from "./invitation-token"
 export { recomputeQuoteTotals } from "./quote-totals"
+export {
+  createDefaultQuoteStatuses,
+  findQuoteStatus,
+  stageEntryStatus,
+} from "./quote-statuses"
 export type { QuoteTotalsRow, RecomputeResult } from "./quote-totals"
 export type {
   OrganizationOwnedTable,

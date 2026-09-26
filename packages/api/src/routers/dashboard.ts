@@ -3,7 +3,7 @@
  * Insights and the recent Quotes (`quote.insights`), aggregated in SQL
  * for the whole Organization (every member sees every Quote), and
  * `dashboard.valueOverTime`, the Quote value chart. The rules — which
- * statuses are open, the chart's ranges and buckets — are the domain's
+ * Stages are open, the chart's ranges and buckets — are the domain's
  * (`@workspace/domain/dashboard`).
  */
 import { z } from "zod"
@@ -22,7 +22,7 @@ import {
 } from "@workspace/db"
 import {
   DASHBOARD_LIST_LIMIT,
-  OPEN_STATUSES,
+  OPEN_STAGES,
   VALUE_RANGES,
   valueBuckets,
 } from "@workspace/domain/dashboard"
@@ -36,9 +36,9 @@ const { customers, approvalSteps, quotes, users } = schema
 export const dashboardRouter = createTRPCRouter({
   /**
    * The Dashboard's figures, computed now (months and days are UTC):
-   * - `open`: the Quotes without a customer outcome yet, counted and their
-   *   Totals summed (the header's pipeline figure);
-   * - `approvalQueue`: the Pending Approval Quotes that need the caller —
+   * - `open`: the open pipeline, Quotes not yet Won or Lost, counted and
+   *   their Totals summed (the header's figure);
+   * - `approvalQueue`: the Quotes In Approval that need the caller —
    *   for an Approver the ones waiting for them (not their own), for
    *   anyone else their own — longest wait first (from each Quote's
    *   latest submit step), at most `DASHBOARD_LIST_LIMIT` rows, with the
@@ -61,7 +61,7 @@ export const dashboardRouter = createTRPCRouter({
     const waitingSince = sql<Date>`coalesce(${submitted.submittedAt}, ${quotes.updatedAt})`
     const inQueue = ctx.scope.where(
       quotes,
-      eq(quotes.status, "pending_approval"),
+      eq(quotes.stage, "in_approval"),
       isApprover
         ? ne(quotes.ownerId, ctx.user.id)
         : eq(quotes.ownerId, ctx.user.id)
@@ -74,7 +74,7 @@ export const dashboardRouter = createTRPCRouter({
           value: sql<string>`coalesce(sum(${quotes.total}), 0)`,
         })
         .from(quotes)
-        .where(ctx.scope.where(quotes, inArray(quotes.status, OPEN_STATUSES))),
+        .where(ctx.scope.where(quotes, inArray(quotes.stage, OPEN_STAGES))),
       ctx.scope.db
         .select({
           id: quotes.id,
@@ -125,10 +125,10 @@ export const dashboardRouter = createTRPCRouter({
   /**
    * The Quote value chart: per UTC bucket of `range` (days or weeks, the
    * domain's `valueBuckets`, oldest first, zero-filled in SQL with
-   * `generate_series`), the Quotes `created` in it and the Quotes that
-   * reached Customer Approved in it (dated by that Approval Step; the
-   * status is final, so a Quote counts once), each counted with their
-   * Totals summed (4 dp).
+   * `generate_series`), the Quotes `created` in it and the Quotes `won` in
+   * it (dated by the Approval Step that moved them to Won; the Stage is
+   * final, so a Quote counts once), each counted with their Totals summed
+   * (4 dp).
    */
   valueOverTime: organizationProcedure
     .input(z.object({ range: z.enum(VALUE_RANGES) }))
@@ -151,7 +151,7 @@ export const dashboardRouter = createTRPCRouter({
         .where(ctx.scope.where(quotes, gte(quotes.createdAt, since)))
         .groupBy(sql`1`)
         .as("created")
-      const approved = ctx.scope.db
+      const won = ctx.scope.db
         .select({
           bucket: bucketOf(approvalSteps.createdAt).as("bucket"),
           count: count().as("count"),
@@ -169,33 +169,33 @@ export const dashboardRouter = createTRPCRouter({
           and(
             ctx.scope.where(
               approvalSteps,
-              eq(approvalSteps.toStatus, "customer_approved"),
+              eq(approvalSteps.toStage, "won"),
               gte(approvalSteps.createdAt, since)
             ),
             ctx.scope.where(quotes)
           )
         )
         .groupBy(sql`1`)
-        .as("approved")
+        .as("won")
 
       // Qualified by hand: drizzle leaves a subquery's aliased fields bare
       // when the outer `from` is raw SQL, and "bucket" is in all three.
       const bucket = sql`buckets.bucket`
-      const col = (from: "created" | "approved", field: string) =>
+      const col = (from: "created" | "won", field: string) =>
         sql.raw(`"${from}"."${field}"`)
       const rows = await ctx.scope.db
         .select({
           start: sql<string>`to_char(${bucket}, 'YYYY-MM-DD')`,
           createdCount: sql<number>`coalesce(${col("created", "count")}, 0)::int`,
           createdValue: sql<string>`coalesce(${col("created", "value")}, 0)`,
-          approvedCount: sql<number>`coalesce(${col("approved", "count")}, 0)::int`,
-          approvedValue: sql<string>`coalesce(${col("approved", "value")}, 0)`,
+          wonCount: sql<number>`coalesce(${col("won", "count")}, 0)::int`,
+          wonValue: sql<string>`coalesce(${col("won", "value")}, 0)`,
         })
         .from(
           sql`generate_series(${from}::date, ${last}::date, ${`1 ${unit}`}::interval) as buckets(bucket)`
         )
         .leftJoin(created, sql`${col("created", "bucket")} = ${bucket}`)
-        .leftJoin(approved, sql`${col("approved", "bucket")} = ${bucket}`)
+        .leftJoin(won, sql`${col("won", "bucket")} = ${bucket}`)
         .orderBy(bucket)
 
       return {
@@ -207,9 +207,9 @@ export const dashboardRouter = createTRPCRouter({
             count: row.createdCount,
             value: toMoneyString(row.createdValue),
           },
-          approved: {
-            count: row.approvedCount,
-            value: toMoneyString(row.approvedValue),
+          won: {
+            count: row.wonCount,
+            value: toMoneyString(row.wonValue),
           },
         })),
       }

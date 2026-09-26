@@ -1,24 +1,22 @@
 /**
  * The Dashboard: the Organization's landing page (glossary: Dashboard).
  * Besides the Key Insights (`../insights`) it shows the open pipeline
- * value and charts the Quote value created and Customer Approved over a
+ * value and charts the Quote value created and Won over a
  * time range. This module owns those rules; the API aggregates in SQL
  * and the web app draws them.
  */
-import type { QuoteStatus } from "../enums"
+import type { QuoteStage } from "../enums"
 
 /**
- * Open: the Quote hasn't had a customer outcome yet (Draft, Pending
- * Approval, Approved, Rejected, Pending Customer Approval). The Dashboard
- * header sums their Totals.
+ * Open pipeline: every Quote not yet Won or Lost (Draft, In Approval,
+ * Approved, With Customer). The Dashboard header sums their Totals.
  */
-export const OPEN_STATUSES = [
+export const OPEN_STAGES = [
   "draft",
-  "pending_approval",
+  "in_approval",
   "approved",
-  "rejected",
-  "pending_customer_approval",
-] as const satisfies readonly QuoteStatus[]
+  "with_customer",
+] as const satisfies readonly QuoteStage[]
 
 /** How many rows each Dashboard list shows. */
 export const DASHBOARD_LIST_LIMIT = 5

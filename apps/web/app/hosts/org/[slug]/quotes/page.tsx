@@ -20,6 +20,7 @@ export default async function QuotesPage({
   // `?insight=…` / `?status=…`: a Dashboard card's filter (shareable).
   const focus = parseInsightFocus(await searchParams)
   prefetch(trpc.quote.filterOptions.queryOptions())
+  prefetch(trpc.quoteStatus.list.queryOptions())
   prefetch(trpc.user.preferences.queryOptions())
   // "This month" and "today" are UTC days on the server's clock, as in
   // `quote.insights`.

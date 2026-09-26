@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
-import type { QuoteStatus, Role } from "@workspace/domain/enums"
+import { LOCKED_STAGES } from "@workspace/domain/stages"
+import type { QuoteStage, Role } from "@workspace/domain/enums"
 
 import {
+  createApprovalStep,
   createCustomer,
   createMember,
   createOrganization,
@@ -61,7 +62,7 @@ describe("quote.create", () => {
         name: "Pilot",
         description: "Phase one",
         customerId: customer.id,
-        status: "draft",
+        stage: "draft",
         currencyCode: "EUR",
         startDate: "2026-10-01",
         endDate: "2026-12-31",
@@ -197,7 +198,10 @@ describe("quote.nameTaken", () => {
 })
 
 describe("quote.list", () => {
-  /** Three Quotes with distinct names, Customers, owners, statuses and dates. */
+  /**
+   * Three Quotes with distinct names, Customers, owners, Stages and dates;
+   * gamma is a Draft an Approver rejected.
+   */
   async function listSetup(db: Db) {
     const s = await setup(db)
     const initech = await createCustomer(db, s.organization, {
@@ -209,7 +213,7 @@ describe("quote.list", () => {
       customer: initech,
       name: "Alpha rollout",
       description: "Warehouse robots",
-      status: "draft",
+      stage: "draft",
       validUntil: "2000-01-01",
       createdAt: new Date("2026-01-10T12:00:00Z"),
     })
@@ -217,7 +221,7 @@ describe("quote.list", () => {
       owner: s.members.manager.user,
       customer: globex,
       name: "Beta support",
-      status: "approved",
+      stage: "approved",
       validUntil: "2999-01-01",
       createdAt: new Date("2026-02-10T12:00:00Z"),
     })
@@ -225,8 +229,17 @@ describe("quote.list", () => {
       owner: s.members.member.user,
       customer: globex,
       name: "gamma pilot",
-      status: "rejected",
       createdAt: new Date("2026-03-10T12:00:00Z"),
+    })
+    await createApprovalStep(db, gamma, {
+      action: "submit",
+      actor: s.members.member.user,
+      createdAt: new Date("2026-03-11T12:00:00Z"),
+    })
+    await createApprovalStep(db, gamma, {
+      action: "reject",
+      actor: s.members.admin.user,
+      createdAt: new Date("2026-03-12T12:00:00Z"),
     })
     return { ...s, initech, globex, alpha, beta, gamma }
   }
@@ -248,9 +261,22 @@ describe("quote.list", () => {
         id: alpha.id,
         customer: { id: initech.id, name: "Initech" },
         owner: { id: members.member.user.id },
-        status: "draft",
+        stage: "draft",
+        status: { name: "Draft", colour: null },
+        rejected: false,
         currencyCode: "USD",
         total: "0.0000",
+      })
+      expect(result.rows[0]).toMatchObject({
+        name: "gamma pilot",
+        stage: "draft",
+        status: { name: "Draft" },
+        rejected: true,
+      })
+      expect(result.rows[1]).toMatchObject({
+        stage: "approved",
+        status: { name: "Approved" },
+        rejected: false,
       })
     }))
 
@@ -278,13 +304,13 @@ describe("quote.list", () => {
       expect(await search("100%")).toEqual([])
     }))
 
-  it("filters by statuses, Customer, created date range and owner", () =>
+  it("filters by Stages, Customer, created date range and owner", () =>
     withTestDb(async (db) => {
       const { caller, globex } = await listSetup(db)
       const list = async (
         input: Parameters<ReturnType<typeof caller>["quote"]["list"]>[0]
       ) => names(await caller("member").quote.list(input))
-      expect(await list({ statuses: ["draft", "rejected"] })).toEqual([
+      expect(await list({ stages: ["draft"] })).toEqual([
         "gamma pilot",
         "Alpha rollout",
       ])
@@ -301,7 +327,7 @@ describe("quote.list", () => {
         "Alpha rollout",
       ])
       expect(
-        await list({ owner: "mine", statuses: ["rejected"], search: "gam" })
+        await list({ owner: "mine", rejected: true, search: "gam" })
       ).toEqual(["gamma pilot"])
     }))
 
@@ -317,30 +343,67 @@ describe("quote.list", () => {
       expect(await list(undefined, "2998-12-31")).toEqual(["Alpha rollout"])
     }))
 
-  it("counts every status under the other filters, for the status tabs", () =>
+  it("filters by Quote Status, grouped as the Status filter offers them", () =>
+    withTestDb(async (db) => {
+      const { caller } = await listSetup(db)
+      const statuses = await caller("member").quoteStatus.list()
+      const id = (name: string) => statuses.find((s) => s.name === name)!.id
+      const list = async (statusIds: string[]) =>
+        names(await caller("member").quote.list({ statusIds }))
+      expect(await list([id("Approved")])).toEqual(["Beta support"])
+      expect(await list([id("Draft"), id("Approved")])).toEqual([
+        "gamma pilot",
+        "Beta support",
+        "Alpha rollout",
+      ])
+      expect(await list([id("Sent")])).toEqual([])
+    }))
+
+  it("filters Rejected Quotes in or out", () =>
+    withTestDb(async (db) => {
+      const { caller } = await listSetup(db)
+      const list = async (rejected: boolean) =>
+        names(await caller("member").quote.list({ rejected }))
+      expect(await list(true)).toEqual(["gamma pilot"])
+      expect(await list(false)).toEqual(["Beta support", "Alpha rollout"])
+    }))
+
+  it("ends Rejected at the next Submission", () =>
+    withTestDb(async (db) => {
+      const { caller, gamma } = await listSetup(db)
+      await db
+        .update(quotes)
+        .set({ total: "100" })
+        .where(eq(quotes.id, gamma.id))
+      expect(
+        (await caller("member").quote.byId({ id: gamma.id })).rejected
+      ).toBe(true)
+      await caller("member").quote.submit({ id: gamma.id })
+      await caller("admin").quote.recall({ id: gamma.id })
+      expect(await caller("member").quote.byId({ id: gamma.id })).toMatchObject(
+        { stage: "draft", rejected: false }
+      )
+    }))
+
+  it("counts every Stage under the other filters", () =>
     withTestDb(async (db) => {
       const { caller, globex } = await listSetup(db)
-      const all = await caller("member").quote.list({ statuses: ["draft"] })
-      expect(all.total).toBe(1)
-      expect(all.statusCounts).toEqual({
-        draft: 1,
-        pending_approval: 0,
+      const all = await caller("member").quote.list({ stages: ["draft"] })
+      expect(all.total).toBe(2)
+      expect(all.stageCounts).toEqual({
+        draft: 2,
+        in_approval: 0,
         approved: 1,
-        rejected: 1,
-        pending_customer_approval: 0,
-        customer_approved: 0,
-        customer_rejected: 0,
+        with_customer: 0,
+        won: 0,
+        lost: 0,
       })
       const onGlobex = await caller("member").quote.list({
         customerId: globex.id,
-        statuses: ["approved", "rejected"],
+        stages: ["approved"],
       })
-      expect(onGlobex.total).toBe(2)
-      expect(onGlobex.statusCounts).toMatchObject({
-        draft: 0,
-        approved: 1,
-        rejected: 1,
-      })
+      expect(onGlobex.total).toBe(1)
+      expect(onGlobex.stageCounts).toMatchObject({ draft: 1, approved: 1 })
     }))
 
   it("rejects a created range that ends before it starts", () =>
@@ -457,7 +520,9 @@ describe("quote.byId", () => {
         id: quote.id,
         name: "Pilot",
         description: "First phase",
-        status: "draft",
+        stage: "draft",
+        status: { name: "Draft", colour: null },
+        rejected: false,
         locked: false,
         customer: { id: customer.id, name: "Initech", archived: false },
         owner: {
@@ -489,7 +554,7 @@ describe("quote.byId", () => {
       const { organization, members, caller } = await setup(db)
       const quote = await createQuote(db, organization, {
         owner: members.member.user,
-        status: "pending_approval",
+        stage: "in_approval",
       })
       const view = await caller("admin").quote.byId({ id: quote.id })
       expect(view.locked).toBe(true)
@@ -641,14 +706,14 @@ describe("quote.rename and quote.setDescription", () => {
       })
     }))
 
-  it.each(LOCKED_STATUSES)(
+  it.each(LOCKED_STAGES)(
     "refuses edits while %s, even for Admins",
-    (status: QuoteStatus) =>
+    (stage: QuoteStage) =>
       withTestDb(async (db) => {
         const { organization, members, caller } = await setup(db)
         const quote = await createQuote(db, organization, {
           owner: members.admin.user,
-          status,
+          stage,
           name: "Locked",
         })
         await expect(
@@ -665,15 +730,20 @@ describe("quote.rename and quote.setDescription", () => {
       })
   )
 
-  it.each<QuoteStatus>(["draft", "rejected", "customer_rejected"])(
-    "allows edits while %s",
-    (status) =>
+  it.each([null, "reject", "customer_rejected"] as const)(
+    "allows edits in Draft (latest step: %s)",
+    (action) =>
       withTestDb(async (db) => {
         const { organization, members, caller } = await setup(db)
         const quote = await createQuote(db, organization, {
           owner: members.member.user,
-          status,
         })
+        if (action) {
+          await createApprovalStep(db, quote, {
+            action,
+            actor: members.admin.user,
+          })
+        }
         await expect(
           caller("member").quote.rename({ id: quote.id, name: "Open" })
         ).resolves.toMatchObject({ name: "Open" })

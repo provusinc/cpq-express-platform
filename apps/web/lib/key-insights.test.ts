@@ -15,9 +15,11 @@ describe("parseInsightFocus", () => {
     [{ insight: "low_margin" }, { kind: "insight", key: "low_margin" }],
     [{ insight: ["rejected", "x"] }, { kind: "insight", key: "rejected" }],
     [{ insight: "nope" }, null],
-    [{ status: "draft" }, { kind: "status", status: "draft" }],
+    [{ status: "in_approval" }, { kind: "stage", stage: "in_approval" }],
     [{ status: "DRAFT" }, null],
-    // An insight wins over a status.
+    // The old status names are not Stages.
+    [{ status: "pending_approval" }, null],
+    // An insight wins over a Stage.
     [
       { insight: "this_month", status: "draft" },
       { kind: "insight", key: "this_month" },
@@ -36,7 +38,7 @@ describe("insightFocusQuery / insightFocusKey", () => {
       "?insight=pending_approval",
     ],
     [
-      { kind: "status", status: "approved" },
+      { kind: "stage", stage: "approved" },
       "?status=approved",
       "?status=approved",
     ],
@@ -58,44 +60,33 @@ describe("insightListFilters", () => {
   const days = { thisMonthFrom: month, today: "2026-09-23" }
   it.each([
     [null, {}],
-    [
-      { kind: "insight", key: "pending_approval" },
-      { statuses: ["pending_approval"] },
-    ],
+    [{ kind: "insight", key: "pending_approval" }, { stages: ["in_approval"] }],
     [
       { kind: "insight", key: "high_value_pipeline" },
       {
-        statuses: ["draft", "pending_approval"],
+        stages: ["draft", "in_approval"],
         sort: { by: "total", direction: "desc" },
       },
     ],
     [
       { kind: "insight", key: "low_margin" },
       {
-        statuses: ["draft", "pending_approval", "pending_customer_approval"],
+        stages: ["draft", "in_approval"],
         marginBelow: "15",
       },
     ],
     [
       { kind: "insight", key: "valid_until_soon" },
       {
-        statuses: [
-          "draft",
-          "pending_approval",
-          "approved",
-          "pending_customer_approval",
-        ],
+        stages: ["draft", "in_approval", "approved", "with_customer"],
         validUntilFrom: "2026-09-23",
         validUntilTo: "2026-10-07",
         sort: { by: "validUntil", direction: "asc" },
       },
     ],
     [{ kind: "insight", key: "this_month" }, { createdFrom: month }],
-    [
-      { kind: "insight", key: "rejected" },
-      { statuses: ["rejected", "customer_rejected"] },
-    ],
-    [{ kind: "status", status: "approved" }, { statuses: ["approved"] }],
+    [{ kind: "insight", key: "rejected" }, { rejected: true }],
+    [{ kind: "stage", stage: "won" }, { stages: ["won"] }],
   ] as Array<[InsightFocus | null, object]>)("%j", (focus, expected) => {
     expect(insightListFilters(focus, days)).toEqual(expected)
   })

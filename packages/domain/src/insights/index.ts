@@ -1,11 +1,11 @@
 /**
  * Key Insights: the cards at the top of the Dashboard that say what needs
  * attention (glossary: Key Insight). This module owns each card's
- * definition (which statuses it counts, the low-margin threshold) and its
+ * definition (which Stages it counts, the low-margin threshold) and its
  * severity; the API counts the Quotes and the web app colours the cards.
  * Thresholds are carried over as-is from the Salesforce edition.
  */
-import type { QuoteStatus } from "../enums"
+import type { QuoteStage } from "../enums"
 import { Decimal } from "../money"
 
 /** The Key Insight cards, in display order. */
@@ -33,57 +33,48 @@ export const INSIGHT_LABELS: Record<InsightKey, string> = {
   rejected: "Rejected",
 }
 
-/** Pending approval counts Quotes in this status. */
-export const PENDING_APPROVAL_STATUSES = [
-  "pending_approval",
-] as const satisfies readonly QuoteStatus[]
+/** Pending approval counts Quotes in this Stage. */
+export const PENDING_APPROVAL_STAGES = [
+  "in_approval",
+] as const satisfies readonly QuoteStage[]
 
-/** High-value pipeline: work not yet approved (Draft + Pending Approval). */
-export const PIPELINE_STATUSES = [
+/** High-value pipeline: work not yet approved (Draft + In Approval). */
+export const PIPELINE_STAGES = [
   "draft",
-  "pending_approval",
-] as const satisfies readonly QuoteStatus[]
-
-/** Rejected: by an Approver or by the customer. */
-export const REJECTED_STATUSES = [
-  "rejected",
-  "customer_rejected",
-] as const satisfies readonly QuoteStatus[]
+  "in_approval",
+] as const satisfies readonly QuoteStage[]
 
 /**
- * Decided statuses: an Approver or the customer has ruled on the Quote
- * (Approved, Rejected, Customer Approved, Customer Rejected), so its margin
- * is no longer actionable. The Salesforce edition excludes the same set.
+ * Glossary: Decided. Past approval (Approved, With Customer, Won, Lost), so
+ * the Quote's margin is no longer actionable. A Rejected Quote is back in
+ * Draft and not Decided.
  */
-export const DECIDED_STATUSES = [
+export const DECIDED_STAGES = [
   "approved",
-  "rejected",
-  "customer_approved",
-  "customer_rejected",
-] as const satisfies readonly QuoteStatus[]
+  "with_customer",
+  "won",
+  "lost",
+] as const satisfies readonly QuoteStage[]
 
 /**
- * Low margin counts Quotes whose margin can still change or matters for a
- * pending decision: every status that isn't decided (Draft, Pending
- * Approval, Pending Customer Approval).
+ * Low margin counts Quotes whose margin can still change: every Stage that
+ * isn't Decided (Draft, Rejected ones included, and In Approval).
  */
-export const LOW_MARGIN_STATUSES = [
+export const LOW_MARGIN_STAGES = [
   "draft",
-  "pending_approval",
-  "pending_customer_approval",
-] as const satisfies readonly QuoteStatus[]
+  "in_approval",
+] as const satisfies readonly QuoteStage[]
 
 /**
- * Valid Until soon counts Quotes whose offer is still in play (not rejected,
- * not a customer outcome): Draft, Pending Approval, Approved and Pending
- * Customer Approval.
+ * Valid Until soon counts Quotes whose offer is still in play (no customer
+ * outcome yet): Draft, In Approval, Approved and With Customer.
  */
-export const VALID_UNTIL_STATUSES = [
+export const VALID_UNTIL_STAGES = [
   "draft",
-  "pending_approval",
+  "in_approval",
   "approved",
-  "pending_customer_approval",
-] as const satisfies readonly QuoteStatus[]
+  "with_customer",
+] as const satisfies readonly QuoteStage[]
 
 /** Valid Until soon: Valid Until from today to this many days ahead. */
 export const VALID_UNTIL_SOON_DAYS = 14
@@ -93,16 +84,16 @@ export const LOW_MARGIN_THRESHOLD = "15"
 
 /**
  * Whether a Quote counts as low-margin: Margin % below the threshold, a
- * Total above zero (an empty Quote has no meaningful margin) and a status
- * that isn't decided.
+ * Total above zero (an empty Quote has no meaningful margin) and a Stage
+ * that isn't Decided.
  */
 export function isLowMargin(quote: {
-  status: QuoteStatus
+  stage: QuoteStage
   total: Decimal.Value
   marginPct: Decimal.Value
 }): boolean {
   return (
-    (LOW_MARGIN_STATUSES as readonly QuoteStatus[]).includes(quote.status) &&
+    (LOW_MARGIN_STAGES as readonly QuoteStage[]).includes(quote.stage) &&
     new Decimal(quote.total).greaterThan(0) &&
     new Decimal(quote.marginPct).lessThan(LOW_MARGIN_THRESHOLD)
   )
@@ -188,17 +179,15 @@ export function validUntilWindow(today: string): { from: string; to: string } {
 
 /**
  * Whether a Quote counts as Valid Until soon on `today`: an offer still in
- * play (`VALID_UNTIL_STATUSES`) whose Valid Until falls in `validUntilWindow`.
- * Valid Until is informational: this never changes the status.
+ * play (`VALID_UNTIL_STAGES`) whose Valid Until falls in `validUntilWindow`.
+ * Valid Until is informational: this never changes the Stage.
  */
 export function isValidUntilSoon(
-  quote: { status: QuoteStatus; validUntil: string | null },
+  quote: { stage: QuoteStage; validUntil: string | null },
   today: string
 ): boolean {
   if (!quote.validUntil) return false
-  if (
-    !(VALID_UNTIL_STATUSES as readonly QuoteStatus[]).includes(quote.status)
-  ) {
+  if (!(VALID_UNTIL_STAGES as readonly QuoteStage[]).includes(quote.stage)) {
     return false
   }
   const { from, to } = validUntilWindow(today)

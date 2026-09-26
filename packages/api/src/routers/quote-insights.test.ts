@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import type { InsightKey } from "@workspace/domain/insights"
 
 import {
+  createApprovalStep,
   createMember,
   createOrganization,
   createQuote,
@@ -24,19 +25,29 @@ async function setup(db: Db) {
     isApprover: true,
   })
   const caller = organizationCaller(db, { organization, user })
-  /** A Quote owned by the Member with the given status and totals. */
-  const quote = (
-    status: QuoteStatus,
+  /**
+   * A Quote owned by the Member in the given Stage with the given totals;
+   * `rejected` / `customer_rejected` is a Draft whose latest Approval Step
+   * is that rejection.
+   */
+  const quote = async (
+    state: QuoteStage | "rejected" | "customer_rejected",
     fields: {
       total?: string
       marginPct?: string
       createdAt?: Date
       validUntil?: string | null
     } = {}
-  ) =>
-    createQuote(db, organization, {
+  ) => {
+    const rejection =
+      state === "rejected"
+        ? "reject"
+        : state === "customer_rejected"
+          ? "customer_rejected"
+          : null
+    const row = await createQuote(db, organization, {
       owner: user,
-      status,
+      stage: rejection ? "draft" : (state as QuoteStage),
       total: fields.total ?? "1000",
       marginPct: fields.marginPct ?? "40",
       ...(fields.createdAt ? { createdAt: fields.createdAt } : {}),
@@ -44,17 +55,18 @@ async function setup(db: Db) {
         ? { validUntil: fields.validUntil }
         : {}),
     })
+    if (rejection) {
+      await createApprovalStep(db, row, { action: rejection, actor: approver })
+    }
+    return row
+  }
   /** Records a submit Approval Step `days` ago. */
   const submitted = (quoteId: string, days: number) =>
-    db.insert(schema.approvalSteps).values({
-      organizationId: organization.id,
-      quoteId,
-      action: "submit",
-      fromStatus: "draft",
-      toStatus: "pending_approval",
-      actorId: user.id,
-      createdAt: daysAgo(days),
-    })
+    createApprovalStep(
+      db,
+      { id: quoteId, organizationId: organization.id },
+      { action: "submit", actor: user, createdAt: daysAgo(days) }
+    )
   return { organization, user, approver, caller, quote, submitted }
 }
 
@@ -88,14 +100,14 @@ describe("quote.insights", () => {
         oldestSubmittedAt: null,
       })
       expect(result.currencyCode).toBe("USD")
-      expect(Object.values(result.statusCounts)).toEqual([0, 0, 0, 0, 0, 0, 0])
+      expect(Object.values(result.stageCounts)).toEqual([0, 0, 0, 0, 0, 0])
       expect(result.recent).toEqual([])
     }))
 
-  it("counts Pending Approval Quotes, their value and the oldest wait from the latest submit step", () =>
+  it("counts Quotes In Approval, their value and the oldest wait from the latest submit step", () =>
     withTestDb(async (db) => {
       const { caller, quote, submitted } = await setup(db)
-      const a = await quote("pending_approval", { total: "100.5" })
+      const a = await quote("in_approval", { total: "100.5" })
       // Submitted 10 days ago, rejected, then resubmitted 4 days ago.
       await submitted(a.id, 10)
       await submitted(a.id, 4)
@@ -128,7 +140,7 @@ describe("quote.insights", () => {
       withTestDb(async (db) => {
         const { caller, quote, submitted } = await setup(db)
         for (let i = 0; i < n; i++) {
-          const q = await quote("pending_approval")
+          const q = await quote("in_approval")
           await submitted(q.id, i === 0 ? days : 0)
         }
         expect(
@@ -137,36 +149,38 @@ describe("quote.insights", () => {
       })
   )
 
-  it("counts Draft + Pending Approval as the pipeline", () =>
+  it("counts Draft (Rejected included) + In Approval as the pipeline", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
       await quote("draft", { total: "100" })
-      await quote("draft", { total: "200" })
-      await quote("pending_approval", { total: "300" })
+      await quote("rejected", { total: "200" })
+      await quote("in_approval", { total: "300" })
       await quote("approved", { total: "5000" })
-      await quote("rejected", { total: "5000" })
-      await quote("pending_customer_approval", { total: "5000" })
+      await quote("with_customer", { total: "5000" })
+      await quote("won", { total: "5000" })
+      await quote("lost", { total: "5000" })
       expect(
         card(await caller.quote.insights(), "high_value_pipeline")
       ).toMatchObject({ count: 3, value: "600.0000", severity: "info" })
     }))
 
-  it("counts low-margin Quotes: Margin % < 15, Total > 0, not decided", () =>
+  it("counts low-margin Quotes: Margin % < 15, Total > 0, not Decided", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
       await quote("draft", { total: "100", marginPct: "14.9999" })
-      await quote("pending_approval", { total: "200", marginPct: "-5" })
-      await quote("pending_customer_approval", { total: "300", marginPct: "0" })
-      // Not counted: at the threshold, no Total, or decided.
+      await quote("in_approval", { total: "200", marginPct: "-5" })
+      // A Rejected Quote is back in Draft: not Decided.
+      await quote("customer_rejected", { total: "300", marginPct: "0" })
+      // Not counted: at the threshold, no Total, or Decided.
       await quote("draft", { total: "100", marginPct: "15" })
       await quote("draft", { total: "0", marginPct: "0" })
-      for (const status of [
+      for (const stage of [
         "approved",
-        "rejected",
-        "customer_approved",
-        "customer_rejected",
+        "with_customer",
+        "won",
+        "lost",
       ] as const) {
-        await quote(status, { total: "100", marginPct: "5" })
+        await quote(stage, { total: "100", marginPct: "5" })
       }
       expect(card(await caller.quote.insights(), "low_margin")).toMatchObject({
         count: 3,
@@ -182,16 +196,13 @@ describe("quote.insights", () => {
         new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, 10)
       await quote("draft", { total: "10", validUntil: day(0) })
       await quote("approved", { total: "20", validUntil: day(7) })
-      await quote("pending_customer_approval", {
-        total: "30",
-        validUntil: day(14),
-      })
+      await quote("with_customer", { total: "30", validUntil: day(14) })
       // Not counted: passed, too far out, none, or no longer in play.
       await quote("draft", { total: "1", validUntil: day(-1) })
       await quote("draft", { total: "1", validUntil: day(15) })
       await quote("draft", { total: "1", validUntil: null })
-      await quote("rejected", { total: "1", validUntil: day(3) })
-      await quote("customer_approved", { total: "1", validUntil: day(3) })
+      await quote("won", { total: "1", validUntil: day(3) })
+      await quote("lost", { total: "1", validUntil: day(3) })
       const result = await caller.quote.insights()
       expect(result.today).toBe(day(0))
       expect(card(result, "valid_until_soon")).toMatchObject({
@@ -226,35 +237,41 @@ describe("quote.insights", () => {
   it.each([
     [2, "info"],
     [3, "warning"],
-  ] as const)("counts Rejected + Customer Rejected (%i → %s)", (n, severity) =>
-    withTestDb(async (db) => {
-      const { caller, quote } = await setup(db)
-      await quote("customer_rejected", { total: "50" })
-      for (let i = 1; i < n; i++) await quote("rejected", { total: "50" })
-      await quote("approved")
-      expect(card(await caller.quote.insights(), "rejected")).toMatchObject({
-        count: n,
-        value: (50 * n).toFixed(4),
-        severity,
+  ] as const)(
+    "counts Rejected Quotes, by an Approver or the customer (%i → %s)",
+    (n, severity) =>
+      withTestDb(async (db) => {
+        const { caller, quote, submitted } = await setup(db)
+        await quote("customer_rejected", { total: "50" })
+        for (let i = 1; i < n; i++) await quote("rejected", { total: "50" })
+        await quote("approved")
+        await quote("draft")
+        // Resubmitted after a rejection: no longer Rejected.
+        const resubmitted = await quote("rejected", { total: "999" })
+        await submitted(resubmitted.id, 0)
+        expect(card(await caller.quote.insights(), "rejected")).toMatchObject({
+          count: n,
+          value: (50 * n).toFixed(4),
+          severity,
+        })
       })
-    })
   )
 
-  it("counts every status", () =>
+  it("counts every Stage", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db)
       await quote("draft")
       await quote("draft")
       await quote("approved")
       await quote("customer_rejected")
-      expect((await caller.quote.insights()).statusCounts).toEqual({
-        draft: 2,
-        pending_approval: 0,
+      await quote("won")
+      expect((await caller.quote.insights()).stageCounts).toEqual({
+        draft: 3,
+        in_approval: 0,
         approved: 1,
-        rejected: 0,
-        pending_customer_approval: 0,
-        customer_approved: 0,
-        customer_rejected: 1,
+        with_customer: 0,
+        won: 1,
+        lost: 0,
       })
     }))
 
@@ -289,7 +306,9 @@ describe("quote.insights", () => {
       ])
       expect(recent[1]).toMatchObject({
         name: "Q5",
-        status: "draft",
+        stage: "draft",
+        status: { name: "Draft" },
+        rejected: false,
         currencyCode: "USD",
         customer: { id: mine[5]!.customerId },
       })
@@ -298,22 +317,22 @@ describe("quote.insights", () => {
   it("counts only this Organization's Quotes, and refuses non-members", () =>
     withTestDb(async (db) => {
       const { organization, caller, quote } = await setup(db)
-      await quote("pending_approval", { total: "100" })
+      await quote("in_approval", { total: "100" })
       const globex = await createOrganization(db)
       const { user: outsider } = await createMember(db, globex)
-      for (const status of [
-        "pending_approval",
-        "draft",
-        "rejected",
-        "rejected",
-        "rejected",
-      ] as const) {
-        await createQuote(db, globex, {
+      for (const stage of ["in_approval", "draft", "draft", "draft"] as const) {
+        const theirs = await createQuote(db, globex, {
           owner: outsider,
-          status,
+          stage,
           total: "5000",
           marginPct: "1",
         })
+        if (stage === "draft") {
+          await createApprovalStep(db, theirs, {
+            action: "reject",
+            actor: outsider,
+          })
+        }
       }
       const result = await caller.quote.insights()
       expect(card(result, "pending_approval")).toMatchObject({
@@ -322,7 +341,7 @@ describe("quote.insights", () => {
       })
       expect(card(result, "rejected").count).toBe(0)
       expect(card(result, "low_margin").count).toBe(0)
-      expect(result.statusCounts.draft).toBe(0)
+      expect(result.stageCounts.draft).toBe(0)
       await expect(
         organizationCaller(db, {
           organization,

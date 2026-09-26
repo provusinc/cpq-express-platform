@@ -53,10 +53,10 @@ type Unit = ValueOverTime["unit"]
 /** Both series are money, so they share the one value axis. */
 const config = {
   created: { label: "Created", color: "var(--series-1)" },
-  approved: { label: "Customer Approved", color: "var(--series-2)" },
+  won: { label: "Won", color: "var(--series-2)" },
 } satisfies ChartConfig
 
-const SERIES_KEYS = ["created", "approved"] as const
+const SERIES_KEYS = ["created", "won"] as const
 
 const RANGE_ITEMS = VALUE_RANGES.map((value) => ({
   value,
@@ -89,8 +89,7 @@ const quotes = (n: number) => `${n} ${n === 1 ? "Quote" : "Quotes"}`
 
 /**
  * The Dashboard's one chart, after shadcn's `chart-area-interactive`
- * block: the value of the Quotes created and of those that reached
- * Customer Approved, per day or week of the chosen range, as two
+ * block: the value of the Quotes created and of those Won, per day or week of the chosen range, as two
  * overlaid areas on one money axis (not stacked: they're different
  * Quotes on different dates). The range toggle sits at the card's top
  * right (a Select when the card is narrow); the previous range stays
@@ -109,12 +108,12 @@ export function QuoteValueCard({ currencyCode }: { currencyCode: string }) {
   const rows = (data?.buckets ?? []).map((b) => ({
     start: b.start,
     created: Number(b.created.value),
-    approved: Number(b.approved.value),
+    won: Number(b.won.value),
   }))
   const empty =
     data !== undefined &&
     !isPlaceholderData &&
-    data.buckets.every((b) => b.created.count === 0 && b.approved.count === 0)
+    data.buckets.every((b) => b.created.count === 0 && b.won.count === 0)
   const select = (next: unknown) => {
     if (VALUE_RANGES.includes(next as ValueRange)) setRange(next as ValueRange)
   }
@@ -172,8 +171,7 @@ export function QuoteValueCard({ currencyCode }: { currencyCode: string }) {
         {empty ? (
           <div className="flex h-40 flex-col">
             <TileEmpty icon={<ChartAreaIcon />}>
-              No Quotes created or Customer Approved in the{" "}
-              {label.toLowerCase()}.
+              No Quotes created or Won in the {label.toLowerCase()}.
             </TileEmpty>
           </div>
         ) : (
@@ -277,8 +275,8 @@ export function QuoteValueCard({ currencyCode }: { currencyCode: string }) {
                     {bucketLabel(b.start, data.unit)}:{" "}
                     {wholeMoney(b.created.value, currencyCode)} created in{" "}
                     {quotes(b.created.count)},{" "}
-                    {wholeMoney(b.approved.value, currencyCode)} Customer
-                    Approved in {quotes(b.approved.count)}
+                    {wholeMoney(b.won.value, currencyCode)} Won in{" "}
+                    {quotes(b.won.count)}
                   </li>
                 ))}
               </ul>

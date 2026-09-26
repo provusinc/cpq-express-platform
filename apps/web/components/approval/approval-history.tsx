@@ -42,7 +42,7 @@ const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
 
 /**
  * The Quote's approval history (`quote.approvalHistory`): every Approval
- * Step, newest first, with who did it, when, the status it led to and the
+ * Step, newest first, with who did it, when, the Status it led to and the
  * comment. The Overview tab prefetches it.
  */
 export function ApprovalHistory({ quoteId }: { quoteId: string }) {
@@ -78,7 +78,10 @@ export function ApprovalHistory({ quoteId }: { quoteId: string }) {
                     <span className="text-muted-foreground">
                       by {step.actor.name ?? step.actor.email}
                     </span>
-                    <QuoteStatusBadge status={step.toStatus} />
+                    <QuoteStatusBadge
+                      stage={step.toStage}
+                      status={{ name: step.toStatusName }}
+                    />
                   </div>
                   <time
                     className="text-xs text-muted-foreground"

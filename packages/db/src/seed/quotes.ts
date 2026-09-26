@@ -1,14 +1,16 @@
 import { and, eq, sql } from "drizzle-orm"
 
-import type { QuoteStatus, TimePeriod } from "@workspace/domain/enums"
+import type { QuoteStage, TimePeriod } from "@workspace/domain/enums"
 
 import type { Db } from "../index"
+import { organizationScope } from "../organization-scope"
+import { stageEntryStatus } from "../quote-statuses"
 import { customers, quotes, users } from "../schema"
 import type { Organization } from "../schema"
 
 /**
  * Demo Quotes for `acme` (their Line Items and Quote Discounts are in
- * `seed/line-items.ts`), spread across owners, Customers, statuses and the
+ * `seed/line-items.ts`), spread across owners, Customers, Stages (and Rejected Drafts) and the
  * last twelve months so the list's filters, the Role rules, the lock and
  * the Dashboard's charts can be tried straight away. One has a Valid Until
  * in the past (highlighted in the list); a few lapse within two weeks of
@@ -19,12 +21,23 @@ import type { Organization } from "../schema"
  */
 const DAY_MS = 86_400_000
 
+/** A demo Quote's Stage, or a Rejected Draft (by the Approver or the customer). */
+export type SeedQuoteState = QuoteStage | "rejected" | "customer_rejected"
+
+/** The Stage a seed state is in: a Rejected Quote is a Draft. */
+export const seedStage = (state: SeedQuoteState): QuoteStage =>
+  state === "rejected" || state === "customer_rejected" ? "draft" : state
+
 export const SEED_QUOTES: readonly {
   name: string
   description?: string
   customer: string
   owner: string
-  status: QuoteStatus
+  /**
+   * Where the demo Quote stands: a Stage, or a Draft that was Rejected by
+   * the Approver or the customer (its approval history says which).
+   */
+  state: SeedQuoteState
   startDate: string
   endDate: string
   validUntil: string | null
@@ -47,7 +60,7 @@ export const SEED_QUOTES: readonly {
     description: "Phase one: discovery, design and the first two sites.",
     customer: "Acme Corp Express CPQ Demo",
     owner: "member@acme.test",
-    status: "draft",
+    state: "draft",
     startDate: "2026-10-01",
     endDate: "2027-03-31",
     validUntil: "2026-11-30",
@@ -59,7 +72,7 @@ export const SEED_QUOTES: readonly {
     description: "Twelve months of premium support.",
     customer: "TechStart Express CPQ Demo",
     owner: "member@acme.test",
-    status: "pending_approval",
+    state: "in_approval",
     startDate: "2026-11-01",
     endDate: "2027-10-31",
     validUntil: "2026-12-15",
@@ -70,7 +83,7 @@ export const SEED_QUOTES: readonly {
     createdDaysAgo: 26,
     customer: "Global Mfg Express",
     owner: "manager@acme.test",
-    status: "approved",
+    state: "approved",
     startDate: "2026-09-01",
     endDate: "2027-02-28",
     validUntil: "2026-10-31",
@@ -82,7 +95,7 @@ export const SEED_QUOTES: readonly {
     description: "Migrate the legacy records system.",
     customer: "Healthcare Express",
     owner: "manager@acme.test",
-    status: "rejected",
+    state: "rejected",
     startDate: "2026-10-05",
     endDate: "2026-12-18",
     validUntil: "2026-09-01",
@@ -93,7 +106,7 @@ export const SEED_QUOTES: readonly {
     createdDaysAgo: 14,
     customer: "Retail Express",
     owner: "admin@acme.test",
-    status: "pending_customer_approval",
+    state: "with_customer",
     startDate: "2026-10-12",
     endDate: "2026-10-30",
     validUntil: "2026-11-15",
@@ -105,7 +118,7 @@ export const SEED_QUOTES: readonly {
     noHistory: true,
     customer: "Acme Corp Express CPQ Demo",
     owner: "approver@acme.test",
-    status: "customer_approved",
+    state: "won",
     startDate: "2026-07-01",
     endDate: "2026-12-31",
     validUntil: null,
@@ -116,7 +129,7 @@ export const SEED_QUOTES: readonly {
     createdDaysAgo: 55,
     customer: "TechStart Express CPQ Demo",
     owner: "admin@acme.test",
-    status: "customer_rejected",
+    state: "customer_rejected",
     startDate: "2026-11-02",
     endDate: "2026-12-11",
     validUntil: "2026-12-01",
@@ -131,7 +144,7 @@ export const SEED_QUOTES: readonly {
         "Global Mfg – Predictive maintenance",
         "Global Mfg Express",
         "manager@acme.test",
-        "customer_approved",
+        "won",
         320,
         280,
         null,
@@ -140,7 +153,7 @@ export const SEED_QUOTES: readonly {
         "Retail – Loyalty app",
         "Retail Express",
         "member@acme.test",
-        "customer_approved",
+        "won",
         60,
         -14,
         null,
@@ -158,7 +171,7 @@ export const SEED_QUOTES: readonly {
         "TechStart – Cloud migration",
         "TechStart Express CPQ Demo",
         "manager@acme.test",
-        "customer_approved",
+        "won",
         130,
         55,
         null,
@@ -167,7 +180,7 @@ export const SEED_QUOTES: readonly {
         "Acme Corp – Data warehouse",
         "Acme Corp Express CPQ Demo",
         "member@acme.test",
-        "customer_approved",
+        "won",
         100,
         25,
         null,
@@ -203,7 +216,7 @@ export const SEED_QUOTES: readonly {
         "Healthcare – Compliance audit",
         "Healthcare Express",
         "member@acme.test",
-        "pending_approval",
+        "in_approval",
         95,
         0,
         10,
@@ -212,7 +225,7 @@ export const SEED_QUOTES: readonly {
         "TechStart – Pen test",
         "TechStart Express CPQ Demo",
         "member@acme.test",
-        "customer_approved",
+        "won",
         40,
         0,
         null,
@@ -230,7 +243,7 @@ export const SEED_QUOTES: readonly {
         "Acme Corp – Support renewal",
         "Acme Corp Express CPQ Demo",
         "admin@acme.test",
-        "pending_customer_approval",
+        "with_customer",
         45,
         0,
         8,
@@ -248,7 +261,7 @@ export const SEED_QUOTES: readonly {
         "Global Mfg – Line automation phase 2",
         "Global Mfg Express",
         "manager@acme.test",
-        "pending_approval",
+        "in_approval",
         30,
         5,
         20,
@@ -277,7 +290,7 @@ export const SEED_QUOTES: readonly {
       name,
       customer,
       owner,
-      status,
+      state,
       createdDaysAgo,
       historyDaysAgo,
       validInDays,
@@ -285,7 +298,7 @@ export const SEED_QUOTES: readonly {
       name,
       customer,
       owner,
-      status,
+      state,
       startDate: "2026-10-05",
       endDate: "2027-03-26",
       validUntil: null,
@@ -299,8 +312,11 @@ export const SEED_QUOTES: readonly {
 
 export async function seedQuotes(db: Db, organization: Organization) {
   const organizationId = organization.id
+  const scope = organizationScope(db, organizationId)
   const now = Date.now()
   for (const seed of SEED_QUOTES) {
+    const stage = seedStage(seed.state)
+    const status = await stageEntryStatus(scope, stage)
     const {
       customer: customerName,
       owner: email,
@@ -310,7 +326,8 @@ export async function seedQuotes(db: Db, organization: Organization) {
     const values = {
       name: seed.name,
       description: seed.description,
-      status: seed.status,
+      stage,
+      statusId: status.id,
       startDate: seed.startDate,
       endDate: seed.endDate,
       validUntil: seed.validUntil,

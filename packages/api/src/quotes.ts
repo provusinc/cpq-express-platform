@@ -21,10 +21,10 @@
  *    isn't this Organization's;
  * 2. builds the policy's `QuoteFacts` (`ownerRole` is the owner's current
  *    Membership Role, `null` once they were removed) and, for
- *    `quote.delete`, reads the Organization's deletable statuses;
+ *    `quote.delete`, reads the Organization's deletable Stages;
  * 3. asks `can(actor, action, facts, settings)` and turns a refusal into
  *    FORBIDDEN (who is asking: Role, owner, Approver rules) or
- *    PRECONDITION_FAILED (the Quote's state: locked, wrong status, not
+ *    PRECONDITION_FAILED (the Quote's state: locked, wrong Stage, not
  *    deletable, Total not positive), with the policy's message.
  *
  * `fn` then receives a `QuoteCommand`: the transaction's `scope`, the locked
@@ -39,9 +39,10 @@
  */
 import { TRPCError } from "@trpc/server"
 
-import { eq, recomputeQuoteTotals, schema } from "@workspace/db"
-import type { OrganizationScope, RecomputeResult } from "@workspace/db"
+import { eq, recomputeQuoteTotals, schema, sql } from "@workspace/db"
+import type { OrganizationScope, RecomputeResult, SQL } from "@workspace/db"
 import type { Role } from "@workspace/domain/enums"
+import { REJECTION_ACTIONS } from "@workspace/domain/stages"
 import { can } from "@workspace/domain/policy"
 import type {
   Actor,
@@ -94,8 +95,8 @@ export interface QuoteCommand {
 /** Refusals about the Quote's state rather than about who is asking. */
 const PRECONDITION_REASONS: readonly DenialReason[] = [
   "locked",
-  "wrong_status",
-  "status_not_deletable",
+  "wrong_stage",
+  "stage_not_deletable",
   "total_missing",
   "total_zero",
   "total_negative",
@@ -129,14 +130,46 @@ export async function ownerRole(
 /** The policy's facts about `quote`. */
 export async function quoteFacts(
   scope: OrganizationScope,
-  quote: Pick<QuoteRow, "ownerId" | "status" | "total">
+  quote: Pick<QuoteRow, "ownerId" | "stage" | "total">
 ): Promise<QuoteFacts> {
   return {
     ownerId: quote.ownerId,
     ownerRole: await ownerRole(scope, quote.ownerId),
-    status: quote.status,
+    stage: quote.stage,
     total: quote.total,
   }
+}
+
+/**
+ * Glossary: Rejected, in SQL, for the `quotes` row of the surrounding query:
+ * the Quote is in Draft and its latest Approval Step is a rejection (by an
+ * Approver or the customer; the domain's `isRejected`). Select it
+ * (`rejected: quoteRejected`) or filter by it. Qualified by hand: drizzle
+ * leaves columns bare in a single-table query, which the correlated
+ * subquery would misread.
+ */
+export const quoteRejected: SQL<boolean> = sql<boolean>`("quotes"."stage" = 'draft' and coalesce((
+  select latest."action" in (${sql.join(
+    REJECTION_ACTIONS.map((action) => sql`${action}`),
+    sql`, `
+  )})
+  from "approval_steps" latest
+  where latest."organization_id" = "quotes"."organization_id"
+    and latest."quote_id" = "quotes"."id"
+  order by latest."created_at" desc, latest."id" desc
+  limit 1
+), false))`
+
+/** Whether one Quote is Rejected (`quoteRejected` for a single row). */
+export async function isQuoteRejected(
+  scope: OrganizationScope,
+  quoteId: string
+): Promise<boolean> {
+  const [row] = await scope.db
+    .select({ rejected: quoteRejected })
+    .from(quotes)
+    .where(scope.where(quotes, eq(quotes.id, quoteId)))
+  return row?.rejected ?? false
 }
 
 /** The settings `can` reads for `action` (only delete needs any). */
@@ -145,8 +178,8 @@ async function policySettings(
   action: QuoteAction
 ): Promise<PolicySettings | undefined> {
   if (action !== "quote.delete") return undefined
-  const { deletableStatuses } = await getOrganizationSettings(scope)
-  return { deletableStatuses }
+  const { deletableStages } = await getOrganizationSettings(scope)
+  return { deletableStages }
 }
 
 /**

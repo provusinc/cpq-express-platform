@@ -120,7 +120,7 @@ const TRANSITIONS: Record<
     field: "Note",
     title: "Record customer approval",
     description:
-      "The customer accepted this Quote. Customer Approved is final: the Quote stays locked for good.",
+      "The customer accepted this Quote. It is Won, which is final: the Quote stays locked for good.",
     placeholder: "Note (optional)",
     done: "Customer approval recorded",
     variant: "default",
@@ -131,7 +131,7 @@ const TRANSITIONS: Record<
     field: "Note",
     title: "Record customer rejection",
     description:
-      "The customer turned this Quote down. It unlocks for editing and can be submitted for approval again.",
+      "The customer turned this Quote down. It goes back to Draft, marked Rejected, so it can be revised and submitted for approval again.",
     placeholder: "Why the customer rejected it (optional)",
     done: "Customer rejection recorded",
     variant: "destructive",
@@ -162,9 +162,9 @@ export interface LifecycleAction {
  * The Quote's lifecycle actions for the viewer, per `quote.permissions`:
  * Submit (the Owner; blocked with the reason when the Total isn't
  * positive), Approve / Reject (Approvers, never on their own Quote), Recall
- * (the Owner or an Admin while Pending Approval), Mark as Sent (the Owner or
+ * (the Owner or an Admin while In Approval), Mark as Sent (the Owner or
  * an Admin while Approved; captures a Quote Document) and the customer
- * outcome (the Owner or an Admin while Pending Customer Approval). The next
+ * outcome (the Owner or an Admin while With Customer). The next
  * step forward is `primary` (the header's one primary button), the rest are
  * `secondary` (its "…" menu). `start(transition)` opens that transition's
  * dialog (an optional comment, then the command); render `dialog`.

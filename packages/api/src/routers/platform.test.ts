@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
 
+import { eq, schema } from "@workspace/db"
+import { QUOTE_STAGES } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import { RESERVED_SLUGS } from "@workspace/domain/organizations"
 
 import {
@@ -77,6 +80,36 @@ describe("platform.createOrganization", () => {
       })
       expect(invitation).toBeNull()
       expect(mailer.outbox).toEqual([])
+    }))
+
+  it("gives the new Organization the default Quote Statuses, one per Stage", () =>
+    withTestDb(async (db) => {
+      const { caller } = await platformCaller(db)
+      const { organization } = await caller.platform.createOrganization({
+        name: "Initech",
+        slug: "initech",
+        currencyCode: "USD",
+      })
+      const statuses = await db
+        .select()
+        .from(schema.quoteStatuses)
+        .where(eq(schema.quoteStatuses.organizationId, organization.id))
+      expect(
+        statuses
+          .map((s) => [s.stage, s.name, s.sequence, s.colour])
+          .sort(
+            (a, b) =>
+              QUOTE_STAGES.indexOf(a[0] as QuoteStage) -
+              QUOTE_STAGES.indexOf(b[0] as QuoteStage)
+          )
+      ).toEqual([
+        ["draft", "Draft", 0, null],
+        ["in_approval", "Pending Approval", 0, null],
+        ["approved", "Approved", 0, null],
+        ["with_customer", "Sent", 0, null],
+        ["won", "Won", 0, null],
+        ["lost", "Lost", 0, null],
+      ])
     }))
 
   it.each([...RESERVED_SLUGS])("rejects the reserved slug %s", (slug) =>

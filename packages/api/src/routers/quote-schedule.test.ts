@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { asc, eq, inArray, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
+import type { QuoteStage } from "@workspace/domain/enums"
+import { LOCKED_STAGES } from "@workspace/domain/stages"
 
 import {
   createCatalogItem,
@@ -13,6 +13,7 @@ import {
   createResourceRole,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 
@@ -401,12 +402,12 @@ describe("lineItem.update start on a planner-managed line", () => {
 })
 
 describe("permissions, lock and isolation", () => {
-  it.each(LOCKED_STATUSES)(
+  it.each(LOCKED_STAGES)(
     "refuses date and Time Period changes while %s, preview included",
-    (status: QuoteStatus) =>
+    (stage: QuoteStage) =>
       withTestDb(async (db) => {
         const { caller, quote } = await setup(db)
-        await db.update(quotes).set({ status }).where(eq(quotes.id, quote.id))
+        await setQuoteStage(db, quote, stage)
         const before = await snapshot(db, quote.id)
         for (const attempt of [
           () =>

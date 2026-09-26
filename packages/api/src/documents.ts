@@ -23,7 +23,15 @@
  */
 import { TRPCError } from "@trpc/server"
 
-import { and, asc, eq, max, schema, uuidv7 } from "@workspace/db"
+import {
+  and,
+  asc,
+  eq,
+  findQuoteStatus,
+  max,
+  schema,
+  uuidv7,
+} from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
 import type { DocumentSettings } from "@workspace/domain/documents"
 import type { Actor } from "@workspace/domain/policy"
@@ -97,6 +105,7 @@ export async function buildQuoteDocumentSnapshot(
     lineRows,
     milestones,
     labels,
+    status,
   ] = await Promise.all([
     scope.findMany(customers, {
       where: eq(customers.id, quote.customerId),
@@ -141,6 +150,7 @@ export async function buildQuoteDocumentSnapshot(
     }),
     loadMilestones(scope, quote.id),
     getLabels(scope),
+    findQuoteStatus(scope, quote.statusId),
   ])
   return {
     schemaVersion: 1,
@@ -150,7 +160,8 @@ export async function buildQuoteDocumentSnapshot(
       id: quote.id,
       name: quote.name,
       description: quote.description,
-      status: quote.status,
+      stage: quote.stage,
+      status: status?.name ?? "",
       startDate: quote.startDate,
       endDate: quote.endDate,
       validUntil: quote.validUntil,

@@ -289,7 +289,7 @@ describe("quoteDocument.generate", () => {
       const { caller, organization, members } = await setup(db)
       const approved = await createQuote(db, organization, {
         owner: members.otherMember.user,
-        status: "approved",
+        stage: "approved",
       })
       for (const who of ["member", "manager", "admin"] as const) {
         await expect(
@@ -642,6 +642,9 @@ describe("versions under concurrency", () => {
       await root
         .delete(memberships)
         .where(eq(memberships.organizationId, organization.id))
+      await root
+        .delete(schema.quoteStatuses)
+        .where(eq(schema.quoteStatuses.organizationId, organization.id))
       await root
         .delete(organizations)
         .where(eq(organizations.id, organization.id))

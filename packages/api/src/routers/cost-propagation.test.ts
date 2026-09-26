@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
 
 import {
@@ -13,6 +13,7 @@ import {
   createResourceRole,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 
@@ -39,11 +40,8 @@ async function setup(db: Db) {
     billRate: "150",
     costRate: "100",
   })
-  /** A Quote of the Member's with one Gateway (qty 1) and one Architect line, then set to `status`. */
-  const quoteWithLines = async (
-    status: QuoteStatus = "draft",
-    name?: string
-  ) => {
+  /** A Quote of the Member's with one Gateway (qty 1) and one Architect line, then set to `stage`. */
+  const quoteWithLines = async (stage: QuoteStage = "draft", name?: string) => {
     const quote = await createQuote(db, organization, {
       owner: member.user,
       ...(name ? { name } : {}),
@@ -55,9 +53,7 @@ async function setup(db: Db) {
         { sourceKind: "resource_role", id: role.id },
       ],
     })
-    if (status !== "draft") {
-      await db.update(quotes).set({ status }).where(eq(quotes.id, quote.id))
-    }
+    if (stage !== "draft") await setQuoteStage(db, quote, stage)
     return quote
   }
   return {
@@ -132,34 +128,29 @@ describe("Cost Propagation from a Catalog Item", () => {
       ])
     }))
 
-  it.each([
-    "pending_approval",
-    "approved",
-    "rejected",
-    "pending_customer_approval",
-    "customer_approved",
-    "customer_rejected",
-  ] as const)("leaves %s Quotes untouched", (status) =>
-    withTestDb(async (db) => {
-      const { admin, as, product, quoteWithLines } = await setup(db)
-      const draft = await quoteWithLines("draft", "Draft one")
-      const other = await quoteWithLines(status, "Other")
-      const before = {
-        quote: await quoteRow(db, other.id),
-        lines: await linesOf(db, other.id),
-      }
-      const result = await as(admin).catalogItem.update({
-        id: product.id,
-        cost: "10",
+  it.each(["in_approval", "approved", "with_customer", "won", "lost"] as const)(
+    "leaves %s Quotes untouched",
+    (stage) =>
+      withTestDb(async (db) => {
+        const { admin, as, product, quoteWithLines } = await setup(db)
+        const draft = await quoteWithLines("draft", "Draft one")
+        const other = await quoteWithLines(stage, "Other")
+        const before = {
+          quote: await quoteRow(db, other.id),
+          lines: await linesOf(db, other.id),
+        }
+        const result = await as(admin).catalogItem.update({
+          id: product.id,
+          cost: "10",
+        })
+        expect(result.costPropagation).toEqual({ quotes: 1, lineItems: 1 })
+        expect({
+          quote: await quoteRow(db, other.id),
+          lines: await linesOf(db, other.id),
+        }).toEqual(before)
+        expect(await logOf(db, other.id)).toEqual([])
+        expect(await logOf(db, draft.id)).toHaveLength(1)
       })
-      expect(result.costPropagation).toEqual({ quotes: 1, lineItems: 1 })
-      expect({
-        quote: await quoteRow(db, other.id),
-        lines: await linesOf(db, other.id),
-      }).toEqual(before)
-      expect(await logOf(db, other.id)).toEqual([])
-      expect(await logOf(db, draft.id)).toHaveLength(1)
-    })
   )
 
   it("never propagates a price change, nor an unchanged cost", () =>

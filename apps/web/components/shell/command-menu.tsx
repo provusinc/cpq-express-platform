@@ -102,14 +102,18 @@ function CommandMenuContent({ close }: { close: () => void }) {
         id: q.id,
         name: q.name,
         customer: q.customer.name,
+        stage: q.stage,
         status: q.status,
+        rejected: q.rejected,
         total: formatMoney(q.total, q.currencyCode),
       }))
     : (recent.data?.recent ?? []).map((q) => ({
         id: q.id,
         name: q.name,
         customer: q.customer.name,
+        stage: q.stage,
         status: q.status,
+        rejected: q.rejected,
         total: formatMoney(q.total, q.currencyCode),
       }))
 
@@ -150,7 +154,11 @@ function CommandMenuContent({ close }: { close: () => void }) {
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {quote.total}
                   </span>
-                  <QuoteStatusBadge status={quote.status} />
+                  <QuoteStatusBadge
+                    stage={quote.stage}
+                    status={quote.status}
+                    rejected={quote.rejected}
+                  />
                 </span>
               </CommandItem>
             ))}

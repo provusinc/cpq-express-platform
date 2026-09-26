@@ -113,6 +113,20 @@
       "when": 1790436424826,
       "tag": "0015_rename_accounts_to_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790442214941,
+      "tag": "0016_quote_stages",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790442294138,
+      "tag": "0017_quote_stages_constraints",
+      "breakpoints": true
     }
   ]
 }

@@ -84,6 +84,11 @@ export function QuoteRowMenu() {
 export const QUOTE_SELECT_COLUMN = "select"
 /** The row menu column: always last, never in the Columns menu. */
 export const QUOTE_ACTIONS_COLUMN = "actions"
+/**
+ * A filter-only column for the Rejected filter (always hidden; the Status
+ * cell shows the marker), never in the Columns menu.
+ */
+export const QUOTE_REJECTED_COLUMN = "rejected"
 
 /** Column id → its name in the header and the Columns menu. */
 export const QUOTE_COLUMN_LABELS = {
@@ -157,7 +162,20 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
     id: "status",
     header: SortableColumnTitle,
     meta: label("status"),
-    cell: ({ row }) => <QuoteStatusBadge status={row.original.status} />,
+    cell: ({ row }) => (
+      <QuoteStatusBadge
+        stage={row.original.stage}
+        status={row.original.status}
+        rejected={row.original.rejected}
+      />
+    ),
+  }),
+  helper.accessor("rejected", {
+    id: QUOTE_REJECTED_COLUMN,
+    header: ColumnTitle,
+    enableHiding: false,
+    enableSorting: false,
+    meta: { label: "Rejected" },
   }),
   helper.accessor("total", {
     id: "total",
@@ -194,7 +212,7 @@ export const quoteColumns: DataTableColumns<QuoteListRow> = [
       row.original.validUntilPassed ? (
         <span
           className="inline-flex items-center gap-1 font-medium text-danger-ink"
-          title="Valid Until has passed. The status doesn't change."
+          title="Valid Until has passed. The Stage doesn't change."
         >
           <CalendarX2Icon className="size-3.5" aria-hidden />
           {formatDate(row.original.validUntil!)}

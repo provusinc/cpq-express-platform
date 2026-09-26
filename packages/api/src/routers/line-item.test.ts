@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
+import type { QuoteStage } from "@workspace/domain/enums"
+import { LOCKED_STAGES } from "@workspace/domain/stages"
 
 import {
   createCatalogItem,
@@ -13,6 +13,7 @@ import {
   createResourceRole,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 import type { TestCaller } from "../test"
@@ -204,7 +205,11 @@ describe("lineItem.add", () => {
       const { organization, members, caller, quote, product } = await setup(db)
       const [phase] = await db
         .insert(phases)
-        .values({ organizationId: organization.id, quoteId: quote.id, name: "Build" })
+        .values({
+          organizationId: organization.id,
+          quoteId: quote.id,
+          name: "Build",
+        })
         .returning()
       const result = await caller("member").lineItem.add({
         quoteId: quote.id,
@@ -786,7 +791,8 @@ describe("permissions and the lock", () => {
           quoteId,
           items: [{ sourceKind: "product", id: ids.productId }],
         }),
-      () => caller.lineItem.update({ quoteId, id: ids.lineId, name: "Changed" }),
+      () =>
+        caller.lineItem.update({ quoteId, id: ids.lineId, name: "Changed" }),
       () => caller.lineItem.restore({ quoteId, undoToken: ids.undoToken }),
       () => caller.lineItem.delete({ quoteId, ids: [ids.lineId] }),
       () =>
@@ -812,16 +818,13 @@ describe("permissions and the lock", () => {
     return { lineId: line.id, productId, undoToken }
   }
 
-  it.each(LOCKED_STATUSES)(
+  it.each(LOCKED_STAGES)(
     "refuses every command while %s, even for Admins",
-    (status: QuoteStatus) =>
+    (stage: QuoteStage) =>
       withTestDb(async (db) => {
         const { caller, quote, product } = await setup(db)
         const ids = await withLines(caller("member"), quote.id, product.id)
-        await db
-          .update(quotes)
-          .set({ status })
-          .where(eq(quotes.id, quote.id))
+        await setQuoteStage(db, quote, stage)
         const before = {
           quote: await quoteRow(db, quote.id),
           lines: await quoteLines(db, quote.id),
@@ -843,23 +846,21 @@ describe("permissions and the lock", () => {
     ["otherManager", "allowed"],
     ["manager", "allowed"],
     ["admin", "allowed"],
-  ] as const)(
-    "on a Member's Quote, %s is %s",
-    (who, expected) =>
-      withTestDb(async (db) => {
-        const { caller, quote, product } = await setup(db)
-        const ids = await withLines(caller("member"), quote.id, product.id)
-        const attempts = everyCommand(caller(who), quote.id, ids)
-        if (expected === "FORBIDDEN") {
-          for (const attempt of attempts) {
-            await expect(attempt()).rejects.toMatchObject({ code: "FORBIDDEN" })
-          }
-        } else {
-          for (const attempt of attempts) {
-            await expect(attempt()).resolves.toBeTruthy()
-          }
+  ] as const)("on a Member's Quote, %s is %s", (who, expected) =>
+    withTestDb(async (db) => {
+      const { caller, quote, product } = await setup(db)
+      const ids = await withLines(caller("member"), quote.id, product.id)
+      const attempts = everyCommand(caller(who), quote.id, ids)
+      if (expected === "FORBIDDEN") {
+        for (const attempt of attempts) {
+          await expect(attempt()).rejects.toMatchObject({ code: "FORBIDDEN" })
         }
-      })
+      } else {
+        for (const attempt of attempts) {
+          await expect(attempt()).resolves.toBeTruthy()
+        }
+      }
+    })
   )
 
   it("lets a Manager edit only their own Quotes among Managers'", () =>

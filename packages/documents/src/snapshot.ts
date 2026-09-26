@@ -10,7 +10,7 @@ import type {
   BillingUnit,
   DiscountKind,
   MilestoneType,
-  QuoteStatus,
+  QuoteStage,
   SourceKind,
   TimePeriod,
 } from "@workspace/domain/enums"
@@ -26,7 +26,9 @@ export interface QuoteDocumentSnapshot {
     id: string
     name: string
     description: string | null
-    status: QuoteStatus
+    /** The Quote Stage and the Quote Status name at the time. */
+    stage: QuoteStage
+    status: string
     startDate: string
     endDate: string
     validUntil: string | null

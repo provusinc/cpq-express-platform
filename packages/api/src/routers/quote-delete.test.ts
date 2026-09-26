@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import { eq, inArray, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { QUOTE_STATUSES } from "@workspace/domain/enums"
+import { QUOTE_STAGES } from "@workspace/domain/enums"
 
 import {
+  createApprovalStep,
   createMember,
   createMemoryStorage,
   createOrganization,
@@ -120,9 +120,6 @@ async function children(db: Db, quoteId: string) {
     ).length,
   }
 }
-
-const setStatus = (db: Db, id: string, status: QuoteStatus) =>
-  db.update(quotes).set({ status }).where(eq(quotes.id, id))
 
 describe("quote.delete", () => {
   it("lets the Owner delete a Draft, cascading to every child row", () =>
@@ -271,38 +268,60 @@ describe("quote.delete", () => {
       expect(await quoteExists(db, quote.id)).toBe(false)
     }))
 
-  it("deletes only in the default deletable statuses (Draft, Rejected)", () =>
+  it("deletes only in the default deletable Stages (Draft; not Lost)", () =>
     withTestDb(async (db) => {
       const { organization, caller, members } = await setup(db)
-      for (const status of QUOTE_STATUSES) {
+      for (const stage of QUOTE_STAGES) {
         const quote = await createQuote(db, organization, {
           owner: members.admin.user,
-          status,
+          stage,
         })
         const attempt = caller("admin").quote.delete({ id: quote.id })
-        if (status === "draft" || status === "rejected") {
+        if (stage === "draft") {
           await attempt
-          expect(await quoteExists(db, quote.id), status).toBe(false)
+          expect(await quoteExists(db, quote.id), stage).toBe(false)
         } else {
-          await expect(attempt, status).rejects.toMatchObject({
+          await expect(attempt, stage).rejects.toMatchObject({
             code: "PRECONDITION_FAILED",
+            message: "Quotes can't be deleted in this Stage.",
           })
-          expect(await quoteExists(db, quote.id), status).toBe(true)
+          expect(await quoteExists(db, quote.id), stage).toBe(true)
         }
       }
     }))
 
-  it("follows the Organization's deletable-status setting", () =>
+  it("deletes a Rejected Draft like any Draft", () =>
     withTestDb(async (db) => {
-      const { caller, quote } = await setup(db)
+      const { caller, quote, members } = await setup(db)
+      await createApprovalStep(db, quote, {
+        action: "reject",
+        actor: members.admin.user,
+      })
+      await caller("member").quote.delete({ id: quote.id })
+      expect(await quoteExists(db, quote.id)).toBe(false)
+    }))
+
+  it("follows the Organization's per-Stage deletable setting", () =>
+    withTestDb(async (db) => {
+      const { organization, caller, quote, members } = await setup(db)
       await caller("admin").settings.updateQuoting({
         hoursPerDay: "8",
-        deletableStatuses: ["customer_rejected"],
+        deletableStages: ["lost"],
       })
       await expect(
         caller("member").quote.delete({ id: quote.id })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
-      await setStatus(db, quote.id, "customer_rejected")
+      const lost = await createQuote(db, organization, {
+        owner: members.member.user,
+        stage: "lost",
+      })
+      await caller("member").quote.delete({ id: lost.id })
+      expect(await quoteExists(db, lost.id)).toBe(false)
+      // Both on: Draft and Lost.
+      await caller("admin").settings.updateQuoting({
+        hoursPerDay: "8",
+        deletableStages: ["draft", "lost"],
+      })
       await caller("member").quote.delete({ id: quote.id })
       expect(await quoteExists(db, quote.id)).toBe(false)
     }))
@@ -325,7 +344,7 @@ describe("quote.deleteMany", () => {
       const approved = await createQuote(db, organization, {
         owner: members.member.user,
         name: "Signed deal",
-        status: "approved",
+        stage: "approved",
       })
       const someoneElses = await createQuote(db, organization, {
         owner: members.otherMember.user,
@@ -334,7 +353,10 @@ describe("quote.deleteMany", () => {
       const rejected = await createQuote(db, organization, {
         owner: members.member.user,
         name: "Lost",
-        status: "rejected",
+      })
+      await createApprovalStep(db, rejected, {
+        action: "reject",
+        actor: members.admin.user,
       })
 
       const result = await caller("member").quote.deleteMany({
@@ -348,7 +370,7 @@ describe("quote.deleteMany", () => {
         {
           id: approved.id,
           name: "Signed deal",
-          reason: "Quotes can't be deleted in this status.",
+          reason: "Quotes can't be deleted in this Stage.",
         },
         {
           id: someoneElses.id,
@@ -401,7 +423,7 @@ describe("quote.list canDelete", () => {
       const { organization, caller, members, quote } = await setup(db)
       const approved = await createQuote(db, organization, {
         owner: members.member.user,
-        status: "approved",
+        stage: "approved",
       })
       const someoneElses = await createQuote(db, organization, {
         owner: members.otherMember.user,

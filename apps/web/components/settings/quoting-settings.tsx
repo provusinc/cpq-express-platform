@@ -11,11 +11,11 @@ import { toast } from "sonner"
 import { z } from "zod"
 
 import { Decimal } from "@workspace/domain/money"
-import { QUOTE_STATUS_LABELS, QUOTE_STATUSES } from "@workspace/domain/enums"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import { QUOTE_STAGE_LABELS, QUOTE_STAGES } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import {
-  checkDeletableStatuses,
-  DELETABLE_STATUS_OPTIONS,
+  checkDeletableStages,
+  DELETABLE_STAGE_OPTIONS,
 } from "@workspace/domain/policy"
 import { checkHoursPerDay } from "@workspace/domain/settings"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -42,11 +42,11 @@ const formSchema = z.object({
     const check = checkHoursPerDay(value)
     if (!check.ok) ctx.addIssue({ code: "custom", message: check.message })
   }),
-  deletableStatuses: z
-    .array(z.enum(QUOTE_STATUSES))
+  deletableStages: z
+    .array(z.enum(QUOTE_STAGES))
     .refine(
-      (statuses) => checkDeletableStatuses(statuses).refused.length === 0,
-      "Committed statuses can never be deletable."
+      (stages) => checkDeletableStages(stages).refused.length === 0,
+      "Only Draft and Lost Quotes can be deletable."
     ),
 })
 
@@ -55,7 +55,7 @@ type FormValues = z.infer<typeof formSchema>
 /** "8.00" → "8", "7.50" → "7.5". */
 const displayHours = (value: string) => new Decimal(value).toString()
 
-/** Settings → Quoting: Hours Per Day and which Quote Statuses allow deletion. */
+/** Settings → Quoting: Hours Per Day and which Quote Stages allow deletion. */
 export function QuotingSettings() {
   const trpc = useTRPC()
   const queryClient = useQueryClient()
@@ -66,7 +66,7 @@ export function QuotingSettings() {
 
   const toForm = (s: typeof settings): FormValues => ({
     hoursPerDay: displayHours(s.hoursPerDay),
-    deletableStatuses: s.deletableStatuses,
+    deletableStages: s.deletableStages,
   })
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -125,28 +125,27 @@ export function QuotingSettings() {
           )}
         />
         <Controller
-          name="deletableStatuses"
+          name="deletableStages"
           control={form.control}
           render={({ field, fieldState }) => (
             <FieldSet data-invalid={fieldState.invalid}>
-              <FieldLegend variant="label">
-                Quotes can be deleted when
-              </FieldLegend>
+              <FieldLegend variant="label">Deleting Quotes</FieldLegend>
               <FieldDescription>
                 The Quote Owner or an Admin can permanently delete a Quote in
-                these statuses. Committed statuses can never be deleted.
+                these Stages. Quotes In Approval, Approved, With Customer or Won
+                can never be deleted.
               </FieldDescription>
               <FieldGroup data-slot="checkbox-group" className="gap-3">
-                {QUOTE_STATUSES.map((status) => (
-                  <StatusCheckbox
-                    key={status}
-                    status={status}
-                    checked={field.value.includes(status)}
+                {DELETABLE_STAGE_OPTIONS.map((stage) => (
+                  <StageCheckbox
+                    key={stage}
+                    stage={stage}
+                    checked={field.value.includes(stage)}
                     onCheckedChange={(checked) =>
                       field.onChange(
                         checked
-                          ? [...field.value, status]
-                          : field.value.filter((s) => s !== status)
+                          ? [...field.value, stage]
+                          : field.value.filter((s) => s !== stage)
                       )
                     }
                   />
@@ -169,32 +168,23 @@ export function QuotingSettings() {
   )
 }
 
-function StatusCheckbox({
-  status,
+function StageCheckbox({
+  stage,
   checked,
   onCheckedChange,
 }: {
-  status: QuoteStatus
+  stage: QuoteStage
   checked: boolean
   onCheckedChange: (checked: boolean) => void
 }) {
-  const committed = !DELETABLE_STATUS_OPTIONS.includes(status)
-  const id = `deletable-${status}`
+  const id = `deletable-${stage}`
   return (
-    <Field orientation="horizontal" data-disabled={committed || undefined}>
-      <Checkbox
-        id={id}
-        checked={committed ? false : checked}
-        disabled={committed}
-        onCheckedChange={onCheckedChange}
-      />
+    <Field orientation="horizontal">
+      <Checkbox id={id} checked={checked} onCheckedChange={onCheckedChange} />
       <FieldContent>
         <FieldLabel htmlFor={id} className="font-normal">
-          {QUOTE_STATUS_LABELS[status]}
+          {QUOTE_STAGE_LABELS[stage]} Quotes may be deleted
         </FieldLabel>
-        {committed && (
-          <FieldDescription>Committed — never deletable</FieldDescription>
-        )}
       </FieldContent>
     </Field>
   )

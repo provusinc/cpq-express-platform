@@ -4,7 +4,7 @@ import { CalendarX2Icon, LockIcon } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 
-import { QUOTE_STATUS_LABELS } from "@workspace/domain/enums"
+import { QUOTE_STAGE_LABELS } from "@workspace/domain/enums"
 import { Decimal } from "@workspace/domain/money"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import {
@@ -71,13 +71,11 @@ function ReadOnlyNotice({ quote }: { quote: Quote }) {
     return (
       <Alert>
         <LockIcon />
-        <AlertTitle>
-          Locked while {QUOTE_STATUS_LABELS[quote.status]}
-        </AlertTitle>
+        <AlertTitle>Locked while {QUOTE_STAGE_LABELS[quote.stage]}</AlertTitle>
         <AlertDescription>
-          {quote.status === "customer_approved"
-            ? "Customer Approved is final: this Quote can no longer change."
-            : quote.status === "pending_approval"
+          {quote.stage === "won" || quote.stage === "lost"
+            ? `${QUOTE_STAGE_LABELS[quote.stage]} is final: this Quote can no longer change.`
+            : quote.stage === "in_approval"
               ? "It can't be edited while it awaits approval. Recalling it returns it to Draft."
               : "Committed Quotes can't be edited. Clone it to make changes."}
         </AlertDescription>
@@ -182,7 +180,12 @@ function MetaLine({ quote }: { quote: Quote }) {
   const owner = quote.owner.name ?? quote.owner.email
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-      <QuoteStatusBadge status={quote.status} className="shrink-0" />
+      <QuoteStatusBadge
+        stage={quote.stage}
+        status={quote.status}
+        rejected={quote.rejected}
+        className="shrink-0"
+      />
       <Dot />
       <Link
         href={`/customers/${quote.customer.id}`}

@@ -16,15 +16,16 @@ import {
   or,
   schema,
   sql,
+  stageEntryStatus,
 } from "@workspace/db"
 import type { OrganizationScope, SQL, SQLWrapper } from "@workspace/db"
 import { addDays, compareDates } from "@workspace/domain/dates"
-import { QUOTE_STATUSES, TIME_PERIODS } from "@workspace/domain/enums"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import { QUOTE_STAGES, TIME_PERIODS } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import { can, quotePermissions } from "@workspace/domain/policy"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
 import { toQuantityString } from "@workspace/domain/money"
-import { isLocked } from "@workspace/domain/status"
+import { isLocked } from "@workspace/domain/stages"
 
 import { notFound } from "../errors"
 import {
@@ -42,7 +43,12 @@ import {
   toMilestoneView,
   toPhaseView,
 } from "../line-items"
-import { quoteCommand, quoteFacts } from "../quotes"
+import {
+  isQuoteRejected,
+  quoteCommand,
+  quoteFacts,
+  quoteRejected,
+} from "../quotes"
 import { getOrganizationSettings } from "../settings"
 import { createTRPCRouter, organizationProcedure } from "../trpc"
 import { quoteApprovalProcedures } from "./quote-approval"
@@ -53,7 +59,7 @@ import { marginBelow, quoteInsightsProcedures } from "./quote-insights"
 import { quoteScheduleProcedures } from "./quote-schedule"
 import { quoteOverviewProcedures } from "./quote-overview"
 
-const { customers, lineItems, phases, quotes, users } = schema
+const { customers, lineItems, phases, quoteStatuses, quotes, users } = schema
 
 /** The longest Description the API accepts. */
 const DESCRIPTION_MAX = 2000
@@ -78,7 +84,8 @@ const SORT_EXPRESSIONS: Record<QuoteSortColumn, SQLWrapper> = {
   name: sql`lower(${quotes.name})`,
   customer: sql`lower(${customers.name})`,
   owner: sql`lower(coalesce(${users.name}, ${users.email}))`,
-  status: quotes.status,
+  // Stage order, then the Statuses' order within it (see the list query).
+  status: quotes.stage,
   startDate: quotes.startDate,
   endDate: quotes.endDate,
   validUntil: quotes.validUntil,
@@ -133,7 +140,7 @@ async function countSameName(
 /** Today's date in UTC, `yyyy-MM-dd`. */
 const utcToday = () => new Date().toISOString().slice(0, 10)
 
-/** Valid Until is before today (UTC): highlighted, never a status change. */
+/** Valid Until is before today (UTC): highlighted, never a Stage change. */
 const validUntilPassed = (validUntil: string | null, today = utcToday()) =>
   validUntil !== null && compareDates(validUntil, today) < 0
 
@@ -144,10 +151,12 @@ const listInput = z
   .object({
     /** Matches Name, Description and the Customer's name. */
     search: z.string().trim().max(200).optional(),
-    statuses: z
-      .array(z.enum(QUOTE_STATUSES))
-      .max(QUOTE_STATUSES.length)
-      .optional(),
+    /** In one of these Quote Stages (the Dashboard's `?status=<stage>`). */
+    stages: z.array(z.enum(QUOTE_STAGES)).max(QUOTE_STAGES.length).optional(),
+    /** In one of these Quote Statuses (the list's Status filter). */
+    statusIds: z.array(z.uuid()).max(100).optional(),
+    /** `true`: only Rejected Quotes; `false`: none of them. */
+    rejected: z.boolean().optional(),
     customerId: z.uuid().optional(),
     /** Created on or after this date (UTC day). */
     createdFrom: isoDateInput.optional(),
@@ -190,17 +199,20 @@ export const quoteRouter = createTRPCRouter({
   /**
    * One page of the Organization's Quotes with their Customer and Owner.
    * Every member sees every Quote; `owner: "mine"` narrows to the caller's.
-   * Sorted by `sort` (newest first by default), ties broken by id.
-   * `validUntilPassed` is true when Valid Until is before today (UTC),
-   * which the list highlights; it never changes the status. `canDelete`
-   * is whether the caller may delete the row (its menu and bulk delete).
-   * `statusCounts` counts every status under all the other filters (the
-   * list's status tabs); `total` is their sum over `statuses`.
+   * Sorted by `sort` (newest first by default; `status` sorts by Stage,
+   * then the Status's order in it), ties broken by id. Each row has its
+   * `stage`, its `status` (the Organization's Quote Status: id, name,
+   * colour) and `rejected` (a Draft whose latest Approval Step is a
+   * rejection). `validUntilPassed` is true when Valid Until is before today
+   * (UTC), which the list highlights; it never changes the Stage.
+   * `canDelete` is whether the caller may delete the row (its menu and
+   * bulk delete). `stageCounts` counts every Stage under all the other
+   * filters; `total` is the count under every filter.
    */
   list: organizationProcedure.input(listInput).query(async ({ ctx, input }) => {
     const search = input.search ? containsPattern(input.search) : undefined
-    // Every filter but the status: the status tabs count under these.
-    const filters = (statuses?: readonly QuoteStatus[]) =>
+    // Every filter but the Stage and Status: `stageCounts` count under these.
+    const filters = (stageFilters = false) =>
       and(
         ctx.scope.where(
           quotes,
@@ -211,7 +223,17 @@ export const quoteRouter = createTRPCRouter({
                 ilike(customers.name, search)
               )
             : undefined,
-          statuses?.length ? inArray(quotes.status, statuses) : undefined,
+          stageFilters && input.stages?.length
+            ? inArray(quotes.stage, input.stages)
+            : undefined,
+          stageFilters && input.statusIds?.length
+            ? inArray(quotes.statusId, input.statusIds)
+            : undefined,
+          input.rejected === undefined
+            ? undefined
+            : input.rejected
+              ? quoteRejected
+              : sql`not ${quoteRejected}`,
           input.customerId
             ? eq(quotes.customerId, input.customerId)
             : undefined,
@@ -234,11 +256,15 @@ export const quoteRouter = createTRPCRouter({
         ),
         ctx.scope.where(customers)
       ) as SQL
-    const where = filters(input.statuses)
+    const where = filters(true)
     const direction = input.sort.direction === "asc" ? asc : desc
     const customerJoin = and(
       eq(customers.organizationId, quotes.organizationId),
       eq(customers.id, quotes.customerId)
+    )
+    const statusJoin = and(
+      eq(quoteStatuses.organizationId, quotes.organizationId),
+      eq(quoteStatuses.id, quotes.statusId)
     )
     const [rows, byStatus, settings] = await Promise.all([
       ctx.scope.db
@@ -246,7 +272,13 @@ export const quoteRouter = createTRPCRouter({
           id: quotes.id,
           name: quotes.name,
           description: quotes.description,
-          status: quotes.status,
+          stage: quotes.stage,
+          status: {
+            id: quoteStatuses.id,
+            name: quoteStatuses.name,
+            colour: quoteStatuses.colour,
+          },
+          rejected: quoteRejected,
           startDate: quotes.startDate,
           endDate: quotes.endDate,
           validUntil: quotes.validUntil,
@@ -267,23 +299,30 @@ export const quoteRouter = createTRPCRouter({
         .from(quotes)
         .innerJoin(customers, customerJoin)
         .innerJoin(users, eq(users.id, quotes.ownerId))
+        .innerJoin(quoteStatuses, statusJoin)
         .where(where)
         .orderBy(
           input.sort.by === "validUntil"
             ? sql`${quotes.validUntil} ${sql.raw(input.sort.direction)} nulls last`
             : direction(SORT_EXPRESSIONS[input.sort.by]),
+          ...(input.sort.by === "status"
+            ? [
+                direction(quoteStatuses.sequence),
+                direction(sql`lower(${quoteStatuses.name})`),
+              ]
+            : []),
           direction(quotes.id)
         )
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize),
-      // Counts per status under every other filter: the status tabs; the
-      // total is the sum over the statuses asked for.
+      // Counts per Stage and Status under every other filter; the total is
+      // the sum over the Stages and Statuses asked for.
       ctx.scope.db
-        .select({ status: quotes.status, n: count() })
+        .select({ stage: quotes.stage, statusId: quotes.statusId, n: count() })
         .from(quotes)
         .innerJoin(customers, customerJoin)
         .where(filters())
-        .groupBy(quotes.status),
+        .groupBy(quotes.stage, quotes.statusId),
       getOrganizationSettings(ctx.scope),
     ])
     const today = utcToday()
@@ -291,26 +330,30 @@ export const quoteRouter = createTRPCRouter({
       rows: rows.map((row) => ({
         ...row,
         validUntilPassed: validUntilPassed(row.validUntil, today),
-        // Delete reads only the owner and status (never the owner's Role).
+        // Delete reads only the owner and Stage (never the owner's Role).
         canDelete: can(
           ctx.actor,
           "quote.delete",
-          { ownerId: row.owner.id, ownerRole: null, status: row.status },
-          { deletableStatuses: settings.deletableStatuses }
+          { ownerId: row.owner.id, ownerRole: null, stage: row.stage },
+          { deletableStages: settings.deletableStages }
         ).allowed,
       })),
       total: byStatus
         .filter(
-          (s) => !input.statuses?.length || input.statuses.includes(s.status)
+          (s) =>
+            (!input.stages?.length || input.stages.includes(s.stage)) &&
+            (!input.statusIds?.length || input.statusIds.includes(s.statusId))
         )
         .reduce((sum, s) => sum + s.n, 0),
-      /** Every status's count under the other filters (the status tabs). */
-      statusCounts: Object.fromEntries(
-        QUOTE_STATUSES.map((status) => [
-          status,
-          byStatus.find((s) => s.status === status)?.n ?? 0,
+      /** Every Stage's count under the other filters. */
+      stageCounts: Object.fromEntries(
+        QUOTE_STAGES.map((stage) => [
+          stage,
+          byStatus
+            .filter((s) => s.stage === stage)
+            .reduce((sum, s) => sum + s.n, 0),
         ])
-      ) as Record<QuoteStatus, number>,
+      ) as Record<QuoteStage, number>,
       page: input.page,
       pageSize: input.pageSize,
     }
@@ -387,6 +430,7 @@ export const quoteRouter = createTRPCRouter({
             message: `“${customer.name}” is archived. Unarchive it to quote it.`,
           })
         }
+        const draft = await stageEntryStatus(scope, "draft")
         const quote = await scope.insert(quotes, {
           customerId: customer.id,
           name: input.name,
@@ -395,7 +439,8 @@ export const quoteRouter = createTRPCRouter({
           endDate: input.endDate,
           validUntil: input.validUntil ?? null,
           timePeriod: input.timePeriod,
-          status: "draft",
+          stage: "draft",
+          statusId: draft.id,
           currencyCode: ctx.organization.currencyCode,
           ownerId: ctx.user.id,
           createdById: ctx.user.id,
@@ -408,41 +453,51 @@ export const quoteRouter = createTRPCRouter({
   /**
    * One Quote for the editor: its header fields and totals, its Effort in
    * hours (Σ quantity of the hourly Line Items), Customer, Owner
-   * (and whether they are still a member), who changed it last, and what
-   * the caller may do to it (`permissions`, from the domain policy).
+   * (and whether they are still a member), who changed it last, its Stage
+   * and Quote Status, whether it is Rejected, and what the caller may do to
+   * it (`permissions`, from the domain policy).
    */
   byId: organizationProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const quote = await ctx.scope.findById(quotes, input.id)
       if (!quote) throw notFound("Quote")
-      const [customer, people, facts, settings, [effort]] = await Promise.all([
-        ctx.scope.findById(customers, quote.customerId),
-        ctx.scope.db
-          .select({ id: users.id, name: users.name, email: users.email })
-          .from(users)
-          .where(inArray(users.id, [quote.ownerId, quote.updatedById])),
-        quoteFacts(ctx.scope, quote),
-        getOrganizationSettings(ctx.scope),
-        ctx.scope.db
-          .select({
-            hours: sql<string>`coalesce(sum(${lineItems.quantity}), 0)`,
-          })
-          .from(lineItems)
-          .where(
-            ctx.scope.where(
-              lineItems,
-              eq(lineItems.quoteId, quote.id),
-              eq(lineItems.billingUnit, "hour")
-            )
-          ),
-      ])
+      const [customer, people, facts, settings, [effort], status, rejected] =
+        await Promise.all([
+          ctx.scope.findById(customers, quote.customerId),
+          ctx.scope.db
+            .select({ id: users.id, name: users.name, email: users.email })
+            .from(users)
+            .where(inArray(users.id, [quote.ownerId, quote.updatedById])),
+          quoteFacts(ctx.scope, quote),
+          getOrganizationSettings(ctx.scope),
+          ctx.scope.db
+            .select({
+              hours: sql<string>`coalesce(sum(${lineItems.quantity}), 0)`,
+            })
+            .from(lineItems)
+            .where(
+              ctx.scope.where(
+                lineItems,
+                eq(lineItems.quoteId, quote.id),
+                eq(lineItems.billingUnit, "hour")
+              )
+            ),
+          ctx.scope.findById(quoteStatuses, quote.statusId),
+          isQuoteRejected(ctx.scope, quote.id),
+        ])
       const person = (id: string) => people.find((p) => p.id === id)!
       return {
         id: quote.id,
         name: quote.name,
         description: quote.description,
-        status: quote.status,
+        stage: quote.stage,
+        status: {
+          id: status!.id,
+          name: status!.name,
+          colour: status!.colour,
+        },
+        rejected,
         startDate: quote.startDate,
         endDate: quote.endDate,
         validUntil: quote.validUntil,
@@ -467,9 +522,9 @@ export const quoteRouter = createTRPCRouter({
         },
         owner: { ...person(quote.ownerId), isMember: facts.ownerRole !== null },
         updatedBy: person(quote.updatedById),
-        locked: isLocked(quote.status),
+        locked: isLocked(quote.stage),
         permissions: quotePermissions(ctx.actor, facts, {
-          deletableStatuses: settings.deletableStatuses,
+          deletableStages: settings.deletableStages,
         }),
       }
     }),

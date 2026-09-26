@@ -1,25 +1,30 @@
 import { and, eq, inArray } from "drizzle-orm"
 
-import type { ApprovalStepAction, QuoteStatus } from "@workspace/domain/enums"
-import { nextStatus } from "@workspace/domain/status"
+import type { ApprovalStepAction, QuoteStage } from "@workspace/domain/enums"
+import { QUOTE_STAGES } from "@workspace/domain/enums"
+import { nextStage } from "@workspace/domain/stages"
 
 import type { Db } from "../index"
+import { organizationScope } from "../organization-scope"
+import { stageEntryStatus } from "../quote-statuses"
 import { approvalSteps, quotes, users } from "../schema"
 import type { Organization } from "../schema"
 import { SEED_QUOTES } from "./quotes"
+import type { SeedQuoteState } from "./quotes"
 
 /** Who performs an action: the Quote's owner, or the demo Approver. */
 type Actor = "owner" | "approver@acme.test"
 
 /**
- * Each seeded status's approval history, oldest first, with how many days
+ * Each seeded state's approval history, oldest first, with how many days
  * ago each step happened (plus the Quote's `historyDaysAgo`). The Approver
  * never decides their own Quote, so the Approver-owned Customer Approved
- * Quote has no history (`noHistory`).
+ * Quote has no history (`noHistory`). A Rejected Draft's history ends with
+ * the rejection, which is what makes it Rejected.
  */
 const HISTORIES: Partial<
   Record<
-    QuoteStatus,
+    SeedQuoteState,
     {
       action: ApprovalStepAction
       by: Actor
@@ -28,7 +33,7 @@ const HISTORIES: Partial<
     }[]
   >
 > = {
-  pending_approval: [
+  in_approval: [
     {
       action: "submit",
       by: "owner",
@@ -54,12 +59,12 @@ const HISTORIES: Partial<
       comment: "Discount is too deep; keep it under 10 %.",
     },
   ],
-  pending_customer_approval: [
+  with_customer: [
     { action: "submit", by: "owner", daysAgo: 12 },
     { action: "approve", by: "approver@acme.test", daysAgo: 11 },
     { action: "mark_sent", by: "owner", daysAgo: 10 },
   ],
-  customer_approved: [
+  won: [
     { action: "submit", by: "owner", daysAgo: 30 },
     { action: "approve", by: "approver@acme.test", daysAgo: 29 },
     { action: "mark_sent", by: "owner", daysAgo: 28 },
@@ -87,7 +92,8 @@ const DAY_MS = 86_400_000
 
 /**
  * Approval Steps for the demo Quotes (`SEED_QUOTES`), consistent with the
- * Status machine: every seeded Quote's history is replaced on each run.
+ * Stage machine: every seeded Quote's history is replaced on each run. Each
+ * step records the Status names the Quote entered each Stage on.
  */
 export async function seedApprovalSteps(db: Db, organization: Organization) {
   const organizationId = organization.id
@@ -96,6 +102,15 @@ export async function seedApprovalSteps(db: Db, organization: Organization) {
     .from(users)
     .where(eq(users.email, "approver@acme.test"))
   if (!approver) throw new Error("Seed Approval Steps: no demo Approver.")
+  const scope = organizationScope(db, organizationId)
+  const statusNames = Object.fromEntries(
+    await Promise.all(
+      QUOTE_STAGES.map(
+        async (stage) =>
+          [stage, (await stageEntryStatus(scope, stage)).name] as const
+      )
+    )
+  ) as Record<QuoteStage, string>
   const now = Date.now()
   for (const seeded of SEED_QUOTES) {
     const [quote] = await db
@@ -118,27 +133,29 @@ export async function seedApprovalSteps(db: Db, organization: Organization) {
           eq(approvalSteps.quoteId, quote.id)
         )
       )
-    let status: QuoteStatus = "draft"
-    const history = seeded.noHistory ? [] : (HISTORIES[seeded.status] ?? [])
+    let stage: QuoteStage = "draft"
+    const history = seeded.noHistory ? [] : (HISTORIES[seeded.state] ?? [])
     const shift = seeded.historyDaysAgo ?? 0
     for (const step of history) {
-      const to = nextStatus(status, step.action)
+      const to = nextStage(stage, step.action)
       if (!to) {
         throw new Error(
-          `Seed Approval Steps: ${step.action} isn't allowed from ${status}.`
+          `Seed Approval Steps: ${step.action} isn't allowed from ${stage}.`
         )
       }
       await db.insert(approvalSteps).values({
         organizationId,
         quoteId: quote.id,
         action: step.action,
-        fromStatus: status,
-        toStatus: to,
+        fromStage: stage,
+        toStage: to,
+        fromStatusName: statusNames[stage],
+        toStatusName: statusNames[to],
         actorId: step.by === "owner" ? quote.ownerId : approver.id,
         comment: step.comment ?? null,
         createdAt: new Date(now - (step.daysAgo + shift) * DAY_MS),
       })
-      status = to
+      stage = to
     }
   }
 }

@@ -99,8 +99,8 @@ const columns: DataTableColumns<AwaitingRow> = [
 ]
 
 /**
- * "Awaiting my approval" (`quote.awaitingMyApproval`): the Pending Approval
- * Quotes an Approver may decide (never their own), longest-waiting first
+ * "Awaiting my approval" (`quote.awaitingMyApproval`): the Quotes In
+ * Approval an Approver may decide (never their own), longest-waiting first
  * (the server's order; it pages too). Opening one shows Approve / Reject
  * in its header.
  */

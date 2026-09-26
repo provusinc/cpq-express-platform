@@ -29,10 +29,10 @@ const { customers, approvalSteps, quotes, users } = schema
 
 export const quoteApprovalProcedures = {
   /**
-   * Submission: the Quote Owner asks for approval of a Draft, Rejected or
-   * Customer Rejected Quote with a positive Total; it moves to Pending
-   * Approval (and is locked). Each failed precondition has its own
-   * message (wrong status, zero or negative Total). Optional comment.
+   * Submission: the Quote Owner asks for approval of a Draft Quote
+   * (Rejected or not) with a positive Total; it moves to In Approval (and
+   * is locked), which ends a rejection. Each failed precondition has its
+   * own message (wrong Stage, zero or negative Total). Optional comment.
    */
   submit: organizationProcedure
     .input(transitionInput)
@@ -43,8 +43,8 @@ export const quoteApprovalProcedures = {
     ),
 
   /**
-   * An Approver approves a Pending Approval Quote (never their own):
-   * Approved. Optional comment.
+   * An Approver approves a Quote In Approval (never their own): Approved.
+   * Optional comment.
    */
   approve: organizationProcedure
     .input(transitionInput)
@@ -55,9 +55,9 @@ export const quoteApprovalProcedures = {
     ),
 
   /**
-   * An Approver rejects a Pending Approval Quote (never their own):
-   * Rejected, which unlocks it for editing and resubmission. Optional
-   * comment (the reason).
+   * An Approver rejects a Quote In Approval (never their own): back to
+   * Draft, Rejected, which unlocks it for editing and resubmission.
+   * Optional comment (the reason).
    */
   reject: organizationProcedure
     .input(transitionInput)
@@ -69,7 +69,7 @@ export const quoteApprovalProcedures = {
 
   /**
    * Recall: the Quote Owner or an Admin withdraws a Submission while it is
-   * Pending Approval; the Quote returns to Draft. Optional comment.
+   * In Approval; the Quote returns to Draft (not Rejected). Optional comment.
    */
   recall: organizationProcedure
     .input(transitionInput)
@@ -81,8 +81,8 @@ export const quoteApprovalProcedures = {
 
   /**
    * Mark as Sent: the Quote Owner or an Admin declares that an Approved
-   * Quote has gone to the customer. It moves to Pending Customer Approval
-   * and a Quote Document is always captured (`captured_by_mark_sent`, never
+   * Quote has gone to the customer. It moves to With Customer and a Quote
+   * Document is always captured (`captured_by_mark_sent`, never
    * deletable) as proof of what was sent, in the same transaction: if
    * rendering or storing fails, nothing changes. `notes` are the Document's
    * notes and the mark_sent step's comment. Returns the transition plus the
@@ -134,10 +134,10 @@ export const quoteApprovalProcedures = {
     }),
 
   /**
-   * Records the customer's answer to a Pending Customer Approval Quote (the
-   * Quote Owner or an Admin), as a customer_approved / customer_rejected
-   * Approval Step with an optional note. Customer Approved is final;
-   * Customer Rejected unlocks the Quote for editing and resubmission.
+   * Records the customer's answer to a Quote With Customer (the Quote
+   * Owner or an Admin), as a customer_approved / customer_rejected Approval
+   * Step with an optional note. Yes → Won (final); no → back to Draft,
+   * Rejected, unlocked for editing and resubmission (Mark as Lost is #32).
    */
   recordCustomerOutcome: organizationProcedure
     .input(
@@ -161,7 +161,8 @@ export const quoteApprovalProcedures = {
 
   /**
    * The Quote's approval history: every Approval Step, oldest first, with
-   * its actor. Every member may read it.
+   * its Stages, the Quote Status names at the time and its actor. Every
+   * member may read it.
    */
   approvalHistory: organizationProcedure
     .input(z.object({ id: z.uuid() }))
@@ -172,8 +173,10 @@ export const quoteApprovalProcedures = {
         .select({
           id: approvalSteps.id,
           action: approvalSteps.action,
-          fromStatus: approvalSteps.fromStatus,
-          toStatus: approvalSteps.toStatus,
+          fromStage: approvalSteps.fromStage,
+          toStage: approvalSteps.toStage,
+          fromStatusName: approvalSteps.fromStatusName,
+          toStatusName: approvalSteps.toStatusName,
           comment: approvalSteps.comment,
           createdAt: approvalSteps.createdAt,
           actor: { id: users.id, name: users.name, email: users.email },
@@ -188,7 +191,7 @@ export const quoteApprovalProcedures = {
     }),
 
   /**
-   * "Awaiting my approval": Pending Approval Quotes the caller may decide,
+   * "Awaiting my approval": Quotes In Approval the caller may decide,
    * i.e. every one they don't own, longest-waiting first, with when (and
    * by whom) each was submitted. Approvers only (FORBIDDEN otherwise).
    */
@@ -203,7 +206,7 @@ export const quoteApprovalProcedures = {
       }
       const where = ctx.scope.where(
         quotes,
-        eq(quotes.status, "pending_approval"),
+        eq(quotes.stage, "in_approval"),
         ne(quotes.ownerId, ctx.user.id)
       )
       // The latest submit step of each Quote: when it entered the queue.

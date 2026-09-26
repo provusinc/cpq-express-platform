@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { QUOTE_STATUSES } from "../enums"
-import type { QuoteStatus } from "../enums"
+import { QUOTE_STAGES } from "../enums"
+import type { QuoteStage } from "../enums"
 import {
   ageInDays,
   daysUntil,
-  DECIDED_STATUSES,
+  DECIDED_STAGES,
   validUntilWindow,
   isValidUntilSoon,
   utcDay,
@@ -13,7 +13,7 @@ import {
   type InsightSeverity,
   insightSeverity,
   isLowMargin,
-  LOW_MARGIN_STATUSES,
+  LOW_MARGIN_STAGES,
   startOfUtcMonth,
 } from "./index"
 
@@ -62,29 +62,28 @@ describe("insightSeverity: the other cards", () => {
 })
 
 describe("isLowMargin", () => {
-  const cases: Array<[string, string, QuoteStatus, boolean]> = [
+  const cases: Array<[string, string, QuoteStage, boolean]> = [
     ["1000", "14.9999", "draft", true],
     ["1000", "15.0000", "draft", false],
     ["1000", "-20", "draft", true],
     ["0", "0", "draft", false],
     ["-5", "0", "draft", false],
-    ["0.0001", "0", "pending_approval", true],
-    ["1000", "10", "pending_customer_approval", true],
+    ["0.0001", "0", "in_approval", true],
     ["1000", "10", "approved", false],
-    ["1000", "10", "rejected", false],
-    ["1000", "10", "customer_approved", false],
-    ["1000", "10", "customer_rejected", false],
+    ["1000", "10", "with_customer", false],
+    ["1000", "10", "won", false],
+    ["1000", "10", "lost", false],
   ]
   it.each(cases)(
     "Total %s, Margin %s %%, %s → %s",
-    (total, marginPct, status, expected) => {
-      expect(isLowMargin({ total, marginPct, status })).toBe(expected)
+    (total, marginPct, stage, expected) => {
+      expect(isLowMargin({ total, marginPct, stage })).toBe(expected)
     }
   )
 
-  it("counts exactly the statuses that aren't decided", () => {
-    expect([...LOW_MARGIN_STATUSES, ...DECIDED_STATUSES].sort()).toEqual(
-      [...QUOTE_STATUSES].sort()
+  it("counts exactly the Stages that aren't Decided", () => {
+    expect([...LOW_MARGIN_STAGES, ...DECIDED_STAGES].sort()).toEqual(
+      [...QUOTE_STAGES].sort()
     )
   })
 })
@@ -131,19 +130,19 @@ describe("Valid Until soon", () => {
     })
   })
 
-  const cases: Array<[string | null, QuoteStatus, boolean]> = [
+  const cases: Array<[string | null, QuoteStage, boolean]> = [
     ["2026-09-23", "draft", true],
     ["2026-10-07", "approved", true],
     ["2026-10-08", "approved", false],
-    ["2026-09-22", "pending_customer_approval", false],
-    ["2026-09-30", "pending_approval", true],
-    ["2026-09-30", "rejected", false],
-    ["2026-09-30", "customer_approved", false],
-    ["2026-09-30", "customer_rejected", false],
+    ["2026-09-22", "with_customer", false],
+    ["2026-09-30", "with_customer", true],
+    ["2026-09-30", "in_approval", true],
+    ["2026-09-30", "won", false],
+    ["2026-09-30", "lost", false],
     [null, "draft", false],
   ]
-  it.each(cases)("Valid Until %s, %s → %s", (validUntil, status, expected) => {
-    expect(isValidUntilSoon({ validUntil, status }, today)).toBe(expected)
+  it.each(cases)("Valid Until %s, %s → %s", (validUntil, stage, expected) => {
+    expect(isValidUntilSoon({ validUntil, stage }, today)).toBe(expected)
   })
 
   it("counts days until a date", () => {

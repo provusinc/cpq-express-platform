@@ -14,6 +14,7 @@ import { phaseRouter } from "./routers/phase"
 import { platformRouter } from "./routers/platform"
 import { quoteRouter } from "./routers/quote"
 import { quoteDocumentRouter } from "./routers/quote-document"
+import { quoteStatusRouter } from "./routers/quote-status"
 import { resourceRoleRouter } from "./routers/resource-role"
 import { settingsRouter } from "./routers/settings"
 import { userRouter } from "./routers/user"
@@ -40,6 +41,7 @@ export const appRouter = createTRPCRouter({
   platform: platformRouter,
   quote: quoteRouter,
   quoteDocument: quoteDocumentRouter,
+  quoteStatus: quoteStatusRouter,
   resourceRole: resourceRoleRouter,
   settings: settingsRouter,
   user: userRouter,

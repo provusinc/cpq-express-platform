@@ -242,7 +242,7 @@ _Avoid_: PDF version, proposal
 
 **Valid Until**:
 The last day a Quote's offer stands; after it the Valid Until has passed. Informational
-only — it never changes the Quote Status. "Valid Until soon" means it falls within the
+only — it never changes the Quote Stage or Status. "Valid Until soon" means it falls within the
 next 14 days.
 _Avoid_: expires, expiry, expiring, expiration date, lapse
 

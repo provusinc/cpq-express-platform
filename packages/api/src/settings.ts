@@ -1,11 +1,12 @@
 /**
  * Reading an Organization's settings from any command. Settings rows are
  * created on the first save, so these fall back to the defaults (Hours Per
- * Day 8, deletable Draft and Rejected, canonical labels) until then.
+ * Day 8, Draft Quotes deletable and Lost ones not, canonical labels) until
+ * then.
  *
- *   const { hoursPerDay, deletableStatuses } = await getOrganizationSettings(ctx.scope)
+ *   const { hoursPerDay, deletableStages } = await getOrganizationSettings(ctx.scope)
  *   defaultLineItemQuantity({ billingUnit, timePeriod, hoursPerDay })
- *   can(ctx.actor, "quote.delete", quote, { deletableStatuses })
+ *   can(ctx.actor, "quote.delete", quote, { deletableStages })
  */
 import { eq, schema } from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
@@ -14,8 +15,8 @@ import {
   sectionsFromColumns,
 } from "@workspace/domain/documents"
 import type { DocumentSettings } from "@workspace/domain/documents"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { DEFAULT_DELETABLE_STATUSES } from "@workspace/domain/policy"
+import type { QuoteStage } from "@workspace/domain/enums"
+import { DEFAULT_DELETABLE_STAGES } from "@workspace/domain/policy"
 import {
   DEFAULT_HOURS_PER_DAY_VALUE,
   resolveLabels,
@@ -33,20 +34,18 @@ const {
 export interface OrganizationSettings {
   /** Glossary: Hours Per Day, at storage scale (e.g. "8.00"). */
   hoursPerDay: string
-  /** Statuses in which Quotes may be deleted (never a committed status). */
-  deletableStatuses: QuoteStatus[]
+  /** Stages in which Quotes may be deleted (only Draft and Lost can be). */
+  deletableStages: QuoteStage[]
 }
 
-/** Hours Per Day and the deletable statuses (the domain's `PolicySettings`). */
+/** Hours Per Day and the deletable Stages (the domain's `PolicySettings`). */
 export async function getOrganizationSettings(
   scope: OrganizationScope
 ): Promise<OrganizationSettings> {
   const [row] = await scope.findMany(organizationSettings, { limit: 1 })
   return {
     hoursPerDay: row?.hoursPerDay ?? DEFAULT_HOURS_PER_DAY_VALUE,
-    deletableStatuses: row?.deletableStatuses ?? [
-      ...DEFAULT_DELETABLE_STATUSES,
-    ],
+    deletableStages: row?.deletableStages ?? [...DEFAULT_DELETABLE_STAGES],
   }
 }
 

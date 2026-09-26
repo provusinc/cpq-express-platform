@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { QUOTE_STATUSES } from "../enums"
+import { QUOTE_STAGES } from "../enums"
 import {
-  OPEN_STATUSES,
+  OPEN_STAGES,
   VALUE_RANGE_SPECS,
   VALUE_RANGES,
   valueBuckets,
@@ -108,10 +108,10 @@ describe("valueBuckets", () => {
   })
 })
 
-describe("status sets", () => {
-  it("open statuses are every status without a customer outcome", () => {
-    expect(
-      [...OPEN_STATUSES, "customer_approved", "customer_rejected"].sort()
-    ).toEqual([...QUOTE_STATUSES].sort())
+describe("Stage sets", () => {
+  it("the open pipeline is every Stage but Won and Lost", () => {
+    expect([...OPEN_STAGES, "won", "lost"].sort()).toEqual(
+      [...QUOTE_STAGES].sort()
+    )
   })
 })

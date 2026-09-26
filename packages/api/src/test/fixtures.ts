@@ -1,8 +1,22 @@
 import { randomBytes } from "node:crypto"
 
 import type { SessionUser } from "@workspace/auth"
-import type { Role } from "@workspace/domain/enums"
-import { createInvitationToken, schema, uuidv7 } from "@workspace/db"
+import { QUOTE_STAGES } from "@workspace/domain/enums"
+import type {
+  ApprovalStepAction,
+  QuoteStage,
+  Role,
+} from "@workspace/domain/enums"
+import { nextStage } from "@workspace/domain/stages"
+import {
+  createDefaultQuoteStatuses,
+  createInvitationToken,
+  eq,
+  organizationScope,
+  schema,
+  stageEntryStatus,
+  uuidv7,
+} from "@workspace/db"
 import type { Db } from "@workspace/db"
 
 type NewUser = typeof schema.users.$inferInsert
@@ -55,7 +69,10 @@ export function toSessionUser(user: SessionUser): SessionUser {
 
 type NewOrganization = typeof schema.organizations.$inferInsert
 
-/** Inserts an Organization (unique slug by default, USD). Returns the row. */
+/**
+ * Inserts an Organization (unique slug by default, USD) with the default
+ * Quote Statuses, like the Platform Admin console. Returns the row.
+ */
 export async function createOrganization(
   db: Db,
   overrides: Partial<NewOrganization> = {}
@@ -70,6 +87,7 @@ export async function createOrganization(
       ...overrides,
     })
     .returning()
+  await createDefaultQuoteStatuses(organizationScope(db, organization!.id))
   return organization!
 }
 
@@ -252,14 +270,21 @@ export async function createResourceRole(
 
 type NewQuote = Omit<
   typeof schema.quotes.$inferInsert,
-  "organizationId" | "ownerId" | "createdById" | "updatedById" | "customerId"
->
+  | "organizationId"
+  | "ownerId"
+  | "createdById"
+  | "updatedById"
+  | "customerId"
+  | "statusId"
+> & { statusId?: string }
 
 /**
  * Inserts a Quote owned (and created) by `owner`, for `customer` (a new
- * Customer when omitted): Draft, Oct–Dec 2026, Months, USD, unless overridden.
+ * Customer when omitted): Draft, Oct–Dec 2026, Months, USD, unless
+ * overridden. It sits on its Stage's first Quote Status unless `statusId`
+ * is given. No Approval Steps are written (see `createApprovalStep`).
  *
- *   const quote = await createQuote(db, acme, { owner: member.user, status: "approved" })
+ *   const quote = await createQuote(db, acme, { owner: member.user, stage: "approved" })
  */
 export async function createQuote(
   db: Db,
@@ -271,6 +296,10 @@ export async function createQuote(
   }: { owner: { id: string }; customer?: { id: string } } & Partial<NewQuote>
 ) {
   const customerId = customer?.id ?? (await createCustomer(db, organization)).id
+  const stage = overrides.stage ?? "draft"
+  const statusId =
+    overrides.statusId ??
+    (await stageEntryStatus(organizationScope(db, organization.id), stage)).id
   const [quote] = await db
     .insert(schema.quotes)
     .values({
@@ -280,6 +309,8 @@ export async function createQuote(
       timePeriod: "months",
       currencyCode: "USD",
       ...overrides,
+      stage,
+      statusId,
       organizationId: organization.id,
       customerId,
       ownerId: owner.id,
@@ -288,4 +319,73 @@ export async function createQuote(
     })
     .returning()
   return quote!
+}
+
+/**
+ * Appends an Approval Step for `action` to `quote`'s history, as if taken
+ * from the one Stage that allows it (e.g. `reject`: In Approval → Draft),
+ * with the default Status names. Only the history changes, not the Quote:
+ * insert the Quote in the step's target Stage. `createdAt` defaults to now.
+ *
+ *   const quote = await createQuote(db, acme, { owner })  // Draft
+ *   await createApprovalStep(db, quote, { action: "reject", actor: approver })  // Rejected
+ */
+export async function createApprovalStep(
+  db: Db,
+  quote: { id: string; organizationId: string },
+  {
+    action,
+    actor,
+    comment = null,
+    createdAt,
+  }: {
+    action: ApprovalStepAction
+    actor: { id: string }
+    comment?: string | null
+    createdAt?: Date
+  }
+) {
+  const fromStage = QUOTE_STAGES.find((stage) => nextStage(stage, action))!
+  const toStage = nextStage(fromStage, action)!
+  const scope = organizationScope(db, quote.organizationId)
+  const [from, to] = await Promise.all([
+    stageEntryStatus(scope, fromStage),
+    stageEntryStatus(scope, toStage),
+  ])
+  const [step] = await db
+    .insert(schema.approvalSteps)
+    .values({
+      organizationId: quote.organizationId,
+      quoteId: quote.id,
+      action,
+      fromStage,
+      toStage,
+      fromStatusName: from.name,
+      toStatusName: to.name,
+      actorId: actor.id,
+      comment,
+      ...(createdAt ? { createdAt } : {}),
+    })
+    .returning()
+  return step!
+}
+
+/**
+ * Moves `quote` straight into `stage` (onto its first Quote Status),
+ * without an Approval Step: for tests that need a Quote in some Stage
+ * after building it as a Draft.
+ */
+export async function setQuoteStage(
+  db: Db,
+  quote: { id: string; organizationId: string },
+  stage: QuoteStage
+) {
+  const status = await stageEntryStatus(
+    organizationScope(db, quote.organizationId),
+    stage
+  )
+  await db
+    .update(schema.quotes)
+    .set({ stage, statusId: status.id })
+    .where(eq(schema.quotes.id, quote.id))
 }

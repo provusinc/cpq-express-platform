@@ -131,7 +131,13 @@ export function RecentList({ rows }: { rows: Recent }) {
           name={q.name}
           detail={q.customer.name}
           figure={wholeMoney(q.total, q.currencyCode)}
-          tag={<QuoteStatusBadge status={q.status} />}
+          tag={
+            <QuoteStatusBadge
+              stage={q.stage}
+              status={q.status}
+              rejected={q.rejected}
+            />
+          }
         />
       ))}
     </ItemGroup>

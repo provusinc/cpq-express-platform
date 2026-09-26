@@ -44,9 +44,9 @@ const ICONS: Record<StripKey, LucideIcon> = {
 /** What each cell counts, under its figure. */
 const DESCRIPTIONS: Record<StripKey, string> = {
   pending_approval: "Waiting for an Approver",
-  low_margin: "Under 15 % margin, undecided",
+  low_margin: "Under 15 % margin, not yet decided",
   valid_until_soon: `Valid Until within ${VALID_UNTIL_SOON_DAYS} days`,
-  rejected: "Rejected and Customer Rejected",
+  rejected: "Back in Draft after a rejection",
 }
 
 /**

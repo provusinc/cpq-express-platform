@@ -9,8 +9,8 @@ import {
   DOCUMENT_SECTIONS,
   sectionsToColumns,
 } from "@workspace/domain/documents"
-import { LABEL_TERMS, QUOTE_STATUSES } from "@workspace/domain/enums"
-import { checkDeletableStatuses } from "@workspace/domain/policy"
+import { LABEL_TERMS, QUOTE_STAGES } from "@workspace/domain/enums"
+import { checkDeletableStages } from "@workspace/domain/policy"
 import {
   checkHoursPerDay,
   checkLabelOverride,
@@ -106,15 +106,15 @@ const hoursPerDayInput = z
     return check.value
   })
 
-const deletableStatusesInput = z
-  .array(z.enum(QUOTE_STATUSES))
-  .transform((statuses, ctx) => {
-    const { accepted, refused } = checkDeletableStatuses(statuses)
+const deletableStagesInput = z
+  .array(z.enum(QUOTE_STAGES))
+  .transform((stages, ctx) => {
+    const { accepted, refused } = checkDeletableStages(stages)
     if (refused.length > 0) {
       ctx.addIssue({
         code: "custom",
         message:
-          "Quotes in a committed status (Pending Approval, Approved, Pending Customer Approval, Customer Approved) can never be deleted.",
+          "Only Draft and Lost Quotes can be deletable; Quotes In Approval, Approved, With Customer or Won can never be deleted.",
       })
       return z.NEVER
     }
@@ -192,7 +192,7 @@ export const settingsRouter = createTRPCRouter({
   labels: organizationProcedure.query(({ ctx }) => getLabels(ctx.scope)),
 
   /**
-   * Hours Per Day and the deletable Quote Statuses. Any member: pricing and
+   * Hours Per Day and the Stages whose Quotes may be deleted. Any member: pricing and
    * Quote deletion read them.
    */
   quoting: organizationProcedure.query(({ ctx }) =>
@@ -243,12 +243,12 @@ export const settingsRouter = createTRPCRouter({
       return getProfile(ctx.scope, ctx.storage)
     }),
 
-  /** Sets Hours Per Day and the deletable Quote Statuses. */
+  /** Sets Hours Per Day and the Stages whose Quotes may be deleted. */
   updateQuoting: manageSettings
     .input(
       z.object({
         hoursPerDay: hoursPerDayInput,
-        deletableStatuses: deletableStatusesInput,
+        deletableStages: deletableStagesInput,
       })
     )
     .mutation(async ({ ctx, input }) => {

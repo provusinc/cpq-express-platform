@@ -9,8 +9,10 @@ import {
 } from "drizzle-orm/pg-core"
 
 import { LABEL_TERMS } from "@workspace/domain/enums"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
-import { DEFAULT_DELETABLE_STATUSES } from "@workspace/domain/policy"
+import {
+  DEFAULT_DELETABLE_STAGES,
+  DELETABLE_STAGE_OPTIONS,
+} from "@workspace/domain/policy"
 import {
   HIDEABLE_LABEL_TERMS,
   HOURS_PER_DAY_MAX,
@@ -18,14 +20,14 @@ import {
 
 import { timestamps } from "../columns"
 import { organizationTable } from "../organization-table"
-import { quoteStatusEnum } from "./enums"
+import { quoteStageEnum } from "./enums"
 
 const list = (values: readonly string[]) =>
   sql.raw(values.map((v) => `'${v}'`).join(", "))
 
 /**
- * An Organization's settings (glossary: Hours Per Day; the deletable Quote
- * Statuses), one row per Organization, typed columns only. The row is created
+ * An Organization's settings (glossary: Hours Per Day; the Stages whose
+ * Quotes may be deleted), one row per Organization, typed columns only. The row is created
  * on the first save: until then every setting reads as its default (see
  * `getOrganizationSettings` in `@workspace/api`). The Organization profile and the
  * logo key are columns of `organizations`; Label Overrides are
@@ -36,11 +38,11 @@ export const organizationSettings = organizationTable(
   {
     /** Glossary: Hours Per Day. More than 0, at most 24. */
     hoursPerDay: numeric({ precision: 4, scale: 2 }).notNull().default("8"),
-    /** Statuses in which Quotes may be deleted; never a committed status. */
-    deletableStatuses: quoteStatusEnum()
+    /** Stages in which Quotes may be deleted: only Draft and Lost. */
+    deletableStages: quoteStageEnum()
       .array()
       .notNull()
-      .default(sql.raw(`'{${DEFAULT_DELETABLE_STATUSES.join(",")}}'`)),
+      .default(sql.raw(`'{${DEFAULT_DELETABLE_STAGES.join(",")}}'`)),
     ...timestamps(),
   },
   (t) => [
@@ -50,8 +52,8 @@ export const organizationSettings = organizationTable(
       sql`${t.hoursPerDay} > 0 and ${t.hoursPerDay} <= ${sql.raw(String(HOURS_PER_DAY_MAX))}`
     ),
     check(
-      "organization_settings_deletable_statuses_uncommitted",
-      sql`not (${t.deletableStatuses} && array[${list(LOCKED_STATUSES)}]::quote_status[])`
+      "organization_settings_deletable_stages_allowed",
+      sql`${t.deletableStages} <@ array[${list(DELETABLE_STAGE_OPTIONS)}]::quote_stage[]`
     ),
   ]
 )

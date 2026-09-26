@@ -15,7 +15,7 @@
  *     })
  *   })
  *
- * Quotes in any other status are never touched (their Base Rates are part of
+ * Quotes in any other Stage are never touched (their Base Rates are part of
  * what was submitted or committed), and price changes never propagate
  * (callers only call this for a cost change). Affected Quotes are locked
  * (`FOR UPDATE`, in id order) like every Quote command, so propagation
@@ -77,7 +77,7 @@ export async function propagateCost(
     .where(
       scope.where(
         quotes,
-        eq(quotes.status, "draft"),
+        eq(quotes.stage, "draft"),
         inArray(quotes.id, affected)
       )
     )

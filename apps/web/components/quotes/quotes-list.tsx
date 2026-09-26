@@ -17,8 +17,7 @@ import { useRouter } from "next/navigation"
 import { useDeferredValue, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { QUOTE_STATUS_LABELS, QUOTE_STATUSES } from "@workspace/domain/enums"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import { QUOTE_STAGE_LABELS, QUOTE_STAGES } from "@workspace/domain/enums"
 import { INSIGHT_LABELS } from "@workspace/domain/insights"
 import { Button } from "@workspace/ui/components/button"
 import { DataTableSelectionBar } from "@workspace/ui/components/niko-table/components/data-table-selection-bar"
@@ -58,6 +57,7 @@ import {
   FIXED_QUOTE_COLUMNS,
   QUOTE_ACTIONS_COLUMN,
   QUOTE_COLUMN_IDS,
+  QUOTE_REJECTED_COLUMN,
   QUOTE_SELECT_COLUMN,
   quoteColumns,
   QuoteRowActionsContext,
@@ -65,11 +65,11 @@ import {
 } from "./quote-columns"
 import type { QuoteListRow, QuoteRowActions } from "./quote-columns"
 
-const STATUS_OPTIONS = QUOTE_STATUSES.map((status) => ({
-  value: status,
-  label: QUOTE_STATUS_LABELS[status],
-}))
 const OWNER_OPTIONS = [{ value: "mine", label: "My Quotes" }]
+const REJECTED_OPTIONS = [
+  { value: "rejected", label: "Rejected" },
+  { value: "not_rejected", label: "Not rejected" },
+]
 
 type Sort = NonNullable<QuoteListInput["sort"]>
 
@@ -81,16 +81,18 @@ const layoutFor = (saved: { order: string[]; hidden: string[] } | null) =>
 
 /**
  * The Quote list (niko-table, server-side): search, faceted filters
- * (status, Customer, owner), created date range, sorting and paging all run
- * on the server (`quote.list`); columns the user shows, hides and reorders
- * are saved to their preferences. Valid Until dates in the past are
- * highlighted. Each row's menu (and right-click) opens, clones or deletes
- * it; the select column feeds bulk delete, which reports the Quotes it
- * skipped. Status tabs above the table (with each status's count under the
- * other filters) set the status filter. `focus` is the Dashboard card
- * chosen in the URL (`?insight=…` / `?status=…`) and `initialFilters` the
- * list input it resolves to (the page prefetches exactly that); another
- * card resets the filters to its input.
+ * (the Organization's Quote Statuses grouped by Stage, Rejected, Customer,
+ * owner), created date range, sorting and paging all run on the server
+ * (`quote.list`); columns the user shows, hides and reorders are saved to
+ * their preferences. Valid Until dates in the past are highlighted, and a
+ * Rejected Quote shows its marker beside the Status. Each row's menu (and
+ * right-click) opens, clones or deletes it; the select column feeds bulk
+ * delete, which reports the Quotes it skipped. `focus` is the Dashboard
+ * card chosen in the URL (`?insight=…` / `?status=<stage>`) and
+ * `initialFilters` the list input it resolves to (the page prefetches
+ * exactly that); another card resets the filters to its input. Filters
+ * without a toolbar control (Stages, Margin below, the Valid Until range)
+ * show as removable chips.
  */
 export function QuotesList({
   focus = null,
@@ -115,6 +117,13 @@ export function QuotesList({
     placeholderData: keepPreviousData,
   })
   const options = useQuery(trpc.quote.filterOptions.queryOptions())
+  const quoteStatuses = useQuery(trpc.quoteStatus.list.queryOptions())
+  const statusGroups = QUOTE_STAGES.map((stage) => ({
+    heading: QUOTE_STAGE_LABELS[stage],
+    options: (quoteStatuses.data ?? [])
+      .filter((status) => status.stage === stage)
+      .map((status) => ({ value: status.id, label: status.name })),
+  })).filter((group) => group.options.length > 0)
   const [creating, setCreating] = useState(false)
 
   // Selection is per page: any filter, sort or page change clears it.
@@ -180,11 +189,17 @@ export function QuotesList({
 
   // The faceted and date filters are column filters on the table; they
   // round-trip through the query input, which stays the source of truth.
-  const statuses = filters.statuses ?? []
+  const statusIds = filters.statusIds ?? []
   const columnFilters: ColumnFiltersState = useMemo(
     () => [
       ...toColumnFilters({
-        status: filters.statuses,
+        status: filters.statusIds,
+        rejected:
+          filters.rejected === undefined
+            ? undefined
+            : filters.rejected
+              ? "rejected"
+              : "not_rejected",
         customer: filters.customerId,
         owner: filters.owner === "mine" ? "mine" : undefined,
       }),
@@ -201,7 +216,8 @@ export function QuotesList({
         : []),
     ],
     [
-      filters.statuses,
+      filters.statusIds,
+      filters.rejected,
       filters.customerId,
       filters.owner,
       filters.createdFrom,
@@ -209,12 +225,14 @@ export function QuotesList({
     ]
   )
   const onColumnFiltersChange = (next: ColumnFiltersState) => {
-    const nextStatuses = facetValues(next, "status") as QuoteStatus[]
+    const nextStatusIds = facetValues(next, "status")
+    const rejected = facetValues(next, "rejected")[0]
     const created = next.find((f) => f.id === "createdAt")?.value as
       | [number | undefined, number | undefined]
       | undefined
     setFilter({
-      statuses: nextStatuses.length > 0 ? nextStatuses : undefined,
+      statusIds: nextStatusIds.length > 0 ? nextStatusIds : undefined,
+      rejected: rejected ? rejected === "rejected" : undefined,
       customerId: facetValues(next, "customer")[0],
       owner: facetValues(next, "owner")[0] === "mine" ? "mine" : "all",
       createdFrom: toLocalDay(created?.[0]),
@@ -224,7 +242,9 @@ export function QuotesList({
 
   const filtered =
     Boolean(deferredSearch) ||
-    statuses.length > 0 ||
+    statusIds.length > 0 ||
+    Boolean(filters.stages?.length) ||
+    filters.rejected !== undefined ||
     Boolean(filters.customerId) ||
     Boolean(filters.createdFrom) ||
     Boolean(filters.createdTo) ||
@@ -333,6 +353,7 @@ export function QuotesList({
             ...layout.visibility,
             [QUOTE_SELECT_COLUMN]: true,
             [QUOTE_ACTIONS_COLUMN]: true,
+            [QUOTE_REJECTED_COLUMN]: false,
           }}
           onColumnVisibilityChange={(visibility) =>
             changeLayout({ ...layout, visibility })
@@ -351,8 +372,14 @@ export function QuotesList({
             />
             <FacetedFilter
               accessorKey="status"
-              options={STATUS_OPTIONS}
+              groups={statusGroups}
               multiple
+              showCounts={false}
+              limitToFilteredRows={false}
+            />
+            <FacetedFilter
+              accessorKey={QUOTE_REJECTED_COLUMN}
+              options={REJECTED_OPTIONS}
               showCounts={false}
               limitToFilteredRows={false}
             />
@@ -372,6 +399,18 @@ export function QuotesList({
               limitToFilteredRows={false}
             />
             <DateRangeFilter accessorKey="createdAt" />
+            {filters.stages?.length ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setFilter({ stages: undefined })}
+              >
+                {filters.stages
+                  .map((stage) => QUOTE_STAGE_LABELS[stage])
+                  .join(", ")}
+                <XIcon data-icon="inline-end" />
+              </Button>
+            ) : null}
             {(filters.validUntilFrom || filters.validUntilTo) && (
               <Button
                 variant="secondary"
@@ -489,7 +528,7 @@ export function QuotesList({
             ? "Delete 1 Quote?"
             : `Delete ${selectedRows.length} Quotes?`
         }
-        description="Each Quote you may delete is removed permanently with everything on it. Quotes you can't delete (not yours, or in a status that can't be deleted) are skipped and listed afterwards."
+        description="Each Quote you may delete is removed permanently with everything on it. Quotes you can't delete (not yours, or in a Stage that can't be deleted) are skipped and listed afterwards."
         confirmLabel="Delete"
         pending={deleteMany.isPending}
         onConfirm={() =>

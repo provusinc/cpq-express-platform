@@ -2,13 +2,13 @@
  * Mark as Sent and the customer outcome (#22): the transitions and their
  * Approval Steps, the captured Quote Document (flagged, stored, in the
  * Quote's version sequence, undeletable), atomicity when storage fails,
- * who may act, Valid Until never changing status, and isolation.
+ * who may act, Valid Until never changing the Stage, and isolation.
  */
 import { describe, expect, it } from "vitest"
 
 import { asc, eq, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
-import type { QuoteStatus } from "@workspace/domain/enums"
+import type { QuoteStage } from "@workspace/domain/enums"
 import {
   createMemoryStorage,
   isOrganizationObjectKey,
@@ -34,7 +34,7 @@ const { approvalSteps, quoteDocuments, quotes } = schema
  */
 async function setup(
   db: Db,
-  quote: { status?: QuoteStatus; validUntil?: string | null } = {},
+  quote: { stage?: QuoteStage; validUntil?: string | null } = {},
   storage: ObjectStorage & {
     objects: Map<string, unknown>
   } = createMemoryStorage()
@@ -54,15 +54,15 @@ async function setup(
     organizationCaller(db, { organization, user: members[who].user, storage })
   const row = await createQuote(db, organization, {
     owner: members.owner.user,
-    status: quote.status ?? "approved",
+    stage: quote.stage ?? "approved",
     total: "1000.0000",
     validUntil: quote.validUntil ?? null,
   })
   return { organization, members, caller, storage, quote: row }
 }
 
-const statusOf = async (db: Db, id: string) =>
-  (await db.select().from(quotes).where(eq(quotes.id, id)))[0]!.status
+const stageOf = async (db: Db, id: string) =>
+  (await db.select().from(quotes).where(eq(quotes.id, id)))[0]!.stage
 
 const stepsOf = (db: Db, quoteId: string) =>
   db
@@ -88,12 +88,14 @@ describe("quote.markSent", () => {
       })
       expect(result).toMatchObject({
         id: quote.id,
-        status: "pending_customer_approval",
+        stage: "with_customer",
         updatedById: members.owner.user.id,
         step: {
           action: "mark_sent",
-          fromStatus: "approved",
-          toStatus: "pending_customer_approval",
+          fromStage: "approved",
+          toStage: "with_customer",
+          fromStatusName: "Approved",
+          toStatusName: "Sent",
           comment: "Emailed to Bill",
         },
         document: {
@@ -106,7 +108,7 @@ describe("quote.markSent", () => {
         },
       })
       expect(result.document).not.toHaveProperty("storageKey")
-      expect(await statusOf(db, quote.id)).toBe("pending_customer_approval")
+      expect(await stageOf(db, quote.id)).toBe("with_customer")
 
       const [row] = await documentsOf(db, quote.id)
       expect(row).toMatchObject({
@@ -159,7 +161,7 @@ describe("quote.markSent", () => {
       await expect(
         caller("owner").quote.markSent({ id: quote.id })
       ).rejects.toThrow()
-      expect(await statusOf(db, quote.id)).toBe("approved")
+      expect(await stageOf(db, quote.id)).toBe("approved")
       expect(await stepsOf(db, quote.id)).toEqual([])
       expect(await documentsOf(db, quote.id)).toEqual([])
       expect(memory.objects.size).toBe(0)
@@ -195,26 +197,21 @@ describe("quote.markSent", () => {
         caller("owner").quote.markSent({ id: quote.id })
       ).rejects.toThrow()
       expect(memory.objects.size).toBe(0)
-      expect(await statusOf(db, quote.id)).toBe("approved")
+      expect(await stageOf(db, quote.id)).toBe("approved")
       expect(await stepsOf(db, quote.id)).toEqual([])
     }))
 
-  it.each([
-    "draft",
-    "pending_approval",
-    "rejected",
-    "pending_customer_approval",
-    "customer_approved",
-    "customer_rejected",
-  ] as const)("is refused from %s", (status) =>
-    withTestDb(async (db) => {
-      const { caller, quote, storage } = await setup(db, { status })
-      await expect(
-        caller("owner").quote.markSent({ id: quote.id })
-      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
-      expect(await statusOf(db, quote.id)).toBe(status)
-      expect(storage.objects.size).toBe(0)
-    })
+  it.each(["draft", "in_approval", "with_customer", "won", "lost"] as const)(
+    "is refused from %s",
+    (stage) =>
+      withTestDb(async (db) => {
+        const { caller, quote, storage } = await setup(db, { stage })
+        await expect(
+          caller("owner").quote.markSent({ id: quote.id })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+        expect(await stageOf(db, quote.id)).toBe(stage)
+        expect(storage.objects.size).toBe(0)
+      })
   )
 
   it("allows the Owner and an Admin; refuses a Manager, another Member and an Approver", () =>
@@ -224,13 +221,13 @@ describe("quote.markSent", () => {
         await expect(
           caller(who).quote.markSent({ id: quote.id })
         ).rejects.toMatchObject({ code: "FORBIDDEN" })
-        expect(await statusOf(db, quote.id)).toBe("approved")
+        expect(await stageOf(db, quote.id)).toBe("approved")
       }
       for (const who of ["owner", "admin"] as const) {
         const { caller, quote } = await setup(db)
         await expect(
           caller(who).quote.markSent({ id: quote.id })
-        ).resolves.toMatchObject({ status: "pending_customer_approval" })
+        ).resolves.toMatchObject({ stage: "with_customer" })
       }
     }))
 
@@ -261,7 +258,7 @@ describe("quote.markSent", () => {
         owner: organization,
         call: (caller) => caller.quote.markSent({ id: quote.id }),
         snapshot: async () => ({
-          status: await statusOf(db, quote.id),
+          stage: await stageOf(db, quote.id),
           documents: await documentsOf(db, quote.id),
         }),
       })
@@ -270,43 +267,49 @@ describe("quote.markSent", () => {
 
 describe("quote.recordCustomerOutcome", () => {
   it.each([
-    ["approved", "customer_approved"],
-    ["rejected", "customer_rejected"],
-  ] as const)("records the customer's %s answer as a step", (outcome, to) =>
-    withTestDb(async (db) => {
-      const { caller, quote, members } = await setup(db, {
-        status: "pending_customer_approval",
+    ["approved", "customer_approved", "won", "Won", false],
+    ["rejected", "customer_rejected", "draft", "Draft", true],
+  ] as const)(
+    "records the customer's %s answer as a step",
+    (outcome, action, to, name, rejected) =>
+      withTestDb(async (db) => {
+        const { caller, quote, members } = await setup(db, {
+          stage: "with_customer",
+        })
+        const result = await caller("owner").quote.recordCustomerOutcome({
+          id: quote.id,
+          outcome,
+          note: " Signed on the call ",
+        })
+        expect(result).toMatchObject({
+          stage: to,
+          status: { name },
+          rejected,
+          updatedById: members.owner.user.id,
+          step: {
+            action,
+            fromStage: "with_customer",
+            toStage: to,
+            fromStatusName: "Sent",
+            toStatusName: name,
+            comment: "Signed on the call",
+          },
+        })
+        expect(await stageOf(db, quote.id)).toBe(to)
+        const history = await caller("otherMember").quote.approvalHistory({
+          id: quote.id,
+        })
+        expect(history.steps).toMatchObject([
+          { action, actor: { id: members.owner.user.id } },
+        ])
       })
-      const result = await caller("owner").quote.recordCustomerOutcome({
-        id: quote.id,
-        outcome,
-        note: " Signed on the call ",
-      })
-      expect(result).toMatchObject({
-        status: to,
-        updatedById: members.owner.user.id,
-        step: {
-          action: to,
-          fromStatus: "pending_customer_approval",
-          toStatus: to,
-          comment: "Signed on the call",
-        },
-      })
-      expect(await statusOf(db, quote.id)).toBe(to)
-      const history = await caller("otherMember").quote.approvalHistory({
-        id: quote.id,
-      })
-      expect(history.steps).toMatchObject([
-        { action: to, actor: { id: members.owner.user.id } },
-      ])
-    })
   )
 
   it("allows the Owner and an Admin; refuses a Manager and another Member", () =>
     withTestDb(async (db) => {
       for (const who of ["manager", "otherMember", "approver"] as const) {
         const { caller, quote } = await setup(db, {
-          status: "pending_customer_approval",
+          stage: "with_customer",
         })
         await expect(
           caller(who).quote.recordCustomerOutcome({
@@ -316,40 +319,35 @@ describe("quote.recordCustomerOutcome", () => {
         ).rejects.toMatchObject({ code: "FORBIDDEN" })
       }
       const { caller, quote } = await setup(db, {
-        status: "pending_customer_approval",
+        stage: "with_customer",
       })
       await expect(
         caller("admin").quote.recordCustomerOutcome({
           id: quote.id,
           outcome: "rejected",
         })
-      ).resolves.toMatchObject({ status: "customer_rejected" })
+      ).resolves.toMatchObject({ stage: "draft", rejected: true })
     }))
 
-  it.each([
-    "draft",
-    "pending_approval",
-    "approved",
-    "rejected",
-    "customer_approved",
-    "customer_rejected",
-  ] as const)("is refused from %s", (status) =>
-    withTestDb(async (db) => {
-      const { caller, quote } = await setup(db, { status })
-      await expect(
-        caller("owner").quote.recordCustomerOutcome({
-          id: quote.id,
-          outcome: "approved",
-        })
-      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
-      expect(await statusOf(db, quote.id)).toBe(status)
-    })
+  it.each(["draft", "in_approval", "approved", "won", "lost"] as const)(
+    "is refused from %s",
+    (stage) =>
+      withTestDb(async (db) => {
+        const { caller, quote } = await setup(db, { stage })
+        await expect(
+          caller("owner").quote.recordCustomerOutcome({
+            id: quote.id,
+            outcome: "approved",
+          })
+        ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
+        expect(await stageOf(db, quote.id)).toBe(stage)
+      })
   )
 
-  it("makes Customer Approved final", () =>
+  it("makes Won final", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db, {
-        status: "pending_customer_approval",
+        stage: "with_customer",
       })
       await caller("owner").quote.recordCustomerOutcome({
         id: quote.id,
@@ -376,25 +374,30 @@ describe("quote.recordCustomerOutcome", () => {
           outcome: "rejected",
         })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
-      expect(await statusOf(db, quote.id)).toBe("customer_approved")
+      expect(await stageOf(db, quote.id)).toBe("won")
     }))
 
-  it("unlocks a Customer Rejected Quote for editing and resubmission", () =>
+  it("returns a customer's no to Draft (Rejected), for editing and resubmission", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db, {
-        status: "pending_customer_approval",
+        stage: "with_customer",
       })
       await caller("owner").quote.recordCustomerOutcome({
         id: quote.id,
         outcome: "rejected",
       })
       const byId = await caller("owner").quote.byId({ id: quote.id })
-      expect(byId.locked).toBe(false)
+      expect(byId).toMatchObject({
+        stage: "draft",
+        status: { name: "Draft" },
+        rejected: true,
+        locked: false,
+      })
       expect(byId.permissions).toMatchObject({ canEdit: true, canSubmit: true })
       await caller("owner").quote.rename({ id: quote.id, name: "Revised" })
       await expect(
         caller("owner").quote.submit({ id: quote.id, comment: "Revised" })
-      ).resolves.toMatchObject({ status: "pending_approval" })
+      ).resolves.toMatchObject({ stage: "in_approval" })
       const steps = await stepsOf(db, quote.id)
       expect(steps.map((s) => s.action)).toEqual([
         "customer_rejected",
@@ -405,7 +408,7 @@ describe("quote.recordCustomerOutcome", () => {
   it("is isolated from other Organizations", () =>
     withTestDb(async (db) => {
       const { organization, quote } = await setup(db, {
-        status: "pending_customer_approval",
+        stage: "with_customer",
       })
       await expectIsolated(db, {
         owner: organization,
@@ -414,21 +417,21 @@ describe("quote.recordCustomerOutcome", () => {
             id: quote.id,
             outcome: "approved",
           }),
-        snapshot: () => statusOf(db, quote.id),
+        snapshot: () => stageOf(db, quote.id),
       })
     }))
 })
 
 describe("Valid Until", () => {
-  it("never changes the Quote Status, even when it has passed", () =>
+  it("never changes the Quote Stage, even when it has passed", () =>
     withTestDb(async (db) => {
       const { caller, quote } = await setup(db, { validUntil: "2020-01-31" })
       const listed = await caller("owner").quote.list({ page: 1, pageSize: 25 })
       expect(listed.rows.find((r) => r.id === quote.id)).toMatchObject({
-        status: "approved",
+        stage: "approved",
         validUntilPassed: true,
       })
-      expect((await caller("owner").quote.byId({ id: quote.id })).status).toBe(
+      expect((await caller("owner").quote.byId({ id: quote.id })).stage).toBe(
         "approved"
       )
       await caller("owner").quote.markSent({ id: quote.id })
@@ -436,17 +439,17 @@ describe("Valid Until", () => {
         id: quote.id,
         outcome: "approved",
       })
-      expect((await caller("owner").quote.byId({ id: quote.id })).status).toBe(
-        "customer_approved"
+      expect((await caller("owner").quote.byId({ id: quote.id })).stage).toBe(
+        "won"
       )
       const draft = await setup(db, {
-        status: "draft",
+        stage: "draft",
         validUntil: "2020-01-31",
       })
       await draft.caller("owner").quote.rename({
         id: draft.quote.id,
         name: "Still a Draft",
       })
-      expect(await statusOf(db, draft.quote.id)).toBe("draft")
+      expect(await stageOf(db, draft.quote.id)).toBe("draft")
     }))
 })

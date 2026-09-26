@@ -54,6 +54,7 @@ import { toSessionUser } from "./fixtures"
 
 export { createMemoryMailer, createMemoryStorage }
 export {
+  createApprovalStep,
   createCustomer,
   createCatalogItem,
   createContact,
@@ -65,6 +66,7 @@ export {
   createResourceRole,
   createSession,
   createUser,
+  setQuoteStage,
   toSessionUser,
 } from "./fixtures"
 export { expectIsolated, ISOLATION_CODES } from "./isolation"

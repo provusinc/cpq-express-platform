@@ -12,6 +12,7 @@ import {
   createResourceRole,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 
@@ -204,10 +205,7 @@ describe("quote.clone", () => {
     withTestDb(async (db) => {
       const { caller, members, quote, customer } = await setup(db)
       // Committed and someone else's: still clonable by any member.
-      await db
-        .update(quotes)
-        .set({ status: "approved" })
-        .where(eq(quotes.id, quote.id))
+      await setQuoteStage(db, quote, "approved")
 
       const result = await caller("otherMember").quote.clone({ id: quote.id })
       expect(result.name).toBe("Copy of Initech rollout")
@@ -217,7 +215,7 @@ describe("quote.clone", () => {
       const clone = await quoteRow(db, result.id)
       expect(clone).toMatchObject({
         name: "Copy of Initech rollout",
-        status: "draft",
+        stage: "draft",
         customerId: customer.id,
         ownerId: members.otherMember.user.id,
         createdById: members.otherMember.user.id,

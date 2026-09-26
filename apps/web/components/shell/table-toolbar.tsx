@@ -18,6 +18,7 @@
 import type { RowData } from "@tanstack/react-table"
 import {
   CalendarIcon,
+  CheckIcon,
   ChevronsUpDownIcon,
   Columns3Icon,
   PlusCircleIcon,
@@ -30,6 +31,15 @@ import { useState } from "react"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button, buttonVariants } from "@workspace/ui/components/button"
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@workspace/ui/components/command"
+import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
@@ -38,9 +48,13 @@ import {
 import { DataTableDateFilter } from "@workspace/ui/components/niko-table/components/data-table-date-filter"
 import { DataTableFacetedFilterContent } from "@workspace/ui/components/niko-table/components/data-table-faceted-filter"
 import { useDataTable } from "@workspace/ui/components/niko-table/core/data-table-context"
+import { useTableFacetedFilter } from "@workspace/ui/components/niko-table/filters/table-faceted-filter"
 import { useDerivedColumnTitle } from "@workspace/ui/components/niko-table/hooks/use-derived-column-title"
 import { formatDate } from "@workspace/ui/components/niko-table/lib/format"
-import type { Option } from "@workspace/ui/components/niko-table/types"
+import type {
+  DataTableColumn,
+  Option,
+} from "@workspace/ui/components/niko-table/types"
 import {
   Popover,
   PopoverContent,
@@ -135,23 +149,31 @@ function selectedFacetValues(filter: unknown): Set<string> {
  * A faceted (pick from a list) filter on one column: the dashed toolbar
  * button with the chosen values, opening niko's option list. On server
  * lists pass static `options` with `showCounts={false}` and
- * `limitToFilteredRows={false}` (only one page is loaded).
+ * `limitToFilteredRows={false}` (only one page is loaded). `groups` lists
+ * the options under headings instead (e.g. Quote Statuses by Stage); niko's
+ * option list has no groups, so they render in a shadcn `Command` driven by
+ * niko's `useTableFacetedFilter`.
  */
 export function FacetedFilter<TData extends RowData>({
   accessorKey,
   title,
-  options,
+  options: optionList,
   multiple = false,
   showCounts,
   limitToFilteredRows,
+  groups,
 }: {
   accessorKey: keyof TData & string
   title?: string
-  options: Option[]
+  options?: Option[]
   multiple?: boolean
   showCounts?: boolean
   limitToFilteredRows?: boolean
+  groups?: { heading: string; options: Option[] }[]
 }) {
+  const options = groups
+    ? groups.flatMap((group) => group.options)
+    : (optionList ?? [])
   const [open, setOpen] = useState(false)
   const { table } = useDataTable<TData>()
   const column = table.getColumn(accessorKey)
@@ -215,19 +237,101 @@ export function FacetedFilter<TData extends RowData>({
         )}
       </PopoverTrigger>
       <PopoverContent className="w-52 p-0" align="start">
-        <DataTableFacetedFilterContent<TData>
-          accessorKey={accessorKey}
-          title={derivedTitle}
-          options={options}
-          multiple={multiple}
-          showCounts={showCounts}
-          limitToFilteredRows={limitToFilteredRows}
-          onValueChange={() => {
-            if (!multiple) setOpen(false)
-          }}
-        />
+        {groups ? (
+          <GroupedFacetedOptions<TData>
+            column={column}
+            title={derivedTitle}
+            groups={groups}
+            multiple={multiple}
+            onValueChange={() => {
+              if (!multiple) setOpen(false)
+            }}
+          />
+        ) : (
+          <DataTableFacetedFilterContent<TData>
+            accessorKey={accessorKey}
+            title={derivedTitle}
+            options={options}
+            multiple={multiple}
+            showCounts={showCounts}
+            limitToFilteredRows={limitToFilteredRows}
+            onValueChange={() => {
+              if (!multiple) setOpen(false)
+            }}
+          />
+        )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/** A faceted filter's option list under headings (`FacetedFilter groups`). */
+function GroupedFacetedOptions<TData extends RowData>({
+  column,
+  title,
+  groups,
+  multiple,
+  onValueChange,
+}: {
+  column: DataTableColumn<TData, unknown>
+  title?: string
+  groups: { heading: string; options: Option[] }[]
+  multiple: boolean
+  onValueChange: () => void
+}) {
+  const { selectedValues, onItemSelect, onReset } = useTableFacetedFilter({
+    column,
+    multiple,
+    onValueChange,
+  })
+  return (
+    <Command>
+      <CommandInput placeholder={title} className="pl-2" />
+      <CommandList className="max-h-80">
+        <CommandEmpty>No results found.</CommandEmpty>
+        {groups.map((group) => (
+          <CommandGroup key={group.heading} heading={group.heading}>
+            {group.options.map((option) => {
+              const isSelected = selectedValues.has(option.value)
+              return (
+                <CommandItem
+                  key={option.value}
+                  value={`${group.heading} ${option.label}`}
+                  onSelect={() => onItemSelect(option, isSelected)}
+                  data-checked={isSelected}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex size-4 items-center justify-center border border-primary",
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "opacity-50 [&_svg]:invisible"
+                    )}
+                  >
+                    <CheckIcon className="size-3.5" />
+                  </span>
+                  <span className="truncate">{option.label}</span>
+                </CommandItem>
+              )
+            })}
+          </CommandGroup>
+        ))}
+        {selectedValues.size > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup>
+              <CommandItem
+                onSelect={() => onReset()}
+                className="justify-center text-center"
+              >
+                Clear filters
+              </CommandItem>
+            </CommandGroup>
+          </>
+        )}
+      </CommandList>
+    </Command>
   )
 }
 

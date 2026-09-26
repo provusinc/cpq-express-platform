@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest"
 import { asc, eq, inArray, schema } from "@workspace/db"
 import type { Db } from "@workspace/db"
 import { defaultAllocations } from "@workspace/domain/allocations"
-import type { QuoteStatus } from "@workspace/domain/enums"
-import { LOCKED_STATUSES } from "@workspace/domain/status"
+import type { QuoteStage } from "@workspace/domain/enums"
+import { LOCKED_STAGES } from "@workspace/domain/stages"
 
 import {
   createCatalogItem,
@@ -14,6 +14,7 @@ import {
   createResourceRole,
   expectIsolated,
   organizationCaller,
+  setQuoteStage,
   withTestDb,
 } from "../test"
 import type { TestCaller } from "../test"
@@ -384,9 +385,9 @@ describe("allocation.setRange", () => {
 })
 
 describe("permissions and the lock", () => {
-  it.each(LOCKED_STATUSES)(
+  it.each(LOCKED_STAGES)(
     "refuses planner commands while %s",
-    (status: QuoteStatus) =>
+    (stage: QuoteStage) =>
       withTestDb(async (db) => {
         const { caller, quote, role } = await setup(db)
         const [line] = await addLines(caller(), quote.id, [
@@ -398,7 +399,7 @@ describe("permissions and the lock", () => {
             { lineItemId: line!.id, periodStart: "2026-10-01", amount: "8" },
           ],
         })
-        await db.update(quotes).set({ status }).where(eq(quotes.id, quote.id))
+        await setQuoteStage(db, quote, stage)
         await expect(
           caller("admin").allocation.setRange({
             quoteId: quote.id,

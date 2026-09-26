@@ -90,7 +90,7 @@ export function DeleteQuoteDialog({
  * The Quote header's actions, left to right: Clone (any member), the
  * Document menu, the one primary button for the next lifecycle step
  * (`useLifecycleActions`) and the "…" menu with the other lifecycle actions
- * and Delete (when `canDelete`: Owner or Admin, deletable status).
+ * and Delete (when `canDelete`: Owner or Admin, deletable Stage).
  */
 export function QuoteHeaderActions({
   quote,

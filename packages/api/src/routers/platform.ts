@@ -1,7 +1,17 @@
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { and, count, desc, eq, isNull, schema, sql } from "@workspace/db"
+import {
+  and,
+  count,
+  createDefaultQuoteStatuses,
+  desc,
+  eq,
+  isNull,
+  organizationScope,
+  schema,
+  sql,
+} from "@workspace/db"
 
 import { currencyInput, emailInput, slugInput } from "../inputs"
 import { invitationStatus, issueInvitation } from "../invitations"
@@ -96,6 +106,7 @@ export const platformRouter = createTRPCRouter({
             message: `The slug "${input.slug}" is already taken.`,
           })
         }
+        await createDefaultQuoteStatuses(organizationScope(tx, organization.id))
         const invitation = input.adminEmail
           ? await issueInvitation(
               { ...ctx, db: tx },

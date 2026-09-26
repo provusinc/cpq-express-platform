@@ -73,7 +73,7 @@ describe("reads are open to every member", () => {
 
       expect(await caller.settings.quoting()).toEqual({
         hoursPerDay: "8.00",
-        deletableStatuses: ["draft", "rejected"],
+        deletableStages: ["draft"],
       })
       expect(await caller.settings.labels()).toMatchObject({
         resource_role: { singular: "Resource Role", plural: "Resource Roles" },
@@ -111,7 +111,7 @@ describe("settings.manage is Admin-only", () => {
     "settings.updateQuoting": () =>
       caller.settings.updateQuoting({
         hoursPerDay: "7.5",
-        deletableStatuses: ["draft"],
+        deletableStages: ["draft"],
       }),
     "settings.updateLabels": () =>
       caller.settings.updateLabels({
@@ -214,17 +214,17 @@ describe("Organization profile", () => {
   )
 })
 
-describe("Hours Per Day and deletable statuses", () => {
+describe("Hours Per Day and deletable Stages", () => {
   it("saves both and every reader sees them", () =>
     withTestDb(async (db) => {
       const { acme, caller } = await acmeWithAdmin(db)
       const saved = await caller.settings.updateQuoting({
         hoursPerDay: "7.5",
-        deletableStatuses: ["draft", "customer_rejected", "draft"],
+        deletableStages: ["lost", "draft", "lost"],
       })
       expect(saved).toEqual({
         hoursPerDay: "7.50",
-        deletableStatuses: ["draft", "customer_rejected"],
+        deletableStages: ["lost", "draft"],
       })
 
       const { user } = await createMember(db, acme)
@@ -237,7 +237,7 @@ describe("Hours Per Day and deletable statuses", () => {
       // A second save updates the one row.
       await caller.settings.updateQuoting({
         hoursPerDay: 6,
-        deletableStatuses: [],
+        deletableStages: [],
       })
       const rows = await db
         .select()
@@ -246,7 +246,7 @@ describe("Hours Per Day and deletable statuses", () => {
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         hoursPerDay: "6.00",
-        deletableStatuses: [],
+        deletableStages: [],
       })
     }))
 
@@ -258,44 +258,40 @@ describe("Hours Per Day and deletable statuses", () => {
         await expect(
           caller.settings.updateQuoting({
             hoursPerDay,
-            deletableStatuses: ["draft"],
+            deletableStages: ["draft"],
           })
         ).rejects.toMatchObject({ code: "BAD_REQUEST" })
         expect((await caller.settings.quoting()).hoursPerDay).toBe("8.00")
       })
   )
 
-  it.each([
-    "pending_approval",
-    "approved",
-    "pending_customer_approval",
-    "customer_approved",
-  ] as const)("never lets %s be deletable", (status) =>
-    withTestDb(async (db) => {
-      const { caller } = await acmeWithAdmin(db)
-      const error = await caller.settings
-        .updateQuoting({
-          hoursPerDay: "8",
-          deletableStatuses: ["draft", status],
-        })
-        .catch((e: unknown) => e)
-      expect(error).toMatchObject({ code: "BAD_REQUEST" })
-      expect(JSON.stringify(error)).toContain("deletableStatuses")
-      expect((await caller.settings.quoting()).deletableStatuses).toEqual([
-        "draft",
-        "rejected",
-      ])
-    })
+  it.each(["in_approval", "approved", "with_customer", "won"] as const)(
+    "never lets %s be deletable",
+    (stage) =>
+      withTestDb(async (db) => {
+        const { caller } = await acmeWithAdmin(db)
+        const error = await caller.settings
+          .updateQuoting({
+            hoursPerDay: "8",
+            deletableStages: ["draft", stage],
+          })
+          .catch((e: unknown) => e)
+        expect(error).toMatchObject({ code: "BAD_REQUEST" })
+        expect(JSON.stringify(error)).toContain("deletableStages")
+        expect((await caller.settings.quoting()).deletableStages).toEqual([
+          "draft",
+        ])
+      })
   )
 
-  it("the database refuses committed statuses too", () =>
+  it("the database refuses committed Stages too", () =>
     withTestDb(async (db) => {
       const acme = await createOrganization(db)
       await expect(
         db.transaction((tx) =>
           tx.insert(organizationSettings).values({
             organizationId: acme.id,
-            deletableStatuses: ["approved"],
+            deletableStages: ["approved"],
           })
         )
       ).rejects.toThrow()

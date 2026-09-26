@@ -18,7 +18,13 @@
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
-import { inArray, recomputeQuoteTotals, schema, uuidv7 } from "@workspace/db"
+import {
+  inArray,
+  recomputeQuoteTotals,
+  schema,
+  stageEntryStatus,
+  uuidv7,
+} from "@workspace/db"
 import type { OrganizationScope } from "@workspace/db"
 import { Decimal } from "@workspace/domain/money"
 import { QUOTE_NAME_MAX } from "@workspace/domain/quotes"
@@ -162,7 +168,8 @@ export const quoteCloneProcedures = {
           endDate: source.endDate,
           validUntil: source.validUntil,
           timePeriod: source.timePeriod,
-          status: "draft",
+          stage: "draft",
+          statusId: (await stageEntryStatus(scope, "draft")).id,
           currencyCode: source.currencyCode,
           discountKind: source.discountKind,
           discountValue: source.discountValue,

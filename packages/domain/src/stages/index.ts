@@ -13,24 +13,27 @@ import type { DecimalInput } from "../money"
  *
  * Rejection is not a Stage: an Approver's rejection and the customer's "no"
  * return the Quote to Draft, where it is Rejected (`isRejected`) until the
- * next Submission. Lost has no way in yet (Mark as Lost, #32).
+ * next Submission. Mark as Lost (`mark_lost`) ends a dead deal from Draft,
+ * Approved or With Customer (a Quote In Approval is recalled first); only
+ * `reopen` leaves Lost, back to Draft. Won is final: nothing leaves it.
  */
 const TRANSITIONS: Readonly<
   Record<QuoteStage, Partial<Record<ApprovalStepAction, QuoteStage>>>
 > = {
-  draft: { submit: "in_approval" },
+  draft: { submit: "in_approval", mark_lost: "lost" },
   in_approval: {
     approve: "approved",
     reject: "draft",
     recall: "draft",
   },
-  approved: { mark_sent: "with_customer" },
+  approved: { mark_sent: "with_customer", mark_lost: "lost" },
   with_customer: {
     customer_approved: "won",
     customer_rejected: "draft",
+    mark_lost: "lost",
   },
   won: {},
-  lost: {},
+  lost: { reopen: "draft" },
 }
 
 /**
@@ -57,10 +60,26 @@ export function availableActions(stage: QuoteStage): ApprovalStepAction[] {
   return Object.keys(TRANSITIONS[stage]) as ApprovalStepAction[]
 }
 
-/** True when `stage` has no outgoing transitions (Won, Lost). */
+/**
+ * The final Stages: the deal is decided (Won, Lost). Won has no way out;
+ * only an Admin's reopen leaves Lost.
+ */
+export const FINAL_STAGES = [
+  "won",
+  "lost",
+] as const satisfies readonly QuoteStage[]
+
+/** True in a final Stage (Won, Lost). */
 export function isTerminal(stage: QuoteStage): boolean {
-  return availableActions(stage).length === 0
+  return (FINAL_STAGES as readonly QuoteStage[]).includes(stage)
 }
+
+/** The Stages a Quote can be marked as lost from (Draft, Approved, With Customer). */
+export const MARK_LOST_STAGES = [
+  "draft",
+  "approved",
+  "with_customer",
+] as const satisfies readonly QuoteStage[]
 
 /** True while the Quote may not be edited: every Stage but Draft. */
 export function isLocked(stage: QuoteStage): boolean {

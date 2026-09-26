@@ -76,6 +76,19 @@ export const VALID_UNTIL_STAGES = [
   "with_customer",
 ] as const satisfies readonly QuoteStage[]
 
+/**
+ * This month's activity counts the Quotes created this month that are still
+ * alive or Won: every Stage but Lost (Lost Quotes are outside every Key
+ * Insight).
+ */
+export const THIS_MONTH_STAGES = [
+  "draft",
+  "in_approval",
+  "approved",
+  "with_customer",
+  "won",
+] as const satisfies readonly QuoteStage[]
+
 /** Valid Until soon: Valid Until from today to this many days ahead. */
 export const VALID_UNTIL_SOON_DAYS = 14
 

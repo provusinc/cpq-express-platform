@@ -359,6 +359,58 @@ describe("can(quote.markSent / quote.recordCustomerOutcome)", () => {
   })
 })
 
+describe("can(quote.markLost / quote.reopen)", () => {
+  it.each<Row>([
+    ["Owner marks a Draft as lost", member, quote(member, "draft"), true],
+    ["Owner marks an Approved one", member, quote(member, "approved"), true],
+    [
+      "Admin marks anyone's With Customer",
+      admin,
+      quote(member, "with_customer"),
+      true,
+    ],
+    [
+      "Manager can't mark a Member's",
+      manager,
+      quote(member, "draft"),
+      "owner_or_admin_only",
+    ],
+    [
+      "Approver can't mark someone else's",
+      approver,
+      quote(member, "approved"),
+      "owner_or_admin_only",
+    ],
+    [
+      "In Approval must be recalled first",
+      member,
+      quote(member, "in_approval"),
+      "wrong_stage",
+    ],
+    ["Not from Won", admin, quote(member, "won"), "wrong_stage"],
+    ["Not again once Lost", admin, quote(member, "lost"), "wrong_stage"],
+  ])("markLost: %s", (_name, who, facts, expected) => {
+    expectDecision(can(who, "quote.markLost", facts), expected)
+  })
+
+  it("tells the Owner to recall a Quote In Approval first", () => {
+    const decision = can(member, "quote.markLost", quote(member, "in_approval"))
+    expect(!decision.allowed && decision.message).toMatch(/Recall it first/)
+  })
+
+  it.each<Row>([
+    ["Admin reopens a Lost Quote", admin, quote(member, "lost"), true],
+    ["Admin reopens their own", admin, quote(admin, "lost"), true],
+    ["The Owner can't", member, quote(member, "lost"), "admin_only"],
+    ["A Manager can't", manager, quote(member, "lost"), "admin_only"],
+    ["An Approver can't", approver, quote(member, "lost"), "admin_only"],
+    ["Won never reopens", admin, quote(member, "won"), "wrong_stage"],
+    ["Only a Lost Quote", admin, quote(member, "draft"), "wrong_stage"],
+  ])("reopen: %s", (_name, who, facts, expected) => {
+    expectDecision(can(who, "quote.reopen", facts), expected)
+  })
+})
+
 describe("Organization actions are Admin-only", () => {
   it.each(
     ORGANIZATION_ACTIONS.flatMap(
@@ -386,6 +438,8 @@ describe("quotePermissions", () => {
       canRecall: false,
       canMarkSent: false,
       canRecordCustomerOutcome: false,
+      canMarkLost: true,
+      canReopen: false,
       editDenial: null,
       submitDenial: null,
     })

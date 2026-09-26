@@ -50,6 +50,8 @@ export const QUOTE_ACTIONS = [
   "quote.recall",
   "quote.markSent",
   "quote.recordCustomerOutcome",
+  "quote.markLost",
+  "quote.reopen",
 ] as const
 export type QuoteAction = (typeof QUOTE_ACTIONS)[number]
 
@@ -155,6 +157,10 @@ export function can(
       return ownerOrAdminFrom(actor, quote, "mark_sent")
     case "quote.recordCustomerOutcome":
       return ownerOrAdminFrom(actor, quote, "customer_approved")
+    case "quote.markLost":
+      return canMarkLost(actor, quote)
+    case "quote.reopen":
+      return canReopen(actor, quote)
   }
 }
 
@@ -229,6 +235,41 @@ function canDecide(
   return requireTransition(quote, action)
 }
 
+/**
+ * Mark as Lost: the Owner or an Admin, from Draft, Approved or With
+ * Customer. A Quote In Approval must be recalled first; Won and Lost are
+ * already decided.
+ */
+function canMarkLost(actor: Actor, quote: QuoteFacts): Decision {
+  if (actor.role !== "admin" && !isOwner(actor, quote)) {
+    return deny(
+      "owner_or_admin_only",
+      "Only the Quote Owner or an Admin can mark this Quote as lost."
+    )
+  }
+  if (quote.stage === "in_approval") {
+    return deny(
+      "wrong_stage",
+      "This Quote is awaiting approval. Recall it first, then mark it as lost."
+    )
+  }
+  return requireTransition(quote, "mark_lost")
+}
+
+/** Reopen: an Admin only, Lost → Draft. Won is final and never reopens. */
+function canReopen(actor: Actor, quote: QuoteFacts): Decision {
+  if (actor.role !== "admin") {
+    return deny("admin_only", "Only an Admin can reopen a Lost Quote.")
+  }
+  if (quote.stage === "won") {
+    return deny("wrong_stage", "A Won Quote is final and can't be reopened.")
+  }
+  if (quote.stage !== "lost") {
+    return deny("wrong_stage", "Only a Lost Quote can be reopened.")
+  }
+  return requireTransition(quote, "reopen")
+}
+
 function ownerOrAdminFrom(
   actor: Actor,
   quote: QuoteFacts,
@@ -262,6 +303,8 @@ export interface QuotePermissions {
   canRecall: boolean
   canMarkSent: boolean
   canRecordCustomerOutcome: boolean
+  canMarkLost: boolean
+  canReopen: boolean
   /**
    * Why the Quote can't be edited (`locked`, or the Role rule), or `null`
    * when it can. The editor shows it as the read-only notice.
@@ -297,6 +340,8 @@ export function quotePermissions(
     canRecall: allowed("quote.recall"),
     canMarkSent: allowed("quote.markSent"),
     canRecordCustomerOutcome: allowed("quote.recordCustomerOutcome"),
+    canMarkLost: allowed("quote.markLost"),
+    canReopen: allowed("quote.reopen"),
     editDenial: edit.allowed
       ? null
       : { reason: edit.reason, message: edit.message },

@@ -268,7 +268,8 @@ describe("quote.markSent", () => {
 describe("quote.recordCustomerOutcome", () => {
   it.each([
     ["approved", "customer_approved", "won", "Won", false],
-    ["rejected", "customer_rejected", "draft", "Draft", true],
+    ["revise", "customer_rejected", "draft", "Draft", true],
+    ["lost", "mark_lost", "lost", "Lost", false],
   ] as const)(
     "records the customer's %s answer as a step",
     (outcome, action, to, name, rejected) =>
@@ -305,6 +306,22 @@ describe("quote.recordCustomerOutcome", () => {
       })
   )
 
+  it("requires a reason (the note) for a lost answer", () =>
+    withTestDb(async (db) => {
+      const { caller, quote } = await setup(db, { stage: "with_customer" })
+      for (const note of [undefined, null, "   "]) {
+        await expect(
+          caller("owner").quote.recordCustomerOutcome({
+            id: quote.id,
+            outcome: "lost",
+            note,
+          })
+        ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+      }
+      expect(await stageOf(db, quote.id)).toBe("with_customer")
+      expect(await stepsOf(db, quote.id)).toEqual([])
+    }))
+
   it("allows the Owner and an Admin; refuses a Manager and another Member", () =>
     withTestDb(async (db) => {
       for (const who of ["manager", "otherMember", "approver"] as const) {
@@ -324,7 +341,7 @@ describe("quote.recordCustomerOutcome", () => {
       await expect(
         caller("admin").quote.recordCustomerOutcome({
           id: quote.id,
-          outcome: "rejected",
+          outcome: "revise",
         })
       ).resolves.toMatchObject({ stage: "draft", rejected: true })
     }))
@@ -371,7 +388,7 @@ describe("quote.recordCustomerOutcome", () => {
       await expect(
         caller("admin").quote.recordCustomerOutcome({
           id: quote.id,
-          outcome: "rejected",
+          outcome: "revise",
         })
       ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" })
       expect(await stageOf(db, quote.id)).toBe("won")
@@ -384,7 +401,7 @@ describe("quote.recordCustomerOutcome", () => {
       })
       await caller("owner").quote.recordCustomerOutcome({
         id: quote.id,
-        outcome: "rejected",
+        outcome: "revise",
       })
       const byId = await caller("owner").quote.byId({ id: quote.id })
       expect(byId).toMatchObject({

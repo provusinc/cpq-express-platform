@@ -32,6 +32,7 @@ import {
   PENDING_APPROVAL_STAGES,
   PIPELINE_STAGES,
   startOfUtcMonth,
+  THIS_MONTH_STAGES,
   utcDay,
 } from "@workspace/domain/insights"
 import type { InsightKey } from "@workspace/domain/insights"
@@ -66,7 +67,8 @@ export const quoteInsightsProcedures = {
    *   Approval);
    * - `valid_until_soon`: Valid Until from today to 14 days ahead, on an
    *   offer still in play (Draft, In Approval, Approved, With Customer);
-   * - `this_month`: Quotes created since the start of this UTC month;
+   * - `this_month`: Quotes created since the start of this UTC month,
+   *   Lost ones excluded (no card counts a Lost Quote);
    * - `rejected`: Rejected Quotes (a Draft whose latest Approval Step is a
    *   rejection, by an Approver or the customer).
    * Each card carries its domain severity. Also the count per Stage (every
@@ -103,7 +105,10 @@ export const quoteInsightsProcedures = {
         gte(quotes.validUntil, validUntilSoon.from),
         lte(quotes.validUntil, validUntilSoon.to)
       )!,
-      this_month: gte(quotes.createdAt, utcDayStart(thisMonthFrom)),
+      this_month: and(
+        inArray(quotes.stage, THIS_MONTH_STAGES),
+        gte(quotes.createdAt, utcDayStart(thisMonthFrom))
+      )!,
       rejected: sql`${quoteRejected}`,
     }
     const aggregates = Object.fromEntries(

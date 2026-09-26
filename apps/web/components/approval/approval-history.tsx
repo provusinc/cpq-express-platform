@@ -4,7 +4,9 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import {
   CheckIcon,
   CircleDotIcon,
+  CircleOffIcon,
   MailCheckIcon,
+  RotateCcwIcon,
   SendIcon,
   Undo2Icon,
   XIcon,
@@ -28,6 +30,8 @@ export const APPROVAL_STEP_LABELS: Record<ApprovalStepAction, string> = {
   mark_sent: "Marked as sent",
   customer_approved: "Customer approved",
   customer_rejected: "Customer rejected",
+  mark_lost: "Marked as lost",
+  reopen: "Reopened",
 }
 
 const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
@@ -38,6 +42,8 @@ const ICONS: Partial<Record<ApprovalStepAction, LucideIcon>> = {
   mark_sent: MailCheckIcon,
   customer_approved: CheckIcon,
   customer_rejected: XIcon,
+  mark_lost: CircleOffIcon,
+  reopen: RotateCcwIcon,
 }
 
 /**

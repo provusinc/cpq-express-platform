@@ -54,6 +54,8 @@ export const APPROVAL_STEP_ACTIONS = [
   "mark_sent",
   "customer_approved",
   "customer_rejected",
+  "mark_lost",
+  "reopen",
 ] as const
 export type ApprovalStepAction = (typeof APPROVAL_STEP_ACTIONS)[number]
 

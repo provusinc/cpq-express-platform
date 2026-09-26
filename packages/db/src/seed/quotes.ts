@@ -21,12 +21,24 @@ import type { Organization } from "../schema"
  */
 const DAY_MS = 86_400_000
 
-/** A demo Quote's Stage, or a Rejected Draft (by the Approver or the customer). */
-export type SeedQuoteState = QuoteStage | "rejected" | "customer_rejected"
+/**
+ * A demo Quote's Stage, a Rejected Draft (by the Approver or the customer),
+ * or a Quote marked as lost straight from Draft (`lost` is lost after the
+ * customer said no).
+ */
+export type SeedQuoteState =
+  | QuoteStage
+  | "rejected"
+  | "customer_rejected"
+  | "lost_from_draft"
 
 /** The Stage a seed state is in: a Rejected Quote is a Draft. */
 export const seedStage = (state: SeedQuoteState): QuoteStage =>
-  state === "rejected" || state === "customer_rejected" ? "draft" : state
+  state === "rejected" || state === "customer_rejected"
+    ? "draft"
+    : state === "lost_from_draft"
+      ? "lost"
+      : state
 
 export const SEED_QUOTES: readonly {
   name: string
@@ -133,6 +145,29 @@ export const SEED_QUOTES: readonly {
     startDate: "2026-11-02",
     endDate: "2026-12-11",
     validUntil: "2026-12-01",
+    timePeriod: "weeks",
+  },
+  {
+    name: "Global Mfg – Warehouse robotics",
+    createdDaysAgo: 70,
+    customer: "Global Mfg Express",
+    owner: "manager@acme.test",
+    state: "lost",
+    startDate: "2026-11-02",
+    endDate: "2027-04-30",
+    validUntil: "2026-10-15",
+    historyDaysAgo: 20,
+    timePeriod: "months",
+  },
+  {
+    name: "Healthcare – Telehealth pilot",
+    createdDaysAgo: 40,
+    customer: "Healthcare Express",
+    owner: "member@acme.test",
+    state: "lost_from_draft",
+    startDate: "2026-10-19",
+    endDate: "2026-12-18",
+    validUntil: null,
     timePeriod: "weeks",
   },
   // Older and more recent Quotes for the Dashboard's Quote value chart:

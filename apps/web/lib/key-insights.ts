@@ -14,6 +14,7 @@ import {
   LOW_MARGIN_THRESHOLD,
   PENDING_APPROVAL_STAGES,
   PIPELINE_STAGES,
+  THIS_MONTH_STAGES,
   startOfUtcMonth,
   utcDay,
 } from "@workspace/domain/insights"
@@ -93,7 +94,7 @@ export const insightFocusKey = (focus: InsightFocus | null) =>
  *   (the API also requires a positive Total);
  * - Valid Until soon → the offers in play with Valid Until from today to 14
  *   days ahead, soonest first;
- * - this month → created on or after the month's first day;
+ * - this month → created on or after the month's first day, not Lost;
  * - rejected → Rejected Quotes (the derived fact, not a Stage);
  * - a Stage → that Stage.
  */
@@ -126,7 +127,7 @@ export function insightListFilters(
       }
     }
     case "this_month":
-      return { createdFrom: thisMonthFrom }
+      return { stages: [...THIS_MONTH_STAGES], createdFrom: thisMonthFrom }
     case "rejected":
       return { rejected: true }
   }

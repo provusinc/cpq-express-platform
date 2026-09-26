@@ -1,7 +1,8 @@
 /**
  * The Quote's approval procedures, registered on the `quote` router
  * (`quote.submit`, `quote.approve`, `quote.reject`, `quote.recall`,
- * `quote.markSent`, `quote.recordCustomerOutcome`, `quote.approvalHistory`,
+ * `quote.markSent`, `quote.recordCustomerOutcome`, `quote.markLost`,
+ * `quote.reopen`, `quote.approvalHistory`,
  * `quote.awaitingMyApproval`). They live in their
  * own file so the lifecycle stays in one place; see `../approval.ts`.
  */
@@ -9,6 +10,7 @@ import { TRPCError } from "@trpc/server"
 import { z } from "zod"
 
 import { and, asc, count, desc, eq, ne, schema, sql } from "@workspace/db"
+import type { ApprovalStepAction } from "@workspace/domain/enums"
 
 import {
   APPROVAL_COMMENT_MAX,
@@ -21,11 +23,24 @@ import {
   removeQuoteDocumentObjects,
 } from "../documents"
 import { notFound } from "../errors"
-import { optionalText, paging } from "../inputs"
+import { optionalText, paging, requiredText } from "../inputs"
 import { quoteCommand } from "../quotes"
 import { organizationProcedure } from "../trpc"
 
 const { customers, approvalSteps, quotes, users } = schema
+
+/** The customer's answer to a Quote With Customer. */
+export const CUSTOMER_OUTCOMES = ["approved", "revise", "lost"] as const
+
+/** The Approval Step each customer answer records. */
+const OUTCOME_ACTIONS = {
+  approved: "customer_approved",
+  revise: "customer_rejected",
+  lost: "mark_lost",
+} as const satisfies Record<
+  (typeof CUSTOMER_OUTCOMES)[number],
+  ApprovalStepAction
+>
 
 export const quoteApprovalProcedures = {
   /**
@@ -135,27 +150,67 @@ export const quoteApprovalProcedures = {
 
   /**
    * Records the customer's answer to a Quote With Customer (the Quote
-   * Owner or an Admin), as a customer_approved / customer_rejected Approval
-   * Step with an optional note. Yes → Won (final); no → back to Draft,
-   * Rejected, unlocked for editing and resubmission (Mark as Lost is #32).
+   * Owner or an Admin), with a note:
+   * - `approved` → Won (final), a customer_approved step;
+   * - `revise` → back to Draft, Rejected (a customer_rejected step),
+   *   unlocked for editing and resubmission;
+   * - `lost` → Lost, a mark_lost step whose comment is the note, which is
+   *   then required (the reason, as for Mark as Lost).
    */
   recordCustomerOutcome: organizationProcedure
     .input(
-      z.object({
-        id: z.uuid(),
-        outcome: z.enum(["approved", "rejected"]),
-        note: optionalText(APPROVAL_COMMENT_MAX),
-      })
+      z
+        .object({
+          id: z.uuid(),
+          outcome: z.enum(CUSTOMER_OUTCOMES),
+          note: optionalText(APPROVAL_COMMENT_MAX),
+        })
+        .superRefine((input, ctx) => {
+          if (input.outcome === "lost" && !input.note) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["note"],
+              message: "Give a reason for marking the Quote as lost.",
+            })
+          }
+        })
     )
     .mutation(({ ctx, input }) =>
       quoteCommand(ctx, input.id, "quote.recordCustomerOutcome", (cmd) =>
-        transitionQuote(
-          cmd,
-          input.outcome === "approved"
-            ? "customer_approved"
-            : "customer_rejected",
-          input.note
-        )
+        transitionQuote(cmd, OUTCOME_ACTIONS[input.outcome], input.note)
+      )
+    ),
+
+  /**
+   * Mark as Lost: the Quote Owner or an Admin declares the deal dead, from
+   * Draft, Approved or With Customer (a Quote In Approval is refused with
+   * "Recall it first"; Won and Lost are refused too). The reason is
+   * required and becomes the mark_lost step's comment. The Quote lands on
+   * the Lost Stage's first Status.
+   */
+  markLost: organizationProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        reason: requiredText(APPROVAL_COMMENT_MAX),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.id, "quote.markLost", (cmd) =>
+        transitionQuote(cmd, "mark_lost", input.reason)
+      )
+    ),
+
+  /**
+   * Reopen: an Admin brings a Lost Quote back to Draft (not Rejected),
+   * written as a reopen step with an optional comment. Won is final and is
+   * never reopened.
+   */
+  reopen: organizationProcedure
+    .input(transitionInput)
+    .mutation(({ ctx, input }) =>
+      quoteCommand(ctx, input.id, "quote.reopen", (cmd) =>
+        transitionQuote(cmd, "reopen", input.comment)
       )
     ),
 

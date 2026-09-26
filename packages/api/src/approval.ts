@@ -18,7 +18,8 @@
  *
  * Mark as Sent and the customer outcome use the same helper with
  * `mark_sent` / `customer_approved` (→ Won) / `customer_rejected` (→ Draft,
- * Rejected).
+ * Rejected) / `mark_lost` (→ Lost); Mark as Lost is `mark_lost` with the
+ * reason as the comment, and an Admin's reopen is `reopen` (Lost → Draft).
  */
 import { TRPCError } from "@trpc/server"
 import { z } from "zod"

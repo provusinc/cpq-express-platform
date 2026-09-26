@@ -25,6 +25,10 @@ const ALLOWED: Array<[QuoteStage, ApprovalStepAction, QuoteStage]> = [
   ["approved", "mark_sent", "with_customer"],
   ["with_customer", "customer_approved", "won"],
   ["with_customer", "customer_rejected", "draft"],
+  ["draft", "mark_lost", "lost"],
+  ["approved", "mark_lost", "lost"],
+  ["with_customer", "mark_lost", "lost"],
+  ["lost", "reopen", "draft"],
 ]
 
 const ALL_PAIRS = QUOTE_STAGES.flatMap((stage) =>
@@ -50,15 +54,19 @@ describe("nextStage", () => {
 
 describe("availableActions / isTerminal", () => {
   it.each([
-    ["draft", ["submit"]],
-    ["in_approval", ["approve", "reject", "recall"]],
-    ["approved", ["mark_sent"]],
-    ["with_customer", ["customer_approved", "customer_rejected"]],
-    ["won", []],
-    ["lost", []],
-  ] as const)("%s offers %j", (stage, actions) => {
+    ["draft", ["submit", "mark_lost"], false],
+    ["in_approval", ["approve", "reject", "recall"], false],
+    ["approved", ["mark_sent", "mark_lost"], false],
+    [
+      "with_customer",
+      ["customer_approved", "customer_rejected", "mark_lost"],
+      false,
+    ],
+    ["won", [], true],
+    ["lost", ["reopen"], true],
+  ] as const)("%s offers %j (final: %s)", (stage, actions, final) => {
     expect(availableActions(stage)).toEqual(actions)
-    expect(isTerminal(stage)).toBe(actions.length === 0)
+    expect(isTerminal(stage)).toBe(final)
   })
 })
 

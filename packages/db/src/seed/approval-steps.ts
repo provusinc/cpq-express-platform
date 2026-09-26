@@ -86,6 +86,25 @@ const HISTORIES: Partial<
       comment: "Went with a cheaper vendor.",
     },
   ],
+  lost: [
+    { action: "submit", by: "owner", daysAgo: 30 },
+    { action: "approve", by: "approver@acme.test", daysAgo: 29 },
+    { action: "mark_sent", by: "owner", daysAgo: 28 },
+    {
+      action: "mark_lost",
+      by: "owner",
+      daysAgo: 10,
+      comment: "The customer is building it in-house.",
+    },
+  ],
+  lost_from_draft: [
+    {
+      action: "mark_lost",
+      by: "owner",
+      daysAgo: 7,
+      comment: "Project shelved: no budget this year.",
+    },
+  ],
 }
 
 const DAY_MS = 86_400_000

@@ -358,6 +358,18 @@ export const SEED_LINE_ITEMS: Record<string, SeedPlan> = {
       },
     ],
   },
+  "Global Mfg – Warehouse robotics": {
+    lines: [
+      { kind: "resource_role", source: "DevOps Engineer", quantity: "320" },
+      { kind: "resource_role", source: "Project Manager", quantity: "60" },
+    ],
+  },
+  "Healthcare – Telehealth pilot": {
+    lines: [
+      { kind: "resource_role", source: "UX Designer", quantity: "80" },
+      { kind: "resource_role", source: "Software Engineer", quantity: "160" },
+    ],
+  },
   "TechStart – Security review": {
     lines: [
       { kind: "product", source: "Cybersecurity Audit Package" },

@@ -84,7 +84,13 @@ describe("insightListFilters", () => {
         sort: { by: "validUntil", direction: "asc" },
       },
     ],
-    [{ kind: "insight", key: "this_month" }, { createdFrom: month }],
+    [
+      { kind: "insight", key: "this_month" },
+      {
+        stages: ["draft", "in_approval", "approved", "with_customer", "won"],
+        createdFrom: month,
+      },
+    ],
     [{ kind: "insight", key: "rejected" }, { rejected: true }],
     [{ kind: "stage", stage: "won" }, { stages: ["won"] }],
   ] as Array<[InsightFocus | null, object]>)("%j", (focus, expected) => {
